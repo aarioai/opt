@@ -1,0 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+
+. /opt/aa/lib/aa-posix-lib.sh
+
+docker logs "${@}"

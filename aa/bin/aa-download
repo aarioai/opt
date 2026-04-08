@@ -1,0 +1,202 @@
+#!/bin/sh
+set -eu
+
+# Optional: curl, tar, openssl(auto install)
+
+if [ -x "../lib/aa-posix-lib.sh" ]; then
+    . ../lib/aa-posix-lib.sh
+else
+    . /opt/aa/lib/aa-posix-lib.sh
+fi
+
+usage(){
+    cat << EOF
+Usage: $0 [options] <url>       url must be last
+    -c <type>   checksum value
+    -C <type>   checksum type, default to sha512
+    -h          help
+    -u <tar>    unzip
+    -O <path>   output to, default to /usr/local/src/xxx
+    -X          not remove zip file after unzip
+EOF
+    exit 1
+}
+
+
+parseTgzFilename(){
+    dst="$1"
+
+    dir=$(basename "$1")
+    name=$(Filename "$1")
+    ext=$(Extname "$1")
+
+    if [ "$ext" = "gz" ] ||  [ "$ext" = "bz2" ] || [ "$ext" = "xz" ] ; then
+        parseTgzFilename "${dir}/${name}"
+        return 0
+    fi
+    printf '%s' "${dir}/${name}"
+}
+
+parseFilename(){
+    dst="$1"
+    unzip=${2-}
+    if [ -z "$unzip" ]; then
+        printf '%s'  "$dst"
+        return 0
+    fi
+    case "$unzip" in
+        tar)
+            parseTgzFilename "$dst"
+            return 0
+        ;;
+        *) Panic "invalid unzip type: -u $unzip" ;;
+    esac
+}
+
+unzipTgz(){
+    file="$1"
+    save_to="$2"
+    opt='-xzf'
+    if EndWith "$file" '.tar.bz2'; then
+        opt='-xjf'
+    elif  EndWith "$file" '.tar.xz'; then
+        opt='-xJf'
+    elif  EndWith "$file" '.tar'; then
+        opt='-xf'
+    fi
+    mkdir -p "$save_to"
+    Install tar
+    Info "tar $opt $file -C $save_to  --strip-components 1"
+    if ! tar "$opt" "$file" -C "$save_to" --strip-components 1; then
+        return 1
+    fi
+}
+unzipFile(){
+    file="$1"
+    save_to="$2"
+    unzip="$3"
+    case "$unzip" in
+        tar)
+            if ! unzipTgz "$file" "$save_to"; then
+                return 1
+            fi
+        ;;
+        *) Panic "invalid unzip type: -u $unzip" ;;
+    esac
+}
+
+
+download() {
+    dst=''
+    remove=1
+    unzip=''
+    checksum=''
+    checksum_type="sha512"
+    while getopts "c:hru:C:O:X" opt; do
+        case "$opt" in
+            c) checksum="$OPTARG" ;;
+            h) usage ;;
+            u) unzip="$OPTARG" ;;
+            C) checksum_type="$OPTARG";;
+            O) dst=$(AbsPath "$OPTARG") ;;
+            X) remove=0 ;;
+            *) usage ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [ $# -ne 1 ]; then usage; fi
+
+    cur=${PWD:-"$(pwd)"}
+    url="$1"
+    if [ -z "$dst" ]; then
+        dst="${cur}/$(basename "$url")"
+    fi
+
+    want=$(parseFilename "$dst" "$unzip")
+    save_dir=$(dirname "$dst")
+    # 若文件夹已存在，就不用处理了
+    if [ -d "$want" ] && [ -n "$(ls -A "$want")" ]; then
+        Info "$want exists"
+        return 0
+    fi
+
+
+
+    # 若文件已存在，就不用下载了
+    if [ -f "$want" ] && [ -s "$want" ]; then
+        ok=1
+
+        if [ -n "$checksum" ] && ! verifyChecksum "$checksum_type" "$checksum" "$temp_file" ;then
+            ok=0
+        fi
+
+        if [ "$ok" -eq 1 ]; then
+            Info "$want exists"
+            return 0
+        fi
+    fi
+
+    # 表示需要解压
+     if [ -f "$dst" ] && [ -s "$dst" ]; then
+        ok=1
+        if [ -n "$checksum" ] && ! verifyChecksum "$checksum_type" "$checksum" "$temp_file" ;then
+            ok=0
+        fi
+        if [ "$ok" -eq 1 ] && unzipFile "$dst" "$want"; then
+            Info "unzip from exists $dst"
+            return 0
+        fi
+        Info "exists $dst is invalid"
+        rm -f "$dst"
+     fi
+
+    # 验证URL格式
+    if  ! StartWith "$url" 'http://' 'https://'; then
+        Panic "invalid URL: ${url}"
+    fi
+
+    Info "downloading $url to $want"
+    temp=$(mktemp -d)
+    trap 'rm -rf "$temp"' EXIT  # 临时文件，退出后自动删除
+    cd "$temp"
+
+    Install curl
+    if ! curl -f -L -O "$url";then
+        Panic "failed to download $url"
+    fi
+    filename=$(basename "$url")
+    temp_file="${temp}/${filename}"
+
+     if [ -n "$checksum" ] ;then
+        if ! errmsg=$(! verifyChecksum "$checksum_type" "$checksum" "$temp_file"  2>&1 >/dev/null); then
+            Panic "checksum verification failed! ${errmsg}"
+        fi
+    fi
+
+    if [ -n "$unzip" ]; then
+        if ! unzipFile "$temp_file" "$want" "$unzip"; then
+            Panic "failed unzip file ${temp_file} to ${want}"
+        fi
+    fi
+
+    if [ $remove -eq 0 ] || [ -z "$unzip" ];then
+        mv "$temp_file" "$dst"
+    fi
+}
+
+verifyChecksum(){
+    checksum_type="$1"
+    checksum="$2"
+    file="$3"
+    Install openssl
+    got=$(openssl  "$checksum_type" -r "$file")
+    got=$(Slice 0 "$got")
+    if [ "$got" != "$checksum" ]; then
+        printf '%s\n' "checksum ${file} failed - want: ${want}, got: ${got}"
+        return 1
+    fi
+}
+
+
+download "$@"
