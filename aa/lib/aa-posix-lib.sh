@@ -773,17 +773,21 @@ CleanPkgManager(){
 
     case "$_cleanpkgmanager" in
         'apk')
+            echo ">>> $_cleanpkgmanager_sudo apk cache clean"
             $_cleanpkgmanager_sudo apk cache clean
             ;;
         'apt-get'|'dnf'|'microdnf'|'yum')
+            echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
             $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
             ;;
         'opkg')
             ;;
         'pacman')
+            echo ">>> $_cleanpkgmanager_sudo pacman -Scc --noconfirm"
             $_cleanpkgmanager_sudo pacman -Scc --noconfirm
             ;;
         'zypper')
+            echo ">>> $_cleanpkgmanager_sudo zypper --non-interactive clean"
             $_cleanpkgmanager_sudo zypper --non-interactive clean
             ;;
         *)
