@@ -4,52 +4,51 @@ set -euo pipefail
 . /opt/aa/lib/aa-posix-lib.sh
 
 usage(){
-    echo "Usage: $0 <tag> [comment]"
-    echo "Examples:"
-    echo "  $0 ps <container id> alias to dockerps"
-    echo "  $0 id <container> get container id by name"
-    echo "  $0 ent <name|id>  alias to dock enter|nsetner <name|id> sh"
-    echo "  $0 enter|nsenter <name|id> [options]  e.g. dock ent aa-redis sh"
-    echo "  $0 logs <name|id> docker logs <container>"
-    echo ""
-    exit 1
+  echo "Usage: $0 <tag> [comment]"
+  echo "Examples:"
+  echo "  $0 ps <container id> alias to dockerps"
+  echo "  $0 id <container> get container id by name"
+  echo "  $0 ent <name|id>  alias to dock enter|nsetner <name|id> sh"
+  echo "  $0 enter|nsenter <name|id> [options]  e.g. dock ent aa-redis sh"
+  echo "  $0 logs <name|id> docker logs <container>"
+  echo ""
+  exit 1
 }
 
 getContainerID(){
-    # dockerps 会带颜色
-    local id=$(dockerps | sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep -E "$1\s" | awk '{print $1}')
-    printf '%s' "$id"
+  # dockerps 会带颜色
+  local id=$(dockerps | sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep -E "$1\s" | awk '{print $1}')
+  printf '%s' "$id"
 }
 
 # Example: enterContainer fc6e5d39aea4 sh
 # https://man7.org/linux/man-pages/man1/nsenter.1.html
 enterContainer(){
-    local container=$(getContainerID "$1")
-    shift
-    local target=$(docker inspect --format '{{.State.Pid}}' "$container")
-    if [ -z "$target" ] ; then
-        Panic "docker inspect --format {{.State.Pid}} ${container} failed"
-    fi
+  local container=$(getContainerID "$1")
+  shift
+  local target=$(docker inspect --format '{{.State.Pid}}' "$container")
+  if [ -z "$target" ] ; then
+    Panic "docker inspect --format {{.State.Pid}} ${container} failed"
+  fi
 
-
-    if ! IAmRoot; then
-        exec sudo nsenter -m -u -i -n -p  -t "$target" "${@}"
-        return 0
-    fi
-    nsenter -m -u -i -n -p  -t "$target" "${@}"
+  if ! IAmRoot; then
+    exec sudo nsenter -m -u -i -n -p  -t "$target" "${@}"
+    return 0
+  fi
+  nsenter -m -u -i -n -p  -t "$target" "${@}"
 }
 
 main(){
-    if [ $# -lt 1 ]; then usage; fi
-    local cmd="$1"
-    shift
-    case "$cmd" in
-        ps) dockerps "${@}" ;;
-        id) getContainerID "$1" ;;
-        ent) enterContainer "${@}" "sh";;
-        enter|nsenter) enterContainer "${@}" ;;
-        logs) docker logs "${@}" ;;
-    esac
+  if [ $# -lt 1 ]; then usage; fi
+  local cmd="$1"
+  shift
+  case "$cmd" in
+    ps) dockerps "${@}" ;;
+    id) getContainerID "$1" ;;
+    ent) enterContainer "${@}" "sh" ;;
+    enter|nsenter) enterContainer "${@}" ;;
+    logs) docker logs "${@}" ;;
+  esac
 }
 
 main "$@"

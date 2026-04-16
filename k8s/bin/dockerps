@@ -7,69 +7,69 @@ readonly aliyuncs="registry.cn-hangzhou.aliyuncs.com/"
 
 
 main(){
-    local aliyuncs_len=${#aliyuncs}
-    local header="table {{.ID}}\t{{.Names}}\t{{.Ports}}\t{{.Status}}"
-    local title=0
-    printf "${_GREEN_}%s\t%s\t\t%s\t\t%s${_NC_}\n" "CONTAINER ID" "NAMES" "STATUS" "PORTS"
-    docker ps -a --format "$header" |  while IFS= read -r line; do
-        if [ "$title" -eq 0 ]; then
-            title=1
-            continue
+  #local aliyuncs_len=${#aliyuncs}
+  local header="table {{.ID}}\t{{.Names}}\t{{.Ports}}\t{{.Status}}"
+  local title=0
+  printf "${_GREEN_}%s\t%s\t\t%s\t\t%s${_NC_}\n" "CONTAINER ID" "NAMES" "STATUS" "PORTS"
+  docker ps -a --format "$header" |  while IFS= read -r line; do
+    if [ "$title" -eq 0 ]; then
+      title=1
+      continue
+    fi
+    local i=0
+    local ports=()
+    local status=()
+    local on_status=0
+    for seg in $(echo "$line" | tr "\t" "\n"); do
+      i=$((i+1))
+      case "$i" in
+        1) printf "${_BLUE_}%s${_NC_}" "$seg"; continue ;;
+        2) printf '\t%s' "$seg"; continue ;;
+      esac
+      if [ "$seg" = "Up" ]; then
+        on_status=1
+        continue
+      fi
+
+      if [ "$on_status" -eq 1 ]; then
+        status+=("$seg")
+        continue
+      fi
+
+      seg=${seg//,/}
+      seg=${seg//0.0.0.0:/}
+      seg=${seg//\/tcp/}
+      #seg=${seg//\/udp/U}
+
+      local p=${seg%%->*}
+      if [ "${p}->${p}" = "$seg" ] || [ "${p}->${p}," = "$seg" ]; then
+        seg="$p"
+      fi
+      #printf '<%s %s>' "$p" "$seg"
+      local exists=0
+      for port in "${ports[@]}"; do
+        if [ "$port" == "$seg" ] || [ "${port}->${port}" == "$seg" ]|| [ ":::${port}->${port}" == "$seg" ];then
+          exists=1
         fi
-        local i=0
-        local ports=()
-        local status=()
-        local on_status=0
-        for seg in $(echo "$line" | tr "\t" "\n"); do
-            i=$((i+1))
-            case "$i" in
-                1) printf "${_BLUE_}%s${_NC_}" "$seg"; continue;;
-                2) printf '\t%s' "$seg"; continue ;;
-            esac
-            if [ "$seg" = "Up" ]; then
-                on_status=1
-                continue
-            fi
-
-            if [ "$on_status" -eq 1 ]; then
-                status+=("$seg")
-                continue
-            fi
-
-            seg=${seg//,/}
-            seg=${seg//0.0.0.0:/}
-            seg=${seg//\/tcp/}
-            #seg=${seg//\/udp/U}
-
-            local p=${seg%%->*}
-            if [ "${p}->${p}" = "$seg" ] || [ "${p}->${p}," = "$seg" ]; then
-                seg="$p"
-            fi
-            #printf '<%s %s>' "$p" "$seg"
-            local exists=0
-            for port in "${ports[@]}"; do
-                if [ "$port" == "$seg" ] || [ "${port}->${port}" == "$seg" ]|| [ ":::${port}->${port}" == "$seg" ];then
-                    exists=1
-                fi
-            done
-            if [ "$exists" -ne 1 ]; then ports+=("$seg"); fi
-        done
-
-        printf '\t%s' "Up"
-        for sts in "${status[@]}"; do
-            printf ' %s' "$sts"
-        done
-
-        printf '\t'
-        local j=0
-        for port in "${ports[@]}"; do
-            if [ "$j" -gt 0 ]; then printf ' '; fi
-            printf "${_YELLOW_}%s${_NC_}" "$port"
-            j=$((j+1))
-        done
-
-        printf '\n'
+      done
+      if [ "$exists" -ne 1 ]; then ports+=("$seg"); fi
     done
+
+    printf '\t%s' "Up"
+    for sts in "${status[@]}"; do
+      printf ' %s' "$sts"
+    done
+
+    printf '\t'
+    local j=0
+    for port in "${ports[@]}"; do
+      if [ "$j" -gt 0 ]; then printf ' '; fi
+      printf "${_YELLOW_}%s${_NC_}" "$port"
+      j=$((j+1))
+    done
+
+    printf '\n'
+  done
 }
 
 main "$@"

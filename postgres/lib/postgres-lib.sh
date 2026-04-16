@@ -7,38 +7,38 @@ POSTGRES_USER=${POSTGRES_USER:-postgres}
 
 # 等待 PostgreSQL ready
 pgUntilReady(){
-    Info "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
+  Info "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
 
-    _timeout="${1:-30}"
-    _interval=2
-    _count=0
-    _max_attempts=$((_timeout / _interval))
+  _timeout="${1:-30}"
+  _interval=2
+  _count=0
+  _max_attempts=$((_timeout / _interval))
 
-    until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
-        _counter=$((_counter + 1))
-        if [ $_counter -ge $_max_attempts ]; then
-            ErrorD "PostgreSQL connect timeout (${_timeout}s)" "PostgreSQL 连接超时 (${_timeout}秒)"
-            exit 1
-        fi
+  until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+    _counter=$((_counter + 1))
+    if [ $_counter -ge $_max_attempts ]; then
+      ErrorD "PostgreSQL connect timeout (${_timeout}s)" "PostgreSQL 连接超时 (${_timeout}秒)"
+      exit 1
+    fi
 
-        DebugD 'waiting for PostgreSQL to start...' '等待PostgreSQL启动...'
-        sleep $_interval
-    done
+    DebugD 'waiting for PostgreSQL to start...' '等待PostgreSQL启动...'
+    sleep $_interval
+  done
 }
 readonly pgUntilReady
 
 _pgCreateSchemaRolesSQL(){
-    Usage $# 3 4 '_pgCreateSchemaRolesSQL <database> <schema> <user> [role_prefix=<database>]'
-    _database="$1"
-    _schema="$2"
-    _user="$3"
-    _role_prefix="${4:-"$_database"}"
+  Usage $# 3 4 '_pgCreateSchemaRolesSQL <database> <schema> <user> [role_prefix=<database>]'
+  _database="$1"
+  _schema="$2"
+  _user="$3"
+  _role_prefix="${4:-"$_database"}"
 
-    _owner="${_role_prefix}_owner"
-    _reader="${_role_prefix}_reader"
-    _writer="${_role_prefix}_writer"
+  _owner="${_role_prefix}_owner"
+  _reader="${_role_prefix}_reader"
+  _writer="${_role_prefix}_writer"
 
-    cat <<-EOSQL
+  cat <<-EOSQL
         -- 需要重新连接到数据库 a_gateway
         \c $_database;
         CREATE SCHEMA IF NOT EXISTS $_schema;
@@ -57,17 +57,17 @@ EOSQL
 readonly _pgCreateSchemaRolesSQL
 
 _pgGrantAllOnSchema(){
-    Usage $# 3 4 '_pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
-    _database="$1"
-    _schema="$2"
-    _user="$3"
-    _role_prefix="${4:-"$_database"}"
+  Usage $# 3 4 '_pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
+  _database="$1"
+  _schema="$2"
+  _user="$3"
+  _role_prefix="${4:-"$_database"}"
 
-    _owner="${_role_prefix}_owner"
-    _reader="${_role_prefix}_reader"
-    _writer="${_role_prefix}_writer"
+  _owner="${_role_prefix}_owner"
+  _reader="${_role_prefix}_reader"
+  _writer="${_role_prefix}_writer"
 
-    cat <<-EOSQL
+  cat <<-EOSQL
         -- 需要重新连接到数据库 $_database
         \c $_database;
 
@@ -104,35 +104,35 @@ EOSQL
 readonly _pgGrantAllOnSchema
 
 pgGrantAllOnSchema(){
-    Usage $# 3 4 'pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
-    _database="$1"
-    _schema="$2"
-    _user="$3"
-    _role_prefix="${4:-"$_database"}"
+  Usage $# 3 4 'pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
+  _database="$1"
+  _schema="$2"
+  _user="$3"
+  _role_prefix="${4:-"$_database"}"
 
-    _owner="${_role_prefix}_owner"
-    _reader="${_role_prefix}_reader"
-    _writer="${_role_prefix}_writer"
+  _owner="${_role_prefix}_owner"
+  _reader="${_role_prefix}_reader"
+  _writer="${_role_prefix}_writer"
 
-    Info "create roles: $_owner, $_reader, $_writer"
-    _pgCreateSchemaRolesSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  Info "create roles: $_owner, $_reader, $_writer"
+  _pgCreateSchemaRolesSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
 
-    Info "grant all privileges on ${_database}.${_schema} to roles: $_owner, $_reader, $_writer"
-    _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  Info "grant all privileges on ${_database}.${_schema} to roles: $_owner, $_reader, $_writer"
+  _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
 }
 
 readonly pgGrantAllOnSchema
 
 _pgCreateSchemaSQL(){
-    Usage $# -ge 4 '_pgCreateSchemaSQL <user> <password> <database> <schema> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    _schema="$4"
-    shift 4
-    _options="$*"
+  Usage $# -ge 4 '_pgCreateSchemaSQL <user> <password> <database> <schema> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema="$4"
+  shift 4
+  _options="$*"
 
-    cat <<-EOSQL
+  cat <<-EOSQL
         \c $_database;
         CREATE USER $_user WITH PASSWORD '$_password' $_options;
         CREATE SCHEMA IF NOT EXISTS $_schema;
@@ -144,49 +144,49 @@ EOSQL
 readonly _pgCreateSchemaSQL
 
 pgCreateSchemaOwnerSQL(){
-    Usage $# -ge 4 'pgCreateSchemaOwnerSQL <user> <password> <database> <schema> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    _schema="$4"
+  Usage $# -ge 4 'pgCreateSchemaOwnerSQL <user> <password> <database> <schema> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema="$4"
 
-    # schema 角色以下划线开头
-    _role_prefix="_${_schema}"
+  # schema 角色以下划线开头
+  _role_prefix="_${_schema}"
 
-    _pgCreateSchemaSQL "$@"
-    printf '\n\n'
-    _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" "$_role_prefix"
-    printf '\n\n'
-    _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
+  _pgCreateSchemaSQL "$@"
+  printf '\n\n'
+  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" "$_role_prefix"
+  printf '\n\n'
+  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
 }
 readonly pgCreateSchemaOwnerSQL
 
 pgCreateSchemaOwner(){
-    Usage $# -ge 4 'pgCreateSchemaOwner <user> <password> <database> <schema> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    _schema="$4"
+  Usage $# -ge 4 'pgCreateSchemaOwner <user> <password> <database> <schema> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema="$4"
 
-    Info "create schema ${_database}.${_schema} and its owner $_user"
-    _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  Info "create schema ${_database}.${_schema} and its owner $_user"
+  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
 
-    # schema 角色以下划线开头
-    _role_prefix="_${_schema}"
-    pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
+  # schema 角色以下划线开头
+  _role_prefix="_${_schema}"
+  pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
 }
 readonly pgCreateSchemaOwner
 
 
 _pgCreateDatabaseOwnerSQL(){
-    Usage $# -ge 3 '_pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    shift 3
-    _options="$*"
-    #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
-    cat <<-EOSQL
+  Usage $# -ge 3 '_pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  shift 3
+  _options="$*"
+  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
+  cat <<-EOSQL
         CREATE USER $_user WITH PASSWORD '$_password' $_options;
         CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
         GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
@@ -195,30 +195,30 @@ EOSQL
 readonly _pgCreateDatabaseOwnerSQL
 
 pgCreateDatabaseOwnerSQL(){
-    Usage $# -ge 3 'pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    _schema='public'
+  Usage $# -ge 3 'pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema='public'
 
-    _pgCreateDatabaseOwnerSQL "$@"
-    printf '\n\n'
-    _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user"
-    printf '\n\n'
-    _pgGrantAllOnSchema "$_database" "$_schema" "$_user"
+  _pgCreateDatabaseOwnerSQL "$@"
+  printf '\n\n'
+  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user"
+  printf '\n\n'
+  _pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
 readonly pgCreateDatabaseOwnerSQL
 
 # 创建用户和 owner, reader, writer 角色
 pgCreateDatabaseOwner(){
-    Usage $# -ge 3 'pgCreateDatabaseOwner <user> <password> <database> [options]...'
-    _user="$1"
-    _password="$2"
-    _database="$3"
-    _schema='public'
+  Usage $# -ge 3 'pgCreateDatabaseOwner <user> <password> <database> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema='public'
 
-    Info "create database $_database and its owner $_user"
-    _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"
-    pgGrantAllOnSchema "$_database" "$_schema" "$_user"
+  Info "create database $_database and its owner $_user"
+  _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"
+  pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
 readonly pgCreateDatabaseOwner
