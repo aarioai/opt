@@ -2,9 +2,9 @@
 set -eu
 
 if [ -x "../lib/aa-posix-lib.sh" ]; then
-    . ../lib/aa-posix-lib.sh
+  . ../lib/aa-posix-lib.sh
 else
-    . /opt/aa/lib/aa-posix-lib.sh
+  . /opt/aa/lib/aa-posix-lib.sh
 fi
 
 # for /usr/share/zoneinfo/
@@ -13,22 +13,22 @@ fi
 # Usage: setTimezone <timezone>
 # Example: setTimezone Asia/Shanghai
 setTimezone(){
-    _settimezone_zone="$1"
-    # timedatectl 需要系统操作，不适合 docker 容器内操作。因此只采用传统方法设置时区
-    if [ ! -f "/usr/share/zoneinfo/$_settimezone_zone" ]; then
-        Info "install tzdata"
-        Install tzdata
-    fi
-    if [ -f "/usr/share/zoneinfo/$_settimezone_zone" ]; then
-        Info "ln -sf /usr/share/zoneinfo/$_settimezone_zone /etc/localtime"
-        ln -sf "/usr/share/zoneinfo/$_settimezone_zone" /etc/localtime
-        return 0
-    fi
-    Warn "[warn] not found timezone:${_settimezone_zone}"
+  _settimezone_zone="$1"
+  # timedatectl 需要系统操作，不适合 docker 容器内操作。因此只采用传统方法设置时区
+  if [ ! -f "/usr/share/zoneinfo/$_settimezone_zone" ]; then
+    Info "install tzdata"
+    Install tzdata
+  fi
+  if [ -f "/usr/share/zoneinfo/$_settimezone_zone" ]; then
+    Info "ln -sf /usr/share/zoneinfo/$_settimezone_zone /etc/localtime"
+    ln -sf "/usr/share/zoneinfo/$_settimezone_zone" /etc/localtime
+    return 0
+  fi
+  Warn "[warn] not found timezone:${_settimezone_zone}"
 }
 
 main(){
-    if [ $# -ne 1 ]; then PanicUsage "$0 <timezone>"; fi
-    setTimezone "$@"
+  if [ $# -ne 1 ]; then PanicUsage "$0 <timezone>"; fi
+  setTimezone "$@"
 }
 main "$@"

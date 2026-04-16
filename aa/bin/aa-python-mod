@@ -7,45 +7,45 @@ venv=${venv:-"/opt/python-venv"}
 
 # pipx 很多必须的库安装不了，比如 python-dateutil 等，还是使用 虚拟环境 pip 安装更简单
 pipInstall() {
-    root="$1"
-    pkg="$2"
-    update="${3:-0}"
-    index_url="${4-}"
+  root="$1"
+  pkg="$2"
+  update="${3:-0}"
+  index_url="${4-}"
 
-    if [ "$update" -eq 1 ]; then
-        Info "pip install --no-cache-dir ${pkg} --upgrade"
-        pip install -q --no-cache-dir "$pkg"  --upgrade
-    elif ! pip list | grep "$pkg" >/dev/null 2>&1; then
-        Info "pip install --no-cache-dir ${pkg}  --upgrade"
-        pip install -q --no-cache-dir "$pkg"  --upgrade
-    fi
-    installed=$(pip list | grep "^${pkg} ")
-    arr=$(Split "$installed" ' ' 1)
-    version=$(Slice 1 "$arr")
-    kv="${pkg}>=${version}"
-    #kv=$(AlignKVPair "$pkg" 32 '==' "$version")
-    sed -i "s/^\s*${pkg}\s*.*$/${kv}/" "${root}/python.mod"
-    Info "installed ${pkg}:${version}"
+  if [ "$update" -eq 1 ]; then
+    Info "pip install --no-cache-dir ${pkg} --upgrade"
+    pip install -q --no-cache-dir "$pkg"  --upgrade
+  elif ! pip list | grep "$pkg" >/dev/null 2>&1; then
+    Info "pip install --no-cache-dir ${pkg}  --upgrade"
+    pip install -q --no-cache-dir "$pkg"  --upgrade
+  fi
+  installed=$(pip list | grep "^${pkg} ")
+  arr=$(Split "$installed" ' ' 1)
+  version=$(Slice 1 "$arr")
+  kv="${pkg}>=${version}"
+  #kv=$(AlignKVPair "$pkg" 32 '==' "$version")
+  sed -i "s/^\s*${pkg}\s*.*$/${kv}/" "${root}/python.mod"
+  Info "installed ${pkg}:${version}"
 }
 
 installModuleGt() {
-    root="$1"
-    line="$2"
-    index="$3"
-    pkg=$(Substr "$line" 0 "$index")
-    pkg=$(Trim "$pkg")
+  root="$1"
+  line="$2"
+  index="$3"
+  pkg=$(Substr "$line" 0 "$index")
+  pkg=$(Trim "$pkg")
 
-    index_url=''
-    with_index_url=$(IndexOf " http" "$line")
-    if [ "$with_index_url" -gt 0 ]; then
-        index_url=$(Substr "$line" "$with_index_url")
-        index_url=$(Trim "$index_url")
-        line=$(Substr "$line" 0 "$with_index_url")
-    fi
+  index_url=''
+  with_index_url=$(IndexOf " http" "$line")
+  if [ "$with_index_url" -gt 0 ]; then
+    index_url=$(Substr "$line" "$with_index_url")
+    index_url=$(Trim "$index_url")
+    line=$(Substr "$line" 0 "$with_index_url")
+  fi
 
-    version=$(Substr "$line" $((index + 2)))
-    version=$(Trim "$version")
-    pipInstall "$root" "$pkg" '' "$index_url"
+  version=$(Substr "$line" $((index + 2)))
+  version=$(Trim "$version")
+  pipInstall "$root" "$pkg" '' "$index_url"
 }
 
 
@@ -54,70 +54,68 @@ installModuleGt() {
 # freeze 会把所有环境列出来（导致requirements.txt太多无用信息），而且也会遗漏、误差，因此不使用
 # 目前最好的办法还是采用，手动管理方式
 installModules() {
-    root="$1"
-    CdOrPanic "$root"
-    # 不加|| [ -n "$line" ]，如果尾部不是换行，则会少一行。
-    # 上面要进行替换，这里需要完整 cat，而不能 done < file 这样
-    # shellcheck disable=SC2002
-    cat ./python.mod | while IFS= read -r line || [ -n "$line" ]; do
-        line=$(Trim "$line")
-        if [ -z "$line" ]; then continue; fi
-        Info "handling module ${line}"
-        # remove comments
-        if [ "$(FirstChar "$line")" = "#" ]; then continue; fi
+  root="$1"
+  CdOrPanic "$root"
+  # 不加|| [ -n "$line" ]，如果尾部不是换行，则会少一行。
+  # 上面要进行替换，这里需要完整 cat，而不能 done < file 这样
+  # shellcheck disable=SC2002
+  cat ./python.mod | while IFS= read -r line || [ -n "$line" ]; do
+    line=$(Trim "$line")
+    if [ -z "$line" ]; then continue; fi
+    Info "handling module ${line}"
+    # remove comments
+    if [ "$(FirstChar "$line")" = "#" ]; then continue; fi
 
+    gt=$(IndexOf ">=" "$line")
+    if [ "$gt" -gt 0 ]; then
+      installModuleGt "$root" "$line" "$gt"
+      continue
+    fi
 
-        gt=$(IndexOf ">=" "$line")
-        if [ "$gt" -gt 0 ]; then
-            installModuleGt "$root" "$line" "$gt"
-            continue
-        fi
-
-        eq=$(IndexOf "==" "$line")
-        if [ "$eq" -gt 0 ]; then
-            installModuleGt "$root" "$line" "$eq"
-            continue
-        fi
-        ce=$(IndexOf "~=" "$line")
-        if [ "$ce" -gt 0 ]; then
-            installModuleGt "$root" "$line" "$ce"
-            continue
-        fi
-        pipInstall "$root" "$line"
-    done
+    eq=$(IndexOf "==" "$line")
+    if [ "$eq" -gt 0 ]; then
+      installModuleGt "$root" "$line" "$eq"
+      continue
+    fi
+    ce=$(IndexOf "~=" "$line")
+    if [ "$ce" -gt 0 ]; then
+      installModuleGt "$root" "$line" "$ce"
+      continue
+    fi
+    pipInstall "$root" "$line"
+  done
 }
 
 setupVEnv(){
-    project="$1"
-    venv_activate="${venv}/${project}/bin/activate"
-    if [ ! -f "$venv_activate" ] ; then
-        Info "python3 -m venv $project"
-        CdOrPanic "$venv"
-        python3 -m venv "$project"
-    fi
+  project="$1"
+  venv_activate="${venv}/${project}/bin/activate"
+  if [ ! -f "$venv_activate" ] ; then
+    Info "python3 -m venv $project"
+    CdOrPanic "$venv"
+    python3 -m venv "$project"
+  fi
 
-    Info "active ${venv_activate}"
-    # shellcheck source=/opt/python-env/huoshan-ai/bin/activate
-    . "$venv_activate"
+  Info "active ${venv_activate}"
+  # shellcheck source=/opt/python-env/huoshan-ai/bin/activate
+  . "$venv_activate"
 }
 
 quitVEnv(){
-    Info "deactivate"
-    deactivate
+  Info "deactivate"
+  deactivate
 }
 
 main() {
-    if [ $# -lt 2 ]; then PanicUsage "$0 <project> <project_root> [venv]"; fi
-    project="$1"
-    root="$2"
-    if [ $# -gt 2 ]; then
-        venv="$3"+
-
-    fi
-    if [ -z "$venv" ]; then PanicUsage "$0 <project> <project_root> <venv>"; fi
-    setupVEnv "$project"
-    installModules "$root"
-    quitVEnv
+  if [ $# -lt 2 ]; then PanicUsage "$0 <project> <project_root> [venv]"; fi
+  project="$1"
+  root="$2"
+  if [ $# -gt 2 ]; then
+    venv="$3"+
+  fi
+  if [ -z "$venv" ]; then PanicUsage "$0 <project> <project_root> <venv>"; fi
+  setupVEnv "$project"
+  installModules "$root"
+  quitVEnv
 }
 
 main "$@"

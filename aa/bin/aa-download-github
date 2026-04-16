@@ -2,9 +2,9 @@
 set -eu
 
 if [ -x "../lib/aa-posix-lib.sh" ]; then
-    . ../lib/aa-posix-lib.sh
+  . ../lib/aa-posix-lib.sh
 else
-    . /opt/aa/lib/aa-posix-lib.sh
+  . /opt/aa/lib/aa-posix-lib.sh
 fi
 
 DOWNLOAD_SCRIPT=''
@@ -17,14 +17,14 @@ CHECKSUM_TYPE=''
 
 
 if [ -x "./aa-download" ]; then
-    DOWNLOAD_SCRIPT='./aa-download'
+  DOWNLOAD_SCRIPT='./aa-download'
 else
-    DOWNLOAD_SCRIPT='/opt/aa/bin/aa-download'
+  DOWNLOAD_SCRIPT='/opt/aa/bin/aa-download'
 fi
 
 
 usage(){
-    cat << EOF
+  cat << EOF
 Usage: $0 [options] <path> <version> [extension]
     -A                      with architecture before extension
     -c <type>               checksum value
@@ -43,91 +43,91 @@ Example:
     $0 -f 1 -A -O ./gosu tianon/gosu 1.17
     $0 -f 1 -A -O ./gosu tianon/gosu 1.17 .asc
 EOF
-    exit 1
+  exit 1
 }
 
 
 githubDownload(){
-    path="$1"
-    version="$2"
-    ext=${3-}
-    name=${path##*/}
+  path="$1"
+  version="$2"
+  ext=${3-}
+  name=${path##*/}
 
-    arc=''
-    if [ "$WITH_ARC" -ne 0 ]; then arc="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; fi
+  arc=''
+  if [ "$WITH_ARC" -ne 0 ]; then arc="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; fi
 
-    ver=''
+  ver=''
 
-    url="https://github.com/${path}"
-    case "$URL_FORMAT" in
-        # version 前有v
-        0) url="${url}/releases/download/v${version}/${name}${version:+"-$version"}${arc:+"-$arc"}${ext}" ;;
-        # version 前没有v
-        1) url="${url}/releases/download/${version}/${name}${arc:+"-$arc"}${ext}" ;;
-        10) url="${url}/archive/refs/tags/${version}${arc:+"-$arc"}${ext}";;
-        *) Panic "invalid url format -f ${URL_FORMAT}";;
-    esac
+  url="https://github.com/${path}"
+  case "$URL_FORMAT" in
+    # version 前有v
+    0) url="${url}/releases/download/v${version}/${name}${version:+"-$version"}${arc:+"-$arc"}${ext}" ;;
+    # version 前没有v
+    1) url="${url}/releases/download/${version}/${name}${arc:+"-$arc"}${ext}" ;;
+    10) url="${url}/archive/refs/tags/${version}${arc:+"-$arc"}${ext}" ;;
+    *) Panic "invalid url format -f ${URL_FORMAT}" ;;
+  esac
 
-    opts=''
+  opts=''
 
-    # ./aa-download "$@" 等方法都将导致./aa-download getopts解析不了。
-    if [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ] && [ -n "$UNZIP" ] && [ -n "$DST" ]; then
-         ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -u "$UNZIP" -O "$DST" "$url"
-    elif [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ] && [ -n "$UNZIP" ] ; then
-        ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -u "$UNZIP" "$url"
-    elif [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ]  && [ -n "$DST" ]; then
-        ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -O "$DST" "$url"
-    elif [ -n "$CHECKSUM" ] && [ -n "$UNZIP" ] && [ -n "$DST" ]; then
-        ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -u "$UNZIP" -O "$DST" "$url"
-    elif [ -n "$CHECKSUM" ] && [ -n "$UNZIP" ] ; then
-        ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -u "$UNZIP" "$url"
-    elif [ -n "$CHECKSUM" ] && [ -n "$DST" ]; then
-        ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -O "$DST" "$url"
-    elif [ -n "$UNZIP" ] && [ -n "$DST" ]; then
-        ${DOWNLOAD_SCRIPT} -u "$UNZIP" -O "$DST" "$url"
-    elif [ -n "$UNZIP" ] ; then
-        ${DOWNLOAD_SCRIPT} -u "$UNZIP" "$url"
-    elif [ -n "$DST" ]; then
-        ${DOWNLOAD_SCRIPT} -O "$DST"  "$url"
-    fi
+  # ./aa-download "$@" 等方法都将导致./aa-download getopts解析不了。
+  if [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ] && [ -n "$UNZIP" ] && [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -u "$UNZIP" -O "$DST" "$url"
+  elif [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ] && [ -n "$UNZIP" ] ; then
+    ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -u "$UNZIP" "$url"
+  elif [ -n "$CHECKSUM" ] && [ -n "$CHECKSUM_TYPE" ]  && [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -C "$CHECKSUM_TYPE" -c "$CHECKSUM" -O "$DST" "$url"
+  elif [ -n "$CHECKSUM" ] && [ -n "$UNZIP" ] && [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -u "$UNZIP" -O "$DST" "$url"
+  elif [ -n "$CHECKSUM" ] && [ -n "$UNZIP" ] ; then
+    ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -u "$UNZIP" "$url"
+  elif [ -n "$CHECKSUM" ] && [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -c "$CHECKSUM" -O "$DST" "$url"
+  elif [ -n "$UNZIP" ] && [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -u "$UNZIP" -O "$DST" "$url"
+  elif [ -n "$UNZIP" ] ; then
+    ${DOWNLOAD_SCRIPT} -u "$UNZIP" "$url"
+  elif [ -n "$DST" ]; then
+    ${DOWNLOAD_SCRIPT} -O "$DST"  "$url"
+  fi
 }
 
 githubHandleTar(){
-    path="$1"
-    version="$2"
-    ext=${3:-".tar.gz"}
-    UNZIP=${UNZIP:-"tar"}
-    githubDownload "$path" "$version" "$ext"
+  path="$1"
+  version="$2"
+  ext=${3:-".tar.gz"}
+  UNZIP=${UNZIP:-"tar"}
+  githubDownload "$path" "$version" "$ext"
 }
 
 main(){
-    tar=0
-    while getopts "Ac:C:E:f:hu:TO:" opt; do
-        case "$opt" in
-            A) WITH_ARC=1;;
-            c) CHECKSUM="$OPTARG" ;;
-            C) CHECKSUM_TYPE="$OPTARG" ;;
-            f) URL_FORMAT=1 ;;
-            h) usage ;;
-            u) UNZIP="$OPTARG" ;;
-            T) tar=1 ;;
-            O) DST=$(AbsPath "$OPTARG") ;;
-            *) usage ;;
-        esac
-    done
-    shift $((OPTIND-1))
-    path="$1"
-    version=${2:-}
-    ext=${3:-}
+  tar=0
+  while getopts "Ac:C:E:f:hu:TO:" opt; do
+    case "$opt" in
+      A) WITH_ARC=1 ;;
+      c) CHECKSUM="$OPTARG" ;;
+      C) CHECKSUM_TYPE="$OPTARG" ;;
+      f) URL_FORMAT=1 ;;
+      h) usage ;;
+      u) UNZIP="$OPTARG" ;;
+      T) tar=1 ;;
+      O) DST=$(AbsPath "$OPTARG") ;;
+      *) usage ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  path="$1"
+  version=${2:-}
+  ext=${3:-}
 
-    if [ $# -lt 1 ]; then usage; fi
+  if [ $# -lt 1 ]; then usage; fi
 
-    if [ "$tar" -eq 1 ]; then
-        githubHandleTar "$@"
-        return 0
-    fi
+  if [ "$tar" -eq 1 ]; then
+    githubHandleTar "$@"
+    return 0
+  fi
 
-    githubDownload "$path" "$version" "$ext"
+  githubDownload "$path" "$version" "$ext"
 }
 
 main "$@"

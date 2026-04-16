@@ -14,132 +14,130 @@ AA_LOG_NO_COLOR=1
 # 1777 表示只有创建者和root可以删除；0777 任何人都可以删除
 # 1=x, w=2, 4=r
 ownDir(){
-    dir="${1:-}"
-    mod_owner=${2:-1750}
-    mod_all=${3:-1777}
+  dir="${1:-}"
+  mod_owner=${2:-1750}
+  mod_all=${3:-1777}
 
-    # 空字符串，表示不创建该目录
-    if [ -z "$dir" ]; then
-        return 0
-    fi
+  # 空字符串，表示不创建该目录
+  if [ -z "$dir" ]; then
+    return 0
+  fi
 
-    if [ -z "${XUSER:-}" ]; then
-        aa-chmod-or-mkdir "$mod_all" "$dir"
-        return 0
-    fi
+  if [ -z "${XUSER:-}" ]; then
+    aa-chmod-or-mkdir "$mod_all" "$dir"
+    return 0
+  fi
 
-    aa-chmod-or-mkdir "$mod_owner" "$dir"
+  aa-chmod-or-mkdir "$mod_owner" "$dir"
 
-    if [ -z "${XGROUP:-}" ]; then
-        chown -R "$XUSER" "$dir"
-    else
-        chown -R "$XUSER":"$XGROUP" "$dir"
-    fi
+  if [ -z "${XGROUP:-}" ]; then
+    chown -R "$XUSER" "$dir"
+  else
+    chown -R "$XUSER":"$XGROUP" "$dir"
+  fi
 }
 
 initDirs(){
-    echo 'init directories'
-    mkdir -p "$TMPDIR"
-    chmod 1777 "$TMPDIR"
+  echo 'init directories'
+  mkdir -p "$TMPDIR"
+  chmod 1777 "$TMPDIR"
 
-    ownDir "${CONFDIR:-}" 1750
-    ownDir "${CONF_D:-}" 1750
-    ownDir "${MODULE_DIR:-}" 1750
-    ownDir "${RUNDIR:-}" 1750
-    ownDir "${LOGDIR:-}" 1750
-    ownDir "${HOME:-}" 1750
-    ownDir "${DATA_DIR:-}" 1750    # DATA_DIR 特殊情况下，使用 /var/lib/xxx/data 作为数据
-
+  ownDir "${CONFDIR:-}" 1750
+  ownDir "${CONF_D:-}" 1750
+  ownDir "${MODULE_DIR:-}" 1750
+  ownDir "${RUNDIR:-}" 1750
+  ownDir "${LOGDIR:-}" 1750
+  ownDir "${HOME:-}" 1750
+  ownDir "${DATA_DIR:-}" 1750    # DATA_DIR 特殊情况下，使用 /var/lib/xxx/data 作为数据
 }
 
 initTimezone(){
-    echo "init timezone => $TZ"
-    if [ -n "${TZ:-}" ]; then aa-set-timezone "$TZ"; fi
+  echo "init timezone => $TZ"
+  if [ -n "${TZ:-}" ]; then aa-set-timezone "$TZ"; fi
 }
 
-
 preinstallPackages(){
-    echo 'preinstall packages'
+  echo 'preinstall packages'
 
-    os="$1"
-    case "$os" in
-        'alpine')
-            # alpine: ~5MB，是其他linux的1/10，优先使用 alpine
-            Install tzdata procps ca-certificates
-            CleanPkgManager
-            ;;
-        'busybox')
-            # busybox: ~1-2MB，非操作系统，继承许多unix工具单一可执行文件
-            busybox --list
-            ;;
-        'debian')
-            # debian slim: ~50-80MB
-            Install locales ca-certificates apt-transport-https procps
-            sed -i '/en_GB.UTF-8/s/^# //g' /etc/locale.gen
-            locale-gen
-            CleanPkgManager
-            ;;
-        'oraclelinux')
-            # oraclelinux: 基于redhat改造
-            Install procps-ng tzdata
-            CleanPkgManager
-            ;;
-        'ubi')
-            Install procps
+  os="$1"
+  case "$os" in
+    'alpine')
+      # alpine: ~5MB，是其他linux的1/10，优先使用 alpine
+      Install tzdata procps ca-certificates
+      CleanPkgManager
+      ;;
+    'busybox')
+      # busybox: ~1-2MB，非操作系统，继承许多unix工具单一可执行文件
+      busybox --list
+      ;;
+    'debian')
+      # debian slim: ~50-80MB
+      Install locales ca-certificates apt-transport-https procps
+      sed -i '/en_GB.UTF-8/s/^# //g' /etc/locale.gen
+      locale-gen
+      CleanPkgManager
+      ;;
+    'oraclelinux')
+      # oraclelinux: 基于redhat改造
+      Install procps-ng tzdata
+      CleanPkgManager
+      ;;
+    'ubi')
+      Install procps
 
-            if ! command -v xargs >/dev/null 2>&1; then
-                Info "install findutils"
-                Install findutils
-            fi
+      if ! command -v xargs >/dev/null 2>&1; then
+        Info "install findutils"
+        Install findutils
+      fi
 
-            if ! command -v awk >/dev/null 2>&1; then
-                Info "install gawk"
-                Install gawk
-            fi
+      if ! command -v awk >/dev/null 2>&1; then
+        Info "install gawk"
+        Install gawk
+      fi
 
-            # ubi minimal: ~50MB, redhat 系列（ubi, centos, rockylinux）
-            # ubi9/ubi-micro 没有 dnf/yum/microdnf 包管理器，安装需要通过其他镜像复制
-            tmpdir=$(mktemp -d)
-            trap 'rm -rf "$tmpdir"' INT TERM EXIT
+      # ubi minimal: ~50MB, redhat 系列（ubi, centos, rockylinux）
+      # ubi9/ubi-micro 没有 dnf/yum/microdnf 包管理器，安装需要通过其他镜像复制
+      tmpdir=$(mktemp -d)
+      trap 'rm -rf "$tmpdir"' INT TERM EXIT
 
-            if [ ! -d '/usr/lib/locale/C.utf8' ] || [ ! -d '/usr/lib/locale/en_GB.utf8' ]; then
-                Info "install glibc-langpack-en"
-                Install glibc-langpack-en
-            fi
+      if [ ! -d '/usr/lib/locale/C.utf8' ] || [ ! -d '/usr/lib/locale/en_GB.utf8' ]; then
+        Info "install glibc-langpack-en"
+        Install glibc-langpack-en
+      fi
 
-            cp -r /usr/lib/locale/C.* "${tmpdir}/"
-            cp -r /usr/lib/locale/en_GB* "${tmpdir}/"
-            rm -rf /usr/lib/locale/*
-            mv "$tmpdir"/* /usr/lib/locale/
+      cp -r /usr/lib/locale/C.* "${tmpdir}/"
+      cp -r /usr/lib/locale/en_GB* "${tmpdir}/"
+      rm -rf /usr/lib/locale/*
+      mv "$tmpdir"/* /usr/lib/locale/
 
-            Info "localedef --list-archive | xargs localedef --delete-from-archive"
-            localedef --list-archive | xargs localedef --delete-from-archive
+      Info "localedef --list-archive | xargs localedef --delete-from-archive"
+      localedef --list-archive | xargs localedef --delete-from-archive
 
-            Info "clean package manager"
-            CleanPkgManager
-            ;;
-        'ubuntu')
-            # ubuntu minimal: ~50MB
-            Install procps
-            CleanPkgManager
-            ;;
-        *)
-            return 0
-    esac
+      Info "clean package manager"
+      CleanPkgManager
+      ;;
+    'ubuntu')
+      # ubuntu minimal: ~50MB
+      Install procps
+      CleanPkgManager
+      ;;
+    *)
+      return 0
+  esac
 }
 
 main(){
-    Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
-    os=${1:-}
+  Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
+  os=${1:-}
 
-    echo "uname -a => ($(uname -a))"
-    if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
+  echo "uname -a => ($(uname -a))"
+  if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
 
-    preinstallPackages "$os"
-    initDirs
-    initTimezone
+  preinstallPackages "$os"
+  initDirs
+  initTimezone
 
-    $ROOT/tests/aa-posix-lib-test.sh
+  $ROOT/tests/aa-posix-lib-test.sh
 }
 
 main "$@"

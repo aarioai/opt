@@ -2,9 +2,9 @@
 set -eu
 
 if [ -x "../lib/aa-posix-lib.sh" ]; then
-    . ../lib/aa-posix-lib.sh
+  . ../lib/aa-posix-lib.sh
 else
-    . /opt/aa/lib/aa-posix-lib.sh
+  . /opt/aa/lib/aa-posix-lib.sh
 fi
 
 main(){

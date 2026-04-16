@@ -2,14 +2,14 @@
 set -eu
 
 if [ -x "../lib/aa-posix-lib.sh" ]; then
-    . ../lib/aa-posix-lib.sh
+  . ../lib/aa-posix-lib.sh
 else
-    . /opt/aa/lib/aa-posix-lib.sh
+  . /opt/aa/lib/aa-posix-lib.sh
 fi
 
 main(){
-    if [ $# -lt 2 ]; then PanicUsage "$0 <mod> <dir> [dir]..."; fi
-    ChmodOrMkdir "$@"
+  if [ $# -lt 2 ]; then PanicUsage "$0 <mod> <dir> [dir]..."; fi
+  ChmodOrMkdir "$@"
 }
 
 main "$@"

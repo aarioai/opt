@@ -8,7 +8,7 @@
 ```shell
 
 noNeedEmptyString(){
-    echo $#
+  echo $#
 }
 
 a=1
@@ -20,9 +20,9 @@ noNeedEmptyString $a $b $c          #  Good!
 
 
 needEmptyString(){
-    echo "$1"
-    echo "$2"
-    echo "$3"
+  echo "$1"
+  echo "$2"
+  echo "$3"
 }
 needEmptyString "$a" "$b" "$c"    # Good!
 needEmptyString $a $b $c          # Bad!

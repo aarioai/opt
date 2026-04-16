@@ -4,7 +4,7 @@ set -eu
 lib='/opt/aa/lib/aa-posix-lib.sh'
 
 if [ -f "../lib/aa-posix-lib.sh" ]; then
-    lib='../lib/aa-posix-lib.sh'
+  lib='../lib/aa-posix-lib.sh'
 fi
 
 md5sum "$lib"
