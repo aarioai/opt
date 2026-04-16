@@ -776,9 +776,13 @@ CleanPkgManager(){
             echo ">>> $_cleanpkgmanager_sudo apk cache clean"
             $_cleanpkgmanager_sudo apk cache clean
             ;;
-        'apt-get'|'dnf'|'microdnf'|'yum')
+        'apt-get'|'dnf'|'yum')
             echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
             $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
+            ;;
+        'microdnf')
+          echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
+            $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
             ;;
         'opkg')
             ;;
@@ -811,23 +815,36 @@ _uninstall_(){
 
     case "$_uninstall_manager" in
         'apk')
+            echo ">>> $_uninstall_sudo apk del --no-cache --quiet $_uninstall_pkg"
             $_uninstall_sudo apk del --no-cache --quiet "$_uninstall_pkg"
             CleanPkgManager
             ;;
-        'apt-get'|'dnf'|'microdnf'|'yum')
+        'apt-get'|'dnf'|'yum')
+            echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
             $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
+            echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
             $_uninstall_sudo $_uninstall_manager autoremove -y -q
             CleanPkgManager
             ;;
+        'microdnf')
+            echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
+            $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
+            echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
+            $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
+            CleanPkgManager
+            ;;
         'opkg')
+            echo ">>> $_uninstall_sudo opkg remove $_uninstall_pkg"
             $_uninstall_sudo opkg remove "$_uninstall_pkg"
             CleanPkgManager
             ;;
         'pacman')
+            echo ">>> $_uninstall_sudo pacman -R --noconfirm --nosave $_uninstall_pkg"
             $_uninstall_sudo pacman -R --noconfirm --nosave "$_uninstall_pkg"
             CleanPkgManager
             ;;
         'zypper')
+            echo ">>> $_uninstall_sudo zypper --non-interactive remove $_uninstall_pkg"
             $_uninstall_sudo zypper --non-interactive remove "$_uninstall_pkg"
             CleanPkgManager
             ;;
