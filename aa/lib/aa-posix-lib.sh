@@ -102,34 +102,48 @@ _install_(){
 
     case "$_install_manager" in
         'apk')
+            echo ">>> $_install_sudo apk update --no-cache $_install_quite"
             $_install_sudo apk update --no-cache $_install_quite
+            echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
             $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
             ;;
         'apt-get')
             # -y auto confirm
             # -q quit only output important information
             # --no-install-recommends 只安装依赖包，不安扩展的推荐包
+            echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
             $_install_sudo $_install_manager update -y $_install_quite
+            echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
             $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
             ;;
         'dnf'|'microdnf')
+            echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
             $_install_sudo $_install_manager update -y $_install_quite
+            echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
             $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
             ;;
         'yum')
+            echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
             $_install_sudo $_install_manager update -y $_install_quite
+            echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
             $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
             ;;
         'opkg')
+            echo ">>> $_install_sudo opkg update $_install_quite"
             $_install_sudo opkg update $_install_quite
+            echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
             $_install_sudo opkg install $_install_quite "$_install_pkg"
             ;;
         'pacman')
+            echo ">>> $_install_sudo pacman -Syu --noconfirm --needed"
             $_install_sudo pacman -Syu --noconfirm --needed
+            echo ">>> $_install_sudo pacman -S --noconfirm --needed $_install_pkg"
             $_install_sudo pacman -S --noconfirm --needed "$_install_pkg"
             ;;
         'zypper')
+            echo ">>> $_install_sudo zypper --non-interactive refresh"
             $_install_sudo zypper --non-interactive refresh
+            echo ">>> $_install_sudo zypper --non-interactive install $_install_pkg"
             $_install_sudo zypper --non-interactive install "$_install_pkg"
             ;;
         *)
