@@ -820,7 +820,6 @@ readonly CpuArch
 
 Install(){
   Usage $# -ge 1 'Install <app> [app]...'
-  _install_result=0
 
   _install_sudo=''
   if ! IAmRoot && command -v sudo >/dev/null 2>&1; then
@@ -830,13 +829,11 @@ Install(){
   for _install_pkg in "$@"; do
     if [ -n "$_install_pkg" ]; then
       if ! _install_ "$_install_pkg" "$_install_sudo"; then
-        _install_result=1
-      else
-        Info "installed $_install_pkg"
+        return 1
       fi
+      Info "installed $_install_pkg"
     fi
   done
-  return "$_install_result"
 }
 export Install
 readonly Install
@@ -950,11 +947,11 @@ Uninstall(){
   Usage $# -ge 1 'Uninstall <app> [app]...'
   _uninstall_result=0
   for _uninstall_pkg in "$@"; do
-    if ! Install "$_uninstall_pkg"; then
+    if ! _uninstall_ "$_uninstall_pkg"; then
       _uninstall_result=1
     fi
   done
-  return "$_uninstall_result"
+  return $_uninstall_result
 }
 export Uninstall
 readonly Uninstall
