@@ -60,7 +60,7 @@ initTimezone(){
 preinstallPackages(){
   os="$1"
 
-  echo "[preinstall packages in $os]"
+  echo "[preinstall packages => $os]"
 
   case "$os" in
     'alpine')

@@ -91,8 +91,8 @@ readonly DetectPkgManager
 
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
 _install_(){
-  _install_sudo="$1"
-  _install_pkg="$2"
+  _install_pkg="$1"
+  _install_sudo="${2:-}"
   _install_quite="${3:-}"
 
   # handle Install <sudo> -q <app>
@@ -196,8 +196,7 @@ InstallGrep(){
     if [ "$(id -u)" != '0' ] && command -v sudo >/dev/null 2>&1; then
       _install_sudo='sudo'
     fi
-    # shellcheck disable=SC2086   # 不要加引号
-    _install_ $_install_sudo grep
+    _install_ grep "$_install_sudo"
   fi
 }
 export InstallGrep
@@ -830,8 +829,7 @@ Install(){
 
   for _install_pkg in "$@"; do
     if [ -n "$_install_pkg" ]; then
-      # shellcheck disable=SC2086   # 不要加引号
-      if ! _install_ $_install_sudo "$_install_pkg"; then
+      if ! _install_ "$_install_pkg" "$_install_sudo"; then
         _install_result=1
       else
         Info "installed $_install_pkg"
