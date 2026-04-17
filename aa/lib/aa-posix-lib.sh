@@ -846,6 +846,7 @@ CleanPkgManager(){
     return 0
   fi
 
+  Info "clean package manager: $_cleanpkgmanager"
   _cleanpkgmanager_sudo=''
   if ! IAmRoot && command -v sudo >/dev/null 2>&1; then
     _cleanpkgmanager_sudo='sudo'

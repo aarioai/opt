@@ -114,7 +114,6 @@ preinstallPackages(){
       Info "localedef --list-archive | xargs localedef --delete-from-archive"
       localedef --list-archive | xargs localedef --delete-from-archive
 
-      Info "clean package manager"
       CleanPkgManager
       ;;
     'ubuntu')
@@ -131,7 +130,7 @@ main(){
   Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
   os=${1:-}
 
-  echo "|↓ uname -a ↓|"
+  echo "| uname -a |"
   uname -a
   if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
 
