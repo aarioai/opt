@@ -196,7 +196,8 @@ InstallGrep(){
     if [ "$(id -u)" != '0' ] && command -v sudo >/dev/null 2>&1; then
       _install_sudo='sudo'
     fi
-    _install_ "$_install_sudo" grep
+    # shellcheck disable=SC2086   # 不要加引号
+    _install_ $_install_sudo grep
   fi
 }
 export InstallGrep
@@ -829,8 +830,11 @@ Install(){
 
   for _install_pkg in "$@"; do
     if [ -n "$_install_pkg" ]; then
-      if ! _install_ "$_install_sudo" "$_install_pkg"; then
+      # shellcheck disable=SC2086   # 不要加引号
+      if ! _install_ $_install_sudo "$_install_pkg"; then
         _install_result=1
+      else
+        Info "installed $_install_pkg"
       fi
     fi
   done
