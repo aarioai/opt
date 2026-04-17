@@ -131,7 +131,8 @@ main(){
   Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
   os=${1:-}
 
-  echo "uname -a => ($(uname -a))"
+  echo "|↓ uname -a ↓|"
+  uname -a
   if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
 
   preinstallPackages "$os"
