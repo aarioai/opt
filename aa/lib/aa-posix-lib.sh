@@ -181,7 +181,11 @@ _install_(){
       return 1
   esac
 
-  return $?
+  if command -v "$_install_cmd" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
 }
 readonly _install_
 
@@ -1010,12 +1014,22 @@ HttpCode(){
   Usage $# -ge 1 'HttpCode <url> [max_time=3]'
   _httpcode_url="$1"
   _httpcode_maxtime="${2:-3}"
-  if ! command -v curl >/dev/null 2>&1; then
-    if ! Install curl; then
-      PanicD "require install curl" "需要安装 curl"
-    fi
+  if command -v curl >/dev/null 2>&1; then
+    curl --max-time "$_httpcode_maxtime" -s -w '%{http_code}\n' -o /dev/null "$_httpcode_url" || printf ''
+    return
   fi
-  curl --max-time "$_httpcode_maxtime" -s -w '%{http_code}\n' -o /dev/null "$_httpcode_url" || printf ''
+
+  # busybox 系统无curl，也不好安装。但是一般会有wget
+  if command -v wget >/dev/null 2>&1; then
+    wget --spider --timeout="$_httpcode_maxtime" --tries=1 -S "$_httpcode_url" 2>&1 | awk '/HTTP\// {print $2}' | tail -1 || printf ''
+    return
+  fi
+
+  if Install curl || Install wget ; then
+    HttpCode "$_httpcode_url" "$_httpcode_maxtime"
+  fi
+
+  PanicD "require install curl or wget" "需要安装 curl 或 wget"
 }
 export HttpCode
 readonly HttpCode
@@ -1030,6 +1044,37 @@ HttpOK(){
 }
 export HttpOK
 readonly HttpOK
+
+Download(){
+  Usage $# 1 2 'Download <url> [output_name]'
+  _download_url="$1"
+  _download_rename="${2:-"$(basename "$_download_url")"}"
+
+  # 移除查询参数，如 index?a=100&b=200
+  _download_rename=$(echo "$_download_rename" | cut -d'?' -f1)
+
+  # curl -f -L -o 的行为（-f 失败时返回非0退出码，-L 跟随重定向，-o 指定输出文件名）
+  if command -v curl >/dev/null 2>&1; then
+      curl -f -L -o "$_download_rename" "$_download_url"
+      return $?
+  fi
+
+  # busybox 系统无curl，也不好安装。但是一般会有wget
+  if command -v wget >/dev/null 2>&1; then
+    wget --tries=1 -O "$_download_rename" "$_download_url"
+    return $?
+  fi
+
+  if Install curl || Install wget; then
+    _download_ "$_download_url"
+    return $?
+  fi
+
+  Error "missing package curl or wget"
+  return 1
+}
+export Download
+readonly Download
 
 Filename(){
   Usage $# 1 2 'Filename <path> [with_ext]'

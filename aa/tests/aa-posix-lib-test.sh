@@ -658,6 +658,22 @@ testHttpOK(){
   done
 }
 
+testDownload(){
+  testing 'Download'
+  url='https://www.baidu.com'
+  filename='baidu.index'
+  temp=$(mktemp -d)
+  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  cd "$temp"
+  if ! Download "$url" "$filename"; then
+    WarnD "Download $url failed" "Download $url 失败"
+    return
+  fi
+  if [ ! -f "$filename" ]; then
+        WarnD "rename downloaded $url to $filename failed" "重命名下载 $url 为 $filename 失败"
+  fi
+}
+
 testAbsDir() {
   testing 'AbsDir'
   want=${PWD:-"$(pwd)"}

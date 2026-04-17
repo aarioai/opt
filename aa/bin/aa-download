@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Optional: curl, tar, openssl(auto install)
+# Optional: tar, openssl(auto install)
 
 if [ -x "../lib/aa-posix-lib.sh" ]; then
   . ../lib/aa-posix-lib.sh
@@ -159,8 +159,7 @@ download() {
   trap 'rm -rf "$temp"' EXIT  # 临时文件，退出后自动删除
   cd "$temp"
 
-  Install curl
-  if ! curl -f -L -O "$url";then
+  if ! Download "$url";then
     Panic "failed to download $url"
   fi
   filename=$(basename "$url")
