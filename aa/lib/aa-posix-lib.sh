@@ -183,11 +183,10 @@ _install_(){
 
   return $?
 }
-export _install_
 readonly _install_
 
 # grep 是基础函数，必须要提前安装。安装尽可能不依赖任何其他函数
-_grep_(){
+InstallGrep(){
   if ! command -v grep >/dev/null 2>&1; then
     _install_sudo=''
     if [ "$(id -u)" != '0' ] && command -v sudo >/dev/null 2>&1; then
@@ -195,11 +194,9 @@ _grep_(){
     fi
     _install_ "$_install_sudo" grep
   fi
-
-  grep "$@"
 }
-export _grep_
-readonly _grep_
+export InstallGrep
+readonly InstallGrep
 
 IsLocaleChinese(){
   # Check ENV
@@ -209,13 +206,14 @@ IsLocaleChinese(){
       ;;
   esac
 
+  InstallGrep
   # Check locale config
-  if command -v locale >/dev/null 2>&1 && locale -a 2>/dev/null | _grep_ -q -E '^zh_(Hans|CN|SG|MY)(\..*)?$'; then
+  if command -v locale >/dev/null 2>&1 && locale -a 2>/dev/null | grep -q -E '^zh_(Hans|CN|SG|MY)(\..*)?$'; then
     return 0
   fi
 
   for _islocalechiense_file in "/etc/default/locale" "/etc/locale.conf"; do
-    if [ -f "$_islocalechiense_file" ] && _grep_ -q -E "=.*zh_(Hans|CN|SG|MY)" "$_islocalechiense_file" 2>/dev/null; then
+    if [ -f "$_islocalechiense_file" ] && grep -q -E "=.*zh_(Hans|CN|SG|MY)" "$_islocalechiense_file" 2>/dev/null; then
       return 0
     fi
   done
@@ -250,7 +248,8 @@ IsSupportChinese(){
   fi
 
   if [ -f "/usr/share/i18n/SUPPORTED" ]; then
-    if _grep_ -q -E "^zh_(CN|SG|MY)(\..*)? UTF-8" "/usr/share/i18n/SUPPORTED" 2>/dev/null; then
+    InstallGrep
+    if grep -q -E "^zh_(CN|SG|MY)(\..*)? UTF-8" "/usr/share/i18n/SUPPORTED" 2>/dev/null; then
       return 0
     fi
   fi
@@ -284,11 +283,11 @@ export IsInChinese
 readonly IsInChinese
 
 _isNumber_(){
-  if ! printf '%s' "${1:-}" | _grep_ '^[[:digit:]]*$' >/dev/null 2>&1; then
+  InstallGrep
+  if ! printf '%s' "${1:-}" | grep '^[[:digit:]]*$' >/dev/null 2>&1; then
     return 1
   fi
 }
-export _isNumber_
 readonly _isNumber_
 
 PanicIfNotNumber(){
@@ -422,7 +421,6 @@ _nowUsage_(){
     -O|-iso8601|-rfc3339 (e.g. 0000-00-00T00:00:00+0800)
 EOF
 }
-export _nowUsage_
 readonly _nowUsage_
 
 
@@ -561,7 +559,6 @@ _saveToLogFile(){
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
-export _saveToLogFile
 readonly _saveToLogFile
 
 _log_() {
@@ -580,7 +577,6 @@ _log_() {
   fi
 }
 # @warn 函数不能设置 readonly，可以重写 _log_(){} ，但是不能作为变量赋值了，如  _log_=100 就会报错
-export _log_
 readonly _log_
 
 Log() {
@@ -770,7 +766,8 @@ readonly IAmRoot
 CpuArch() {
   # debian/ubuntu
   if command -v dpkg >/dev/null 2>&1; then
-    if dpkg --help 2>/dev/null | _grep_ -q -- "--print-architecture"; then
+    InstallGrep
+    if dpkg --help 2>/dev/null | grep -q -- "--print-architecture"; then
       dpkg --print-architecture 2>/dev/null | sed 's/.*-//'
       return 0
     fi
@@ -940,7 +937,6 @@ _uninstall_(){
       if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
   esac
 }
-export _uninstall_
 readonly _uninstall_
 
 Uninstall(){
@@ -2174,7 +2170,8 @@ ExportProfile(){
 
   if [ -f "$_exportprofile_dst" ]; then
     _exportprofile_pattern="^\s*export\s+${_exportprofile_key}\s*=\s*=${_exportprofile_value}\s*$"
-    if _grep_ -E "$_exportprofile_pattern" "$_exportprofile_dst" >/dev/null 2>&1; then
+    InstallGrep
+    if grep -E "$_exportprofile_pattern" "$_exportprofile_dst" >/dev/null 2>&1; then
       return 0
     fi
   else
@@ -2239,7 +2236,8 @@ ExistGroup(){
   _existgroup_g="$1"
 
   if [ -f "/etc/group" ]; then
-    if ! _grep_ -q "^${_existgroup_g}:" /etc/group; then
+    InstallGrep
+    if ! grep -q "^${_existgroup_g}:" /etc/group; then
       return 1
     fi
     return
@@ -2260,7 +2258,8 @@ ExistUser(){
   Usage $# -eq 1 'ExistUser <user>'
   _existuser_u="$1"
   if [ -f "/etc/passwd" ]; then
-    if ! _grep_ -q "^${_existuser_u}:" /etc/passwd; then
+    InstallGrep
+    if ! grep -q "^${_existuser_u}:" /etc/passwd; then
       return 1
     fi
     return
@@ -2779,7 +2778,8 @@ MatchedLines(){
 
   _matchedlines_matched=0
   _matchedlines_result="$TAB"
-  _grep_ "^[[:space:]]*${_matchedlines_pattern}.*[[:space:]]*$" "$_matchedlines_file" | while IFS= read -r _matchedlines_match; do
+  InstallGrep
+  grep "^[[:space:]]*${_matchedlines_pattern}.*[[:space:]]*$" "$_matchedlines_file" | while IFS= read -r _matchedlines_match; do
     if [ "$_matchedlines_trim" = '1' ]; then
       # trim left spaces
       _matchedlines_match="${_matchedlines_match#"${_matchedlines_match%%[![:space:]]*}"}"
@@ -2885,7 +2885,6 @@ _generateRSAKey_() {
 
   return 0
 }
-export _generateRSAKey_
 readonly _generateRSAKey_
 
 # 批量生成 RSA 密钥
