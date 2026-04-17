@@ -671,6 +671,36 @@ testAbsDir() {
   cd "$want" || fail 'AbsDir' "$want" ""
 }
 
+testParentDir() {
+  testing 'ParentDir'
+  temp=$(mktemp -d)
+  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  dir="$temp/a/b/c/d/e/f/g"
+  file="${dir}/test.txt"
+  mkdir -p "$dir"
+  echo "$dir" > "$file"
+
+  got="$(ParentDir "$dir")"
+  want="$temp/a/b/c/d/e/f"
+  assert "ParentDir $dir" "$want" "$got"
+
+  got="$(ParentDir "$dir" 2)"
+  want="$temp/a/b/c/d/e"
+  assert "ParentDir $dir 2" "$want" "$got"
+
+  got="$(ParentDir "$dir" 4)"
+  want="$temp/a/b/c"
+  assert "ParentDir $dir 4" "$want" "$got"
+
+  got="$(ParentDir "$file" 4)"
+  want="$temp/a/b/c"
+  assert "ParentDir $file 4" "$want" "$got"
+
+  got="$(ParentDir "$file")"
+  want="$temp/a/b/c/d/e/f"
+  assert "ParentDir $file" "$want" "$got"
+}
+
 testAbsPath() {
   testing 'AbsPath'
   cur=${PWD:-"$(pwd)"}
@@ -979,6 +1009,7 @@ main() {
   testHttpOK
 
   testAbsDir
+  testParentDir
   testAbsPath
   testFilename
   testExtname

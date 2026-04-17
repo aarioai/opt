@@ -3,6 +3,7 @@ set -euo pipefail
 
 . /opt/k8s/lib/k8s-lib.sh
 
+export REGISTRIES_YAML
 readonly REGISTRIES_YAML='/etc/rancher/k3s/registries.yaml'
 
 K3S_NAMESPACE=${K3S_NAMESPACE:-}
@@ -11,6 +12,7 @@ K3S_NAMESPACE=${K3S_NAMESPACE:-}
 k3sClusterServe(){
   k3s kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
 }
+export k3sClusterServe
 readonly k3sClusterServe
 
 k3sContextCluster(){
@@ -19,6 +21,7 @@ k3sContextCluster(){
   if [ -z "$_k3s_ctx" ]; then _k3s_ctx=$(kubectl config current-context); fi
   k3s kubectl config view -o jsonpath="{.contexts[?(@.name=='$_k3s_ctx')].context.cluster}"
 }
+export k8sContextCluster
 readonly k8sContextCluster
 
 k3sRenewKubeconfig(){
@@ -28,12 +31,18 @@ k3sRenewKubeconfig(){
   local _k3s_file="$3"
   local _k3s_namespace="${4:-kubernetes-dashboard}"
 
-  local _k3s_server=$(k3sClusterServe)
-  local _k3s_current_ctx=$(k3s kubectl config current-context)
-  local _k3s_cluster=$(k3sContextCluster "$_k3s_current_ctx")
-  local _k3s_context="kubeconfig-${_k3s_current_ctx}"  # 基于当前 context 生成
-  local _k3s_crt=$(k3s kubectl get secret "$_k3s_secret" -n "$_k3s_namespace" -o jsonpath='{.data.ca\.crt}')
-  local _k3s_user_token=$(k3s kubectl get secret "$_k3s_secret" -n "$_k3s_namespace" -o jsonpath='{.data.token}' | base64 --decode)
+  local _k3s_server
+  local _k3s_current_ctx
+  local _k3s_cluster
+  local _k3s_context
+  local _k3s_crt
+  local _k3s_user_token
+  _k3s_server=$(k3sClusterServe)
+  _k3s_current_ctx=$(k3s kubectl config current-context)
+  _k3s_cluster=$(k3sContextCluster "$_k3s_current_ctx")
+  _k3s_context="kubeconfig-${_k3s_current_ctx}"  # 基于当前 context 生成
+  _k3s_crt=$(k3s kubectl get secret "$_k3s_secret" -n "$_k3s_namespace" -o jsonpath='{.data.ca\.crt}')
+  _k3s_user_token=$(k3s kubectl get secret "$_k3s_secret" -n "$_k3s_namespace" -o jsonpath='{.data.token}' | base64 --decode)
 
   if [ -f "$_k3s_file" ]; then
     sudo cp -f "$_k3s_file" "${_k3s_file}.bak"
@@ -64,11 +73,13 @@ EOF
   sudo chmod 644 "$_k3s_file"
   Info "kubeconfig $_k3s_file generated"
 }
+export k8sGenerateKubeconfig
 readonly k8sGenerateKubeconfig
 
 # 删除所有未使用的<none>镜像
 k3sRmiNoneImages(){
-  local _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
+  local _k3s_unused_images
+  _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
   for image in $_k3s_unused_images; do
     # 检查是否有容器使用这个镜像
     if ! sudo k3s crictl ps -q | xargs -r sudo k3s crictl inspect 2>/dev/null | grep -q "$image"; then
@@ -77,6 +88,7 @@ k3sRmiNoneImages(){
     fi
   done
 }
+export k3sRmiNoneImages
 readonly k3sRmiNoneImages
 
 _k3sPull(){
@@ -85,8 +97,10 @@ _k3sPull(){
   if [ -f "$REGISTRIES_YAML" ] && Install yq; then
     case "$_k3s_image" in
       "$K8S_ALIYUN_HOST"/*)
-        local _k3s_username=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.username" "$REGISTRIES_YAML")
-        local _k3s_password=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.password" "$REGISTRIES_YAML")
+        local _k3s_username
+        local _k3s_password
+        _k3s_username=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.username" "$REGISTRIES_YAML")
+        _k3s_password=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.password" "$REGISTRIES_YAML")
         if [ -n "$_k3s_username" ] && [ -n "$_k3s_password" ]; then
           Info "sudo k3s ctr images pull --print-chainid --local --user $_k3s_username:<password> $_k3s_image"
           if k3s ctr images pull --print-chainid --local --user "$_k3s_username:$_k3s_password" $_k3s_image; then
@@ -103,6 +117,7 @@ _k3sPull(){
   HighlightD "$_k3s_hightlight_en" "$_k3s_hightlight_cn"
   sudo k3s crictl pull "$_k3s_image"
 }
+export _k3sPull
 readonly _k3sPull
 
 k3sPullImage(){
@@ -130,6 +145,7 @@ EOF
     *) _k3sPull "$K8S_ALIYUN_HOST/$_k3s_source/$_k3s_image" ;;
   esac
 }
+export k3sPullImage
 readonly k3sPullImage
 
 # 获取 PVC 状态
@@ -154,6 +170,7 @@ k3sPvcStatus(){
     Panic "bind PVC (${_k3s_name} @${_k3s_namespace}) failed"
   fi
 }
+export k3sPvcStatus
 readonly k3sPvcStatus
 
 k3sStatus(){
@@ -171,6 +188,7 @@ k3sStatus(){
   Heading "[CONTAINER] sudo k3s crictl ps -a --name $_k3s_container"
   sudo k3s crictl ps -a --name "$_k3s_container"
 }
+export k3sStatus
 readonly k3sStatus
 
 # K3S 启动之后，查看容器状态
@@ -203,6 +221,7 @@ k3sWaitReady(){
 #  Heading "[IMAGE] sudo k3s crictl images | grep $_k3s_image"
 #  sudo k3s crictl images | grep "$_k3s_image"
 }
+export k3sWaitReady
 readonly k3sWaitReady
 
 k3sDetectGlobalYaml(){
@@ -219,6 +238,7 @@ k3sDetectGlobalYaml(){
   done
   return 1
 }
+export k3sDetectGlobalYaml
 readonly k3sDetectGlobalYaml
 
 k3sDetectNamespaceYaml(){
@@ -235,6 +255,7 @@ k3sDetectNamespaceYaml(){
   done
   return 1
 }
+export k3sDetectNamespaceYaml
 readonly k3sDetectNamespaceYaml
 
 k3sTryApply(){
@@ -249,6 +270,7 @@ k3sTryApply(){
   Info "sudo k3s kubectl apply -f $(LastN 3 '/' $_k3s_yaml)"
   sudo k3s kubectl apply -f "$_k3s_yaml"
 }
+export k3sTryApply
 readonly k3sTryApply
 
 k3sTryDelete(){
@@ -271,6 +293,7 @@ k3sTryDelete(){
   Info "sudo k3s kubectl delete -n $_k3s_namespace -f $(LastN 3 '/' $_k3s_yaml)"
   sudo k3s kubectl delete -n "$_k3s_namespace" -f "$_k3s_yaml" --ignore-not-found=true
 }
+export k3sTryDelete
 readonly k3sTryDelete
 
 k3sPullImageSources(){
@@ -283,6 +306,7 @@ k3sPullImageSources(){
     fi
   done
 }
+export k3sPullImageSources
 readonly k3sPullImageSources
 
 k3sTryApplyGlobal(){
@@ -291,6 +315,7 @@ k3sTryApplyGlobal(){
   k3sTryApply "$(k3sDetectGlobalYaml "$_k3s_dir")"
   k3sTryApply "$(k3sDetectNamespaceYaml "$_k3s_dir")"
 }
+export k3sTryApplyGlobal
 readonly k3sTryApplyGlobal
 
 _k3sConvertTmpl(){
@@ -315,6 +340,7 @@ _k3sConvertTmpl(){
   mv "$_k3s_global_tmpl_temp" "$_k3s_dst"
   Info "convert $(LastN 3 '/' $_k3s_tmpl) => $(LastN 3 '/' $_k3s_dst)"
 }
+export _k3sConvertTmpl
 readonly _k3sConvertTmpl
 
 k3sConvertTmpl(){
@@ -327,6 +353,7 @@ k3sConvertTmpl(){
     fi
   done
 }
+export k3sConvertTmpl
 readonly k3sConvertTmpl
 
 # 自动构建
@@ -355,6 +382,7 @@ k3sBuild(){
   k3sTryApply "${_k3s_dir}/service"
   k3sTryApply "${_k3s_dir}/web"
 }
+export k3sBuild
 readonly k3sBuild
 
 # 移除安装，但是保留 pvc 和 namespace
@@ -376,6 +404,7 @@ k3sDelete(){
   fi
   k3sRmiNoneImages
 }
+export k3sDelete
 readonly k3sDelete
 
 k3sTryDeletePV(){
@@ -404,6 +433,7 @@ k3sTryDeletePV(){
   Info 'k3s kubectl get pv'
   k3s kubectl get pv
 }
+export k3sTryDeletePV
 readonly k3sTryDeletePV
 
 k3sPurge(){
@@ -428,6 +458,7 @@ k3sPurge(){
   local _k3s_cn='global 和 namespace 通常与其他服务共享，删除需使用 destroy (k3sDestroy) 指令'
   NoticeD "$_k3s_en" "$_k3s_cn"
 }
+export k3sPurge
 readonly k3sPurge
 
 k3sDestroy(){
@@ -440,6 +471,7 @@ k3sDestroy(){
   Warn "sudo k3s kubectl delete namespace $_k3s_namespace"
   sudo k3s kubectl delete namespace "$_k3s_namespace"
 }
+export k3sDestroy
 readonly k3sDestroy
 
 # 进入正在运行的容器
@@ -471,6 +503,7 @@ k3sNsenter(){
   fi
   sudo k3s kubectl exec "${_k3s_args[@]}" -- /bin/sh
 }
+export k3sNsenter
 readonly k3sNsenter
 
 k3sDetectNamespace(){
@@ -494,6 +527,7 @@ k3sDetectNamespace(){
     fi
   done
 }
+export k3sDetectNamespace
 readonly k3sDetectNamespace
 
 _k3s_cmd_list(){
@@ -549,6 +583,7 @@ k3sErrorLog(){
   Info 'sudo journalctl -u k3s | grep error | tail -10'
   sudo journalctl -u k3s | grep error | tail -10
 }
+export k3sErrorLog
 readonly k3sErrorLog
 
 k3sLogs(){
@@ -596,6 +631,7 @@ k3sLogs(){
     sudo k3s crictl logs "$_k3s_id"   # 失败容器重启，名称会变
   fi
 }
+export k3sLogs
 readonly k3sLogs
 
 k3sRestart(){
@@ -605,6 +641,7 @@ k3sRestart(){
   Info "sudo k3s kubectl rollout restart $_k3s_serv -n $_k3s_namespace"
   sudo k3s kubectl rollout restart "$_k3s_serv" -n "$_k3s_namespace"
 }
+export k3sRestart
 readonly k3sRestart
 
 k3sRunIt(){
@@ -634,6 +671,7 @@ k3sRunIt(){
   Highlight "  1. sudo k3s kubectl run $K8S_TEST_POD $_k3s_ns --image=$_k3s_image --restart=Never --rm -it -- $_k3s_bash"
   if [ -n "$_k3s_interact" ]; then Highlight "  2. $_k3s_interact"; fi
 }
+export k3sRunIt
 readonly k3sRunIt
 
 # 1. 同命名空间访问    curl http://<service_name>:15672/api/overview
@@ -671,6 +709,7 @@ k3sCurl(){
 
   k3sRunIt 'curlimages/curl' "curl $_k3s_flag $_k3s_url" "$_k3s_namespace"
 }
+export k3sCurl
 readonly k3sCurl
 
 k3sCommands(){
@@ -750,4 +789,5 @@ EOF
     *)  _k3s_cmd_list "$0" "$_k3s_sub_cmd";;
   esac
 }
+export k3sCommands
 readonly k3sCommands

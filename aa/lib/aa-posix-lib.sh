@@ -18,33 +18,51 @@ set -eu
 #   本身shell脚本就很小，因此不要过度优化通用包，这里只保留少量全局变量
 
 # mktemp 依赖 $TMPDIR 文件夹
-export TMPDIR=${TMPDIR:-/tmp}
-export QUITE_LOGS=${QUITE_LOGS:-0}
-export LIB_LOG_FILE=${LIB_LOG_FILE:-}
+export TMPDIR="${TMPDIR:-/tmp}"
+export QUITE_LOGS="${QUITE_LOGS:-0}"
+export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
 export IN_CHINESE=0         # 如果将此设置为 -1，则强制输出英文；设为 1，强制输出中文；否则自动判断系统是否是中文
-AA_LOG_NO_COLOR=${AA_LOG_NO_COLOR:-0}  # 是否不输出颜色
+AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色
 
 # 换行符
 # printf/echo 都会移除掉尾部的空行。试了很多办法，只有这样写才可以
+export LF
 readonly LF="
 "
+export TAB
 readonly TAB='	'     # tab=tab符号
+export TAB2
 readonly TAB2='  '    # tab=2个空格
+export TAB4
 readonly TAB4='    '  # tab=4个空格
 # 黑、白没有存在的必要（黑、白背景面板难以区分）
+export _NC_
 readonly _NC_='\033[0m' # No Color
+export _RED_
 readonly _RED_='\033[0;31m'             # 红
+export _LIGHT_RED_
 readonly _LIGHT_RED_='\033[0;91m'
+export _GREEN_
 readonly _GREEN_='\033[0;32m'           # 绿
+export _LIGHT_GREEN_
 readonly _LIGHT_GREEN_='\033[0;92m'
+export _YELLOW_
 readonly _YELLOW_='\033[1;33m'          # 黄
+export _LIGHT_YELLOW_
 readonly _LIGHT_YELLOW_='\033[1;93m'
+export _BLUE_
 readonly _BLUE_='\033[1;34m'            # 蓝
+export _LIGHT_BLUE_
 readonly _LIGHT_BLUE_='\033[1;94m'
+export _MAGENTA_
 readonly _MAGENTA_='\033[1;35m'         # 品红
+export _LIGHT_MAGENTA_
 readonly _LIGHT_MAGENTA_='\033[1;95m'
+export _CYAN_
 readonly _CYAN_='\033[1;36m'            # 青
+export _LIGHT_CYAN_
 readonly _LIGHT_CYAN_='\033[1;96m'
+export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
 
 DetectPkgManager(){
@@ -68,6 +86,7 @@ DetectPkgManager(){
     printf '%s' ''
   fi
 }
+export DetectPkgManager
 readonly DetectPkgManager
 
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
@@ -103,8 +122,10 @@ _install_(){
   case "$_install_manager" in
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
+      # shellcheck disable=SC2086
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
@@ -112,26 +133,34 @@ _install_(){
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
+      # shellcheck disable=SC2086
       $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
       echo ">>> $_install_sudo opkg update $_install_quite"
+      # shellcheck disable=SC2086
       $_install_sudo opkg update $_install_quite
       echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
+      # shellcheck disable=SC2086
       $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
@@ -154,6 +183,7 @@ _install_(){
 
   return $?
 }
+export _install_
 readonly _install_
 
 # grep 是基础函数，必须要提前安装。安装尽可能不依赖任何其他函数
@@ -168,6 +198,7 @@ _grep_(){
 
   grep "$@"
 }
+export _grep_
 readonly _grep_
 
 IsLocaleChinese(){
@@ -190,6 +221,7 @@ IsLocaleChinese(){
   done
   return 1
 }
+export IsLocaleChinese
 readonly IsLocaleChinese
 
 IsSupportChinese(){
@@ -225,6 +257,7 @@ IsSupportChinese(){
 
   return 1
 }
+export IsSupportChinese
 readonly IsSupportChinese
 
 # 只有系统是中文，才输出中文。
@@ -247,6 +280,7 @@ IsInChinese(){
   export IN_CHINESE=-1
   return 1
 }
+export IsInChinese
 readonly IsInChinese
 
 _isNumber_(){
@@ -254,6 +288,7 @@ _isNumber_(){
     return 1
   fi
 }
+export _isNumber_
 readonly _isNumber_
 
 PanicIfNotNumber(){
@@ -262,6 +297,7 @@ PanicIfNotNumber(){
     if ! _isNumber_ "$_panicifnotumber"; then Panic "'$_panicifnotumber' is not a valid number"; fi
   done
 }
+export PanicIfNotNumber
 readonly PanicIfNotNumber
 
 PanicIfNotFile(){
@@ -270,6 +306,7 @@ PanicIfNotFile(){
     if [ ! -f "$_panicifnotfile" ]; then Panic "not found file '$_panicifnotfile'"; fi
   done
 }
+export PanicIfNotFile
 readonly PanicIfNotFile
 
 PanicIfNotDir(){
@@ -278,6 +315,7 @@ PanicIfNotDir(){
     if [ ! -d "$_panicifnotdir" ]; then Panic "not found directory '$_panicifnotdir'"; fi
   done
 }
+export PanicIfNotDir
 readonly PanicIfNotDir
 
 # Require: IsInChinese
@@ -293,6 +331,7 @@ PanicUsage() {
   fi
   exit 1
 }
+export PanicUsage
 readonly PanicUsage
 
 # Require: _is_number, PanicUsage
@@ -349,6 +388,7 @@ EOF
 
   PanicUsage "$_usage_msg"
 }
+export Usage
 readonly Usage
 
 # Require: IsInChinese
@@ -360,6 +400,7 @@ Dict(){
   fi
   printf '%s' "$1"
 }
+export Dict
 readonly Dict
 
 _nowUsage_(){
@@ -381,6 +422,7 @@ _nowUsage_(){
     -O|-iso8601|-rfc3339 (e.g. 0000-00-00T00:00:00+0800)
 EOF
 }
+export _nowUsage_
 readonly _nowUsage_
 
 
@@ -409,11 +451,13 @@ Now(){
     *)  _nowUsage_ ;;
   esac
 }
+export Now
 readonly Now
 
 Today(){
   Now -F
 }
+export Today
 readonly Today
 
 PrintColor(){
@@ -426,6 +470,7 @@ PrintColor(){
     printf "%s\n" "$*"
   fi
 }
+export PrintColor
 readonly PrintColor
 
 Lowlight(){
@@ -435,12 +480,14 @@ Lowlight(){
     printf "%s\n" "$*"
   fi
 }
+export Lowlight
 readonly Lowlight
 
 LowlightD(){
   Usage $# -eq 2 'LowlightD <english> <chinese>'
   Lowlight "$(Dict "$1" "$2")"
 }
+export LowlightD
 readonly LowlightD
 
 Highlight(){
@@ -450,12 +497,14 @@ Highlight(){
     printf "%s\n" "$*"
   fi
 }
+export Highlight
 readonly Highlight
 
 HighlightD(){
   Usage $# -eq 2 'HighlightD <english> <chinese>'
   Highlight "$(Dict "$1" "$2")"
 }
+export HighlightD
 readonly HighlightD
 
 Heading(){
@@ -468,22 +517,26 @@ Heading(){
   fi
   _saveToLogFile "" "$@"
 }
+export Heading
 readonly Heading
 
 HeadingD(){
   Usage $# -eq 2 'HeadingD <english> <chinese>'
   Heading "$(Dict "$1" "$2")"
 }
+export HeadingD
 readonly HeadingD
 
 SetLibLogFile(){
   export LIB_LOG_FILE="$1"
 }
+export SetLibLogFile
 readonly SetLibLogFile
 
 UnsetLibLogFile(){
   export LIB_LOG_FILE=''
 }
+export UnsetLibLogFile
 readonly UnsetLibLogFile
 
 
@@ -508,6 +561,7 @@ _saveToLogFile(){
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
+export _saveToLogFile
 readonly _saveToLogFile
 
 _log_() {
@@ -526,122 +580,141 @@ _log_() {
   fi
 }
 # @warn 函数不能设置 readonly，可以重写 _log_(){} ，但是不能作为变量赋值了，如  _log_=100 就会报错
+export _log_
 readonly _log_
 
 Log() {
   _log_ "" "" "$*"
   _saveToLogFile "" "$@"
 }
+export Log
 readonly Log
 
 LogD(){
   Usage $# -eq 2 'LogD <english> <chinese>'
   Log "$(Dict "$1" "$2")"
 }
+export LogD
 readonly LogD
 
 Debug() {
   _log_ "[debug]" "$_CYAN_" "$*"
   _saveToLogFile "[debug]" "$@"
 }
+export Debug
 readonly Debug
 
 DebugD(){
   Usage $# -eq 2 'DebugD <english> <chinese>'
   Debug "$(Dict "$1" "$2")"
 }
+export DebugD
 readonly DebugD
 
 Info() {
   _log_ "[info]" "$_GREEN_" "$*"
   _saveToLogFile "[info]" "$@"
 }
+export Info
 readonly Info
 
 InfoD(){
   Usage $# -eq 2 'InfoD <english> <chinese>'
   Info "$(Dict "$1" "$2")"
 }
+export InfoD
 readonly InfoD
 
 Notice() {
   _log_ "[notice]" "$_MAGENTA_" "$*"
   _saveToLogFile "[notice]" "$@"
 }
+export Notice
 readonly Notice
 
 NoticeD(){
   Usage $# -eq 2 'NoticeD <english> <chinese>'
   Notice "$(Dict "$1" "$2")"
 }
+export NoticeD
 readonly NoticeD
 
 Warn() {
   _log_ "[warn]" "$_YELLOW_" "$*" >&2
   _saveToLogFile "[warn]" "$@"
 }
+export Warn
 readonly Warn
 
 WarnD(){
   Usage $# -eq 2 'Warn <english> <chinese>'
   Warn "$(Dict "$1" "$2")"
 }
+export WarnD
 readonly WarnD
 
 Error() {
   _log_ "[error]" "$_RED_" "$*" >&2
   _saveToLogFile "[error]" "$@"
 }
+export Error
 readonly Error
 
 ErrorD(){
   Usage $# -eq 2 'ErrorD <english> <chinese>'
   Error "$(Dict "$1" "$2")"
 }
+export ErrorD
 readonly ErrorD
 
 Panic() {
   Error "$@"
   exit 1
 }
+export Panic
 readonly Panic
 
 PanicD(){
   Usage $# -eq 2 'PanicD <english> <chinese>'
   Panic "$(Dict "$1" "$2")"
 }
+export PanicD
 readonly PanicD
 
 IsNumber(){
   Usage $# -eq 1 'if ! IsNumber <string>; then ... fi'
-  _isNumber_ $1
+  _isNumber_ "$1"
 }
+export IsNumber
 readonly IsNumber
 
 Abs(){
   Usage $# -eq 1 'Abs <number>'
   printf '%s' "${1#-}"
 }
+export Abs
 readonly Abs
 
 Max(){
   Usage $# -eq 2 'Max <number> <number>'
-  if [ $1 -gt $2 ]; then
+  if [ "$1" -gt "$2" ]; then
     printf '%s' "$1"
     return 0
   fi
   printf '%s' "$2"
 }
+export Max
 readonly Max
 
 Min(){
   Usage $# -eq 2 'Min <number> <number>'
-  if [ $1 -lt $2 ]; then
+  if [ "$1" -lt "$2" ]; then
     printf '%s' "$1"
     return 0
   fi
   printf '%s' "$2"
 }
+export Min
 readonly Min
 
 
@@ -652,6 +725,7 @@ IsLF() {
     return 1
   fi
 }
+export IsLF
 readonly IsLF
 
 Confirm(){
@@ -671,12 +745,14 @@ Confirm(){
     *) return 1 ;;
   esac
 }
+export Confirm
 readonly Confirm
 
 ConfirmD(){
   Usage $# -eq 2 'ConfirmD <english> <chinese>'
   Confirm "$(Dict "$1" "$2")"
 }
+export ConfirmD
 readonly ConfirmD
 
 # Check current user is root
@@ -687,6 +763,7 @@ IAmRoot() {
     return 1
   fi
 }
+export IAmRoot
 readonly IAmRoot
 
 # 获取CPU类型：amd 或 arm 架构
@@ -735,6 +812,7 @@ CpuArch() {
     *) printf '%s' "$(uname -m)" ;;
   esac
 }
+export CpuArch
 readonly CpuArch
 
 
@@ -757,6 +835,7 @@ Install(){
   done
   return "$_install_result"
 }
+export Install
 readonly Install
 
 CleanPkgManager(){
@@ -778,10 +857,12 @@ CleanPkgManager(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
+      # shellcheck disable=SC2086
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
+      # shellcheck disable=SC2086
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
       ;;
     'opkg')
@@ -800,6 +881,7 @@ CleanPkgManager(){
       if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
   esac
 }
+export CleanPkgManager
 readonly CleanPkgManager
 
 _uninstall_(){
@@ -821,15 +903,19 @@ _uninstall_(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
+      # shellcheck disable=SC2086
       $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
+      # shellcheck disable=SC2086
       $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
+      # shellcheck disable=SC2086
       $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
+      # shellcheck disable=SC2086
       $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
       CleanPkgManager
       ;;
@@ -854,6 +940,7 @@ _uninstall_(){
       if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
   esac
 }
+export _uninstall_
 readonly _uninstall_
 
 Uninstall(){
@@ -866,6 +953,7 @@ Uninstall(){
   done
   return "$_uninstall_result"
 }
+export Uninstall
 readonly Uninstall
 
 IsAccessible(){
@@ -903,6 +991,7 @@ IsAccessible(){
 
   return 1
 }
+export IsAccessible
 readonly IsAccessible
 
 IsWanAccessible(){
@@ -918,6 +1007,7 @@ IsWanAccessible(){
     fi
   done
 }
+export IsWanAccessible
 readonly IsWanAccessible
 
 HttpCode(){
@@ -929,8 +1019,9 @@ HttpCode(){
       PanicD "require install curl" "需要安装 curl"
     fi
   fi
-  curl --max-time $_httpcode_maxtime -s -w '%{http_code}\n' -o /dev/null "$_httpcode_url" || printf ''
+  curl --max-time "$_httpcode_maxtime" -s -w '%{http_code}\n' -o /dev/null "$_httpcode_url" || printf ''
 }
+export HttpCode
 readonly HttpCode
 
 HttpOK(){
@@ -941,6 +1032,7 @@ HttpOK(){
   esac
   return 1
 }
+export HttpOK
 readonly HttpOK
 
 Filename(){
@@ -960,6 +1052,7 @@ Filename(){
   esac
   printf '%s' "$_filename"
 }
+export Filename
 readonly Filename
 
 Extname(){
@@ -980,6 +1073,7 @@ Extname(){
   esac
   printf ''
 }
+export ExtName
 readonly ExtName
 
 
@@ -1004,6 +1098,7 @@ FindFileByExt(){
   done
   printf ''
 }
+export FindFileByExt
 readonly FindFileByExt
 
 # 获取字符的ASCII码
@@ -1011,6 +1106,7 @@ EncodeASCII() {
   Usage $# -eq 1 'EncodeASCII <char>'
   printf '%d' "'$1"
 }
+export EncodeASCII
 readonly EncodeASCII
 
 # ASCII码转字符
@@ -1018,6 +1114,7 @@ DecodeASCII() {
   Usage $# -eq 1 'DecodeASCII <char>'
   printf '%b' "\0$(printf '%03o' "$1")"
 }
+export DecodeASCII
 readonly DecodeASCII
 
 # 将字符ASCII码加一个数，返回ASCII码对应的字符
@@ -1030,6 +1127,7 @@ AddASCII() {
   fi
   DecodeASCII $((_addascii_n + _addascii_add))
 }
+export AddASCII
 readonly AddASCII
 
 # Example:
@@ -1083,6 +1181,7 @@ StartWith() {
   done
   return 1
 }
+export StartWith
 readonly StartWith
 
 EndWith() {
@@ -1101,6 +1200,7 @@ EndWith() {
   done
   return 1
 }
+export EndWith
 readonly EndWith
 
 StrRepeat() {
@@ -1113,6 +1213,7 @@ StrRepeat() {
     _strrepeat_i=$((_strrepeat_i + 1))
   done
 }
+export StrRepeat
 readonly StrRepeat
 
 
@@ -1135,6 +1236,7 @@ StrPad(){
   fi
   printf '%s' "$_strpad_s"
 }
+export StrPad
 readonly StrPad
 
 StrPadLeft(){
@@ -1144,6 +1246,7 @@ StrPadLeft(){
   _strpadleft_padding="${3:-" "}"
   StrPad "$_strpadleft_s" "$_strpadleft_n" "$_strpadleft_padding" 1
 }
+export StrPadLeft
 readonly StrPadLeft
 
 # Convert all characters into a specific character
@@ -1159,6 +1262,7 @@ ToPlaceholder(){
   _toplaceholder_s_len=${#_toplaceholder_s}
   StrRepeat "$_toplaceholder_s_len" "$_toplaceholder_char"
 }
+export ToPlaceholder
 readonly ToPlaceholder
 
 AlignKVPair(){
@@ -1173,6 +1277,7 @@ AlignKVPair(){
   if [ "$_alignkvpair_valuepad" -gt 0 ]; then StrRepeat "$_alignkvpair_valuepad" ' '; fi
   printf '%s' "$_alignkvpair_value"
 }
+export AlignKVPair
 readonly AlignKVPair
 
 # Get the 1st character
@@ -1180,6 +1285,7 @@ FirstChar() {
   Usage $# -eq 1 'FirstChar <string>'
   printf %.1s "$1"
 }
+export FirstChar
 readonly FirstChar
 
 # 从左边移除n个字符
@@ -1232,6 +1338,7 @@ CutLeft() {
     _cutleft_n=0
   done
 }
+export CutLeft
 readonly CutLeft
 
 # Warn: $() 获取时，尾部的换行符一律会被截取掉
@@ -1282,6 +1389,7 @@ Substr() {
   # 必须要这个处理，因为上面多了换行符。通过 printf 移除尾部换行符
   printf '%s' "$_substr_value"
 }
+export Substr
 readonly Substr
 
 # POSIX 不支持 ${s::} 切片方法，所以这里重新写
@@ -1302,6 +1410,7 @@ Substring() {
   if [ "$_substring_end" -eq "$_substring_start" ]; then printf '%s' "$_substring_s"; fi
   Substr "$_substring_s" "$_substring_start" "$((_substring_end - _substring_start))"
 }
+export Substring
 readonly Substring
 
 # 把左侧所有匹配的字符，全部删除
@@ -1321,6 +1430,7 @@ TrimLeft() {
   done
   printf '%s' "$_trimleft_s"
 }
+export TrimLeft
 readonly TrimLeft
 
 # 把右侧所有匹配的字符，全部删除
@@ -1340,6 +1450,7 @@ TrimRight() {
   done
   printf '%s' "$_trimright_s"
 }
+export TrimRight
 readonly TrimRight
 
 # 把两侧所有匹配的字符，全部删除
@@ -1352,6 +1463,7 @@ Trim() {
   _trim_s=$(TrimRight "$_trim_s" "$_trim_cut")
   printf '%s' "$_trim_s"
 }
+export Trim
 readonly Trim
 
 # string IndexOf
@@ -1390,6 +1502,7 @@ IndexOf() {
   if [ -z "$_indexof_result" ]; then _indexof_result=-1; fi
   printf '%d' "$_indexof_result"
 }
+export IndexOf
 readonly IndexOf
 
 StrIn() {
@@ -1401,6 +1514,7 @@ StrIn() {
     return 1
   fi
 }
+export StrIn
 readonly StrIn
 
 SliceIn(){
@@ -1413,6 +1527,7 @@ SliceIn(){
     return 1
   fi
 }
+export SliceIn
 readonly SliceIn
 
 # Count matches. Not support LF 统计匹配次数。只能单独统计匹配单个换行符（会自动忽略尾部换行符），不能跨行匹配
@@ -1452,6 +1567,7 @@ CountMatches() {
 
   printf '%d' "${#_countmatches_counting}"
 }
+export CountMatches
 readonly CountMatches
 
 # Replace matched string
@@ -1484,6 +1600,7 @@ Replace() {
 
   Replace "$_replace_s" "$_replace_old" "$_replace_new"
 }
+export Replace
 readonly Replace
 
 
@@ -1495,12 +1612,14 @@ PackLF() {
     printf '\n'
   } | awk -v ORS= '{print sep $0; sep="\\n"}'
 }
+export PackLF
 readonly PackLF
 
 # 替换所有两个字符 \n 为一个换行符 LF
 UnpackLF() {
   printf "${*}%s" ''
 }
+export UnpackLF
 readonly UnpackLF
 
 # Replace all \n
@@ -1513,6 +1632,7 @@ ReplaceLF(){
   fi
   printf '%s' "$_replacelf" | sed ":a;N;\$!ba;s/\n/$_replacelf_to/g"
 }
+export ReplaceLF
 readonly ReplaceLF
 
 # Replace all LF and "\n" into spaces, trailing LFs will be ignored
@@ -1557,6 +1677,7 @@ EOF
     printf '%s' "$_replacelftospace_line" | sed 's/\\n/ /g' # \n is not LF, it's `\` + `n`
   done
 }
+export ReplaceLFToSpace
 readonly ReplaceLFToSpace
 
 # Replace all spaces into LF, trailing LFs will be ignored
@@ -1564,6 +1685,7 @@ ReplaceSpaceToLF() {
   Usage $# -ge 1 'ReplaceSpaceToLF {string} | while IFS= read -r <line>; do ...; done'
   printf '%s\n' "$@" | tr ' ' '\n'
 }
+export ReplaceSpaceToLF
 readonly ReplaceSpaceToLF
 
 # 数组长度
@@ -1582,6 +1704,7 @@ SliceLen() {
   #printf '%s' "$_slicelen_counting"
   printf '%d' "${#_slicelen_counting}"
 }
+export SliceLen
 readonly SliceLen
 
 # POSIX 不支持数组，所以这里写了个方法。
@@ -1613,6 +1736,7 @@ Slice() {
     _slice_i=$((_slice_i + 1)) # 内部可以使用一次外部传进来的值，并且通道内复用。但是不能再传出去了
   done
 }
+export Slice
 readonly Slice
 
 # Split string
@@ -1644,6 +1768,7 @@ Split() {
   Replace "$_split_s" "$_split_delimiter" "$LF" # 使用换行符，方便遍历
   printf '\n'  # 尾部增加一个换行符，方便 | while IFS ...
 }
+export Split
 readonly Split
 
 # Split array-like [a,b,c] or a,b,c
@@ -1655,6 +1780,7 @@ SplitArray() {
   _parsearray_input=$(TrimRight "$_parsearray_input" ']')
   Split "$_parsearray_input"
 }
+export SplitArray
 readonly SplitArray
 
 # Join array string into string
@@ -1676,6 +1802,7 @@ Join() {
     fi
   done
 }
+export Join
 readonly Join
 
 # Count words in a sentence that split with spaces
@@ -1690,6 +1817,7 @@ CountWords(){
   }
   END { print total }'
 }
+export CountWords
 readonly CountWords
 
 # Find the index of the word in a sentence
@@ -1708,6 +1836,7 @@ WordIndex(){
     print -1
   }'
 }
+export WordIndex
 readonly WordIndex
 
 WordIn(){
@@ -1731,6 +1860,7 @@ NthWord(){
     }
   }'
 }
+export NthWord
 readonly NthWord
 
 # Get nth to from end mth words
@@ -1754,7 +1884,7 @@ WordsBetween(){
   IFS=' '
 
   # 将字符串拆分为位置参数
-  set -- $_wordsbetween_str
+  set -- "$_wordsbetween_str"
   _wordsbetween_total_words=$#
 
   # 恢复原来的 IFS
@@ -1800,7 +1930,7 @@ WordsBetween(){
 
   # 重新设置 IFS 进行分词
   IFS=' '
-  set -- $_wordsbetween_str
+  set -- "$_wordsbetween_str"
 
   # 移动到起始位置
   shift "$_wordsbetween_start"
@@ -1822,6 +1952,7 @@ WordsBetween(){
   # 输出结果，不追加换行符
   printf '%s' "$_wordsbetween_result"
 }
+export WordsBetween
 readonly WordsBetween
 
 
@@ -1847,7 +1978,7 @@ WordsRange(){
 
   # 将字符串拆分为单词数组
   IFS=' '
-  set -- $_wordsrange_str
+  set -- "$_wordsrange_str"
   _wordsrange_total_words=$#
 
   # 处理起始索引
@@ -1901,6 +2032,7 @@ WordsRange(){
 
   printf '%s' "$_wordsrange_result"
 }
+export WordsRange
 readonly WordsRange
 
 # Require: CountWords, WordIndex, NthWord
@@ -1927,7 +2059,7 @@ ProcessMatch(){
       _processmatch_matched_n="$(CountWords "$_processmatch_ps")"
       _processmatch_matched_n_pid="$(WordIndex 'PID' "$_processmatch_ps")"
       _processmatch_matched_n_command="$(WordIndex 'COMMAND' "$_processmatch_ps")"
-      if [ -z "$_processmatch_matched_n_command" -o "$_processmatch_matched_n_command" -lt 0 ]; then
+      if [ -z "$_processmatch_matched_n_command" ] || [ "$_processmatch_matched_n_command" -lt 0 ]; then
         # alpine 可能会使用 CMD
         _processmatch_matched_n_command="$(WordIndex 'CMD' "$_processmatch_ps")"
       fi
@@ -1948,6 +2080,7 @@ ProcessMatch(){
 
   if [ -z "$_processmatch_matched" ]; then return 1; fi
 }
+export ProcessMatch
 readonly ProcessMatch
 
 # Matches the first process of current session user
@@ -1956,6 +2089,7 @@ MyProcessMatch(){
   Usage $# -ge 1 'MyProcessMatch {process/pid sub match} => if ! MyProcessMatch "mysql"; then ...; fi'
   ProcessMatch -x "$@"
 }
+export MyProcessMatch
 readonly MyProcessMatch
 
 # Matches the first process of all users
@@ -1964,6 +2098,7 @@ AllProcessMatch(){
   Usage $# -ge 1 'AllProcessMatch {process/pid sub match} => if ! AllProcessMatch "mysql"; then ...; fi'
   ProcessMatch -ax "$@"
 }
+export AllProcessMatch
 readonly AllProcessMatch
 
 # Require: ProcessMatch
@@ -1980,6 +2115,7 @@ AwaitProcessStartup(){
     sleep "$_awaitprocessstart_i"
   done
 }
+export AwaitProcessStartup
 readonly AwaitProcessStartup
 
 # Require: AwaitProcessStartup
@@ -1987,6 +2123,7 @@ AwaitMyProcessStartup(){
   Usage $# -ge 1 'AwaitMyProcessStartup {process/pid sub match}'
   AwaitProcessStartup 'x' "$@"
 }
+export AwaitMyProcessStartup
 readonly AwaitMyProcessStartup
 
 # Require: AwaitProcessStartup
@@ -1994,11 +2131,13 @@ AwaitAllProcessStartup(){
   Usage $# -ge 1 'AwaitAllProcessStartup {process/pid sub match}'
   AwaitProcessStartup 'ax' "$@"
 }
+export AwaitAllProcessStartup
 readonly AwaitAllProcessStartup
 
 SendCrossServiceSignal(){
   if [ -n "${AA_CROSS_SERVICE_SIGNAL:-}" ]; then printf '\nAA_CROSS_SERVICE_SIGNAL=%s\n' "$AA_CROSS_SERVICE_SIGNAL"; fi
 }
+export SendCrossServiceSignal
 readonly SendCrossServiceSignal
 
 # Require: AwaitMyProcessStartup, SendCrossServiceSignal
@@ -2007,6 +2146,7 @@ AwaitMyProcessCrossServiceSignal() {
   AwaitMyProcessStartup "$@"
   SendCrossServiceSignal
 }
+export AwaitMyProcessCrossServiceSignal
 readonly AwaitMyProcessCrossServiceSignal
 
 # Require: AwaitAllProcessStartup, SendCrossServiceSignal
@@ -2015,6 +2155,7 @@ AwaitCrossServiceSignal() {
   AwaitAllProcessStartup "$@"
   SendCrossServiceSignal
 }
+export AwaitCrossServiceSignal
 readonly AwaitCrossServiceSignal
 
 # Export profile and save into profile
@@ -2044,6 +2185,7 @@ ExportProfile(){
   sed -i "/^\s*export\s*${_exportprofile_key}\s*=.*/d" "$_exportprofile_dst" >/dev/null 2>&1
   printf "export %s=%s\n" "$_exportprofile_key" "$_exportprofile_value" >> "$_exportprofile_dst"
 }
+export ExportProfile
 readonly ExportProfile
 
 AbsDir() {
@@ -2052,7 +2194,26 @@ AbsDir() {
   _fulldir_file="${1:-.}"
   printf '%s' "$(cd "$(dirname "$_fulldir_file")" && pwd)"
 }
+export AbsDir
 readonly AbsDir
+
+ParentDir(){
+  Usage $# 1 2 'ParentDir <path> [depth=1]'
+  _parentdir_path="$1"
+  _parentdir_depth="${2:-1}"
+  if [ -f "$_parentdir_path" ]; then
+    _parentdir_path="$(AbsDir "$_parentdir_path")"
+  else
+    _parentdir_path="$(cd "$_parentdir_path" && pwd)"
+  fi
+  while [ "$_parentdir_depth" -gt 0 ]; do
+    _parentdir_path="${_parentdir_path}/.."
+    _parentdir_depth=$((_parentdir_depth - 1))
+  done
+  printf '%s' "$(cd "$_parentdir_path" && pwd)"
+}
+export ParentDir
+readonly ParentDir
 
 # Require: FirstChar, AbsDir
 AbsPath(){
@@ -2067,7 +2228,8 @@ AbsPath(){
   _fullpath_filename=$(basename "$_fullpath_file")
   printf '%s/%s' "$_fullpath_dir" "$_fullpath_filename"
 }
-readonly  AbsPath
+export AbsPath
+readonly AbsPath
 
 ExistGroup(){
   Usage $# -eq 1 'ExistGroup <group>'
@@ -2088,6 +2250,7 @@ ExistGroup(){
   fi
   Panic "missing command getent or file /etc/group"
 }
+export ExistGroup
 readonly ExistGroup
 
 ExistUser(){
@@ -2108,6 +2271,7 @@ ExistUser(){
   fi
   Panic "missing command getent or file /etc/passwd"
 }
+export ExistUser
 readonly ExistUser
 
 # Add a group if not exists
@@ -2147,6 +2311,7 @@ AddGroupNx(){
     groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
   fi
 }
+export addGroupx
 readonly addGroupx
 
 # add a non-login user if not exists
@@ -2214,6 +2379,7 @@ AddUserNx(){
     useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
   fi
 }
+export AddUserNx
 readonly AddUserNx
 
 # Require: IAmRoot
@@ -2232,6 +2398,7 @@ MkdirP(){
 
   sudo mkdir -p "$_mkdir"
 }
+export MkdirP
 readonly MkdirP
 
 
@@ -2258,6 +2425,7 @@ ChownR() {
     sudo chown -R "$_chownr_user" "$_chownr_dir"
   done
 }
+export ChownR
 readonly ChownR
 
 # 递归修改目录及子目录用户组。这样修改权限比 `chgrp -R` 性能更好
@@ -2282,6 +2450,7 @@ ChgrpR() {
     sudo chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
   done
 }
+export ChgrpR
 readonly ChgrpR
 
 # Require: ReplaceSpaceToLF, Mkdir
@@ -2303,6 +2472,7 @@ ChmodOrMkdir(){
     sudo chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir"
   done
 }
+export ChmodOrMkdir
 readonly ChmodOrMkdir
 
 # Change mode of files, create files if not exists
@@ -2324,6 +2494,7 @@ ChmodOrCreate(){
     sudo chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
   done
 }
+export ChmodOrCreate
 readonly ChmodOrCreate
 
 # Create dirs with a certain owner
@@ -2361,6 +2532,7 @@ ChownOrMkdir(){
     ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
   done
 }
+export ChownOrMkdir
 readonly ChownOrMkdir
 
 CleanOrMkdir(){
@@ -2377,6 +2549,7 @@ CleanOrMkdir(){
   fi
   rm -rf "${_cleanormkdir:?}/"*
 }
+export CleanOrMkdir
 readonly CleanOrMkdir
 
 # Create a temporary directory if not exists or clear this directory
@@ -2386,6 +2559,7 @@ ClearTMPDIR(){
   Usage $# -le 1 'ClearTMPDIR [dir=$TMPDIR]'
   CleanOrMkdir "${1:-"$TMPDIR"}" 1777
 }
+export ClearTMPDIR
 readonly ClearTMPDIR
 
 
@@ -2398,6 +2572,7 @@ CdOrPanic(){
   PanicIfNotDir "$1"
   cd "$1" || Panic "failed to ${_NC_}cd $1"
 }
+export CdOrPanic
 readonly CdOrPanic
 
 # Require: ChmodOrMkdir, CdOrPanic
@@ -2410,6 +2585,7 @@ CdOrMkdir(){
   fi
   CdOrPanic "$_cdormkdir"
 }
+export CdOrMkdir
 readonly CdOrMkdir
 
 CheckDirs(){
@@ -2426,6 +2602,7 @@ CheckDirs(){
     CdOrPanic "$_checkdirs_dir"
   done
 }
+export CheckDirs
 readonly CheckDirs
 
 # Format ,a,b,c or [,a,,'b',  "c"] to ['a', 'b', 'c'] or other format
@@ -2473,6 +2650,7 @@ EOF
   done
   printf ']'
 }
+export FormatArrayString
 readonly FormatArrayString
 
 
@@ -2519,6 +2697,7 @@ ParseArrays() {
   # append a LF for | while IFS= read -r <item>; do ...; done
   if [ -n "$_parsearrargs_result" ]; then printf '%s\n' "$_parsearrargs_result"; fi
 }
+export ParseArrays
 readonly ParseArrays
 
 # Parse `k v` or `k=v` configure value
@@ -2541,6 +2720,7 @@ ParseConfig() {
 
   printf '%s' "${_value_:-}"
 }
+export ParseConfig
 readonly ParseConfig
 
 # Required: ParseConfig
@@ -2607,6 +2787,7 @@ MatchedLines(){
     if ! StrIn "${TAB}$_matchedlines_match${TAB}" "$_matchedlines_result"; then
       _matchedlines_result="${_matchedlines_result}$_matchedlines_match${TAB}"
       echo "$_matchedlines_match"
+      # shellcheck disable=SC2030
       _matchedlines_matched=1
     fi
   done
@@ -2617,6 +2798,7 @@ MatchedLines(){
     echo ''
   fi
 }
+export MatchedLines
 readonly MatchedLines
 
 # 替换 YAML 文件中配置标记
@@ -2653,6 +2835,7 @@ ReplaceYamlConfig(){
   rm -f "$_replaceyamlconfig_dst"
   cp "$_replaceyamlconfig_temp" "$_replaceyamlconfig_dst"
 }
+export ReplaceYamlConfig
 readonly ReplaceYamlConfig
 
 _generateRSAKey_() {
@@ -2699,6 +2882,7 @@ _generateRSAKey_() {
 
   return 0
 }
+export _generateRSAKey_
 readonly _generateRSAKey_
 
 # 批量生成 RSA 密钥
@@ -2737,4 +2921,5 @@ GenerateRSAKeys() {
   find "$_generatersakeys_dir" -type f -name "*.priv.der" -exec chmod 600 {} + || Panic "GenerateRSAKeys: failed to chmod 600 ${_generatersakeys_dir}/*.priv.der"
   find "$_generatersakeys_dir" -type f -name "*.pub.der.b64" -exec chmod 644 {} + || Panic "GenerateRSAKeys: failed to chmod 644 ${_generatersakeys_dir}/*.pub.der.b64"
 }
+export GenerateRSAKeys
 readonly GenerateRSAKeys
