@@ -181,11 +181,7 @@ _install_(){
       return 1
   esac
 
-  if command -v "$_install_cmd" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  return 1
+  return $?
 }
 readonly _install_
 
@@ -829,6 +825,7 @@ Install(){
   for _install_pkg in "$@"; do
     if [ -n "$_install_pkg" ]; then
       if ! _install_ "$_install_pkg" "$_install_sudo"; then
+        Error "install $_install_pkg failed"
         return 1
       fi
       Info "installed $_install_pkg"
@@ -985,7 +982,9 @@ IsAccessible(){
   # in case not install net tool
   if [ "$_isaccessible_installed" -eq 0 ] && [ "$_isaccessible_install" != 'false' ]; then
     if Install curl || Install wget ; then
-      IsAccessible "$_isaccessible_url" "$_isaccessible_timeout" false
+      if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+        IsAccessible "$_isaccessible_url" "$_isaccessible_timeout" false
+      fi
     fi
   fi
 
@@ -1026,7 +1025,9 @@ HttpCode(){
   fi
 
   if Install curl || Install wget ; then
-    HttpCode "$_httpcode_url" "$_httpcode_maxtime"
+    if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+      HttpCode "$_httpcode_url" "$_httpcode_maxtime"
+    fi
   fi
 
   PanicD "require install curl or wget" "需要安装 curl 或 wget"
@@ -1065,9 +1066,11 @@ Download(){
     return $?
   fi
 
-  if Install curl || Install wget; then
-    _download_ "$_download_url"
-    return $?
+  if Install curl || Install wget || command -v wget >/dev/null 2>&1; then
+    if command -v curl >/dev/null 2>&1; then
+      _download_ "$_download_url"
+      return $?
+    fi
   fi
 
   Error "missing package curl or wget"
