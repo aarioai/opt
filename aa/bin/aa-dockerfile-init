@@ -39,7 +39,7 @@ ownDir(){
 }
 
 initDirs(){
-  echo 'init directories'
+  echo '[init directories]'
   mkdir -p "$TMPDIR"
   chmod 1777 "$TMPDIR"
 
@@ -58,9 +58,10 @@ initTimezone(){
 }
 
 preinstallPackages(){
-  echo 'preinstall packages'
-
   os="$1"
+
+  echo "[preinstall packages in $os]"
+
   case "$os" in
     'alpine')
       # alpine: ~5MB，是其他linux的1/10，优先使用 alpine
@@ -130,9 +131,9 @@ main(){
   Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
   os=${1:-}
 
-  echo "| uname -a |"
-  uname -a
-  if [ -f "/etc/os-release" ]; then cat /etc/os-release; fi
+  echo "[uname -a] >>> $(uname -a)"
+
+  if [ -f "/etc/os-release" ]; then echo "[cat /etc/os-release]"; cat /etc/os-release; fi
 
   preinstallPackages "$os"
   initDirs
