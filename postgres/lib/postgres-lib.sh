@@ -25,6 +25,7 @@ pgUntilReady(){
     sleep $_interval
   done
 }
+export pgUntilReady
 readonly pgUntilReady
 
 _pgCreateSchemaRolesSQL(){
@@ -54,6 +55,7 @@ _pgCreateSchemaRolesSQL(){
         GRANT $_owner TO $_user
 EOSQL
 }
+export _pgCreateSchemaRolesSQL
 readonly _pgCreateSchemaRolesSQL
 
 _pgGrantAllOnSchema(){
@@ -101,6 +103,7 @@ _pgGrantAllOnSchema(){
         ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT EXECUTE ON FUNCTIONS TO $_reader, $_writer, $_owner;
 EOSQL
 }
+export _pgGrantAllOnSchema
 readonly _pgGrantAllOnSchema
 
 pgGrantAllOnSchema(){
@@ -121,6 +124,7 @@ pgGrantAllOnSchema(){
   _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
 }
 
+export pgGrantAllOnSchema
 readonly pgGrantAllOnSchema
 
 _pgCreateSchemaSQL(){
@@ -141,6 +145,7 @@ _pgCreateSchemaSQL(){
         ALTER USER $_user SET search_path TO $_schema;
 EOSQL
 }
+export _pgCreateSchemaSQL
 readonly _pgCreateSchemaSQL
 
 pgCreateSchemaOwnerSQL(){
@@ -159,6 +164,7 @@ pgCreateSchemaOwnerSQL(){
   printf '\n\n'
   _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
 }
+export pgCreateSchemaOwnerSQL
 readonly pgCreateSchemaOwnerSQL
 
 pgCreateSchemaOwner(){
@@ -175,6 +181,7 @@ pgCreateSchemaOwner(){
   _role_prefix="_${_schema}"
   pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
 }
+export pgCreateSchemaOwner
 readonly pgCreateSchemaOwner
 
 
@@ -192,6 +199,7 @@ _pgCreateDatabaseOwnerSQL(){
         GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
 EOSQL
 }
+export _pgCreateDatabaseOwnerSQL
 readonly _pgCreateDatabaseOwnerSQL
 
 pgCreateDatabaseOwnerSQL(){
@@ -207,6 +215,7 @@ pgCreateDatabaseOwnerSQL(){
   printf '\n\n'
   _pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
+export pgCreateDatabaseOwnerSQL
 readonly pgCreateDatabaseOwnerSQL
 
 # 创建用户和 owner, reader, writer 角色
@@ -221,4 +230,5 @@ pgCreateDatabaseOwner(){
   _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"
   pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
+export pgCreateDatabaseOwner
 readonly pgCreateDatabaseOwner

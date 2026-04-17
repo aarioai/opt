@@ -8,6 +8,7 @@ readonly ROOT
 
 # 关闭颜色输出，aliyun 构建日志暂不支持
 AA_LOG_NO_COLOR=1
+export AA_LOG_NO_COLOR
 
 . "${ROOT}/lib/aa-posix-lib.sh"
 

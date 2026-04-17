@@ -11,8 +11,10 @@ if [ ! -f "$lib" ]; then lib="/opt/aa/lib/aa-posix-lib.sh"; fi
 . "$lib"
 
 export IN_CHINESE=1
-readonly HERE="$(AbsDir "$0")"
-readonly dictTesting="$(Dict "testing" "测试")"
+HERE="$(AbsDir "$0")"
+readonly HERE
+dictTesting="$(Dict "testing" "测试")"
+readonly dictTesting
 
 Lowlight "${dictTesting} <${lib}>  <${config}>"
 

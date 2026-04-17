@@ -18,7 +18,9 @@ readonly k3sClusterServe
 k3sContextCluster(){
   Usage $# -le 1 'k3sContextCluster [context=current-context]'
   local _k3s_ctx="${1:-}"
-  if [ -z "$_k3s_ctx" ]; then _k3s_ctx=$(kubectl config current-context); fi
+  if [ -z "$_k3s_ctx" ]; then
+    _k3s_ctx=$(kubectl config current-context)
+  fi
   k3s kubectl config view -o jsonpath="{.contexts[?(@.name=='$_k3s_ctx')].context.cluster}"
 }
 export k8sContextCluster
@@ -80,6 +82,7 @@ readonly k8sGenerateKubeconfig
 k3sRmiNoneImages(){
   local _k3s_unused_images
   _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
+  local image
   for image in $_k3s_unused_images; do
     # 检查是否有容器使用这个镜像
     if ! sudo k3s crictl ps -q | xargs -r sudo k3s crictl inspect 2>/dev/null | grep -q "$image"; then
@@ -103,7 +106,7 @@ _k3sPull(){
         _k3s_password=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.password" "$REGISTRIES_YAML")
         if [ -n "$_k3s_username" ] && [ -n "$_k3s_password" ]; then
           Info "sudo k3s ctr images pull --print-chainid --local --user $_k3s_username:<password> $_k3s_image"
-          if k3s ctr images pull --print-chainid --local --user "$_k3s_username:$_k3s_password" $_k3s_image; then
+          if k3s ctr images pull --print-chainid --local --user "$_k3s_username:$_k3s_password" "$_k3s_image"; then
             return 0
           fi
         fi
@@ -112,8 +115,10 @@ _k3sPull(){
   fi
 
   Info "sudo k3s crictl pull $_k3s_image"
-  local _k3s_hightlight_en="Slow? Try:${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
-  local _k3s_hightlight_cn="拉取慢？手动拉更快：${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
+  local _k3s_hightlight_en
+  local _k3s_hightlight_cn
+  _k3s_hightlight_en="Slow? Try:${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
+  _k3s_hightlight_cn="拉取慢？手动拉更快：${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
   HighlightD "$_k3s_hightlight_en" "$_k3s_hightlight_cn"
   sudo k3s crictl pull "$_k3s_image"
 }
@@ -121,7 +126,8 @@ export _k3sPull
 readonly _k3sPull
 
 k3sPullImage(){
-  local _k3s_pullimage_usage=$(cat << EOF
+  local _k3s_pullimage_usage
+  _k3s_pullimage_usage=$(cat << EOF
 k3sPullImage <name|image> [source=docker.io|natived|coff|worked]
 Example:
   k3sPullImage docker.io/library/redis:latest
@@ -138,7 +144,6 @@ EOF
     PanicUsage "$_k3s_pullimage_usage"
   fi
 
-  local _k3s_src=''
   case "$_k3s_source" in
     -h|-help|--help) PanicUsage "$_k3s_pullimage_usage" ;;
     'docker.io') _k3sPull "$_k3s_image" ;;
@@ -155,7 +160,9 @@ k3sPvcStatus(){
   local _k3s_name="$2"
   local ok=0
 
+  local i
   for i in {1..30}; do
+    local PVC_STATUS
     PVC_STATUS=$(kubectl get pvc "$_k3s_name" -n "$_k3s_namespace" -o jsonpath='{.status.phase}' 2> /dev/null || true || echo "Pending")
     if [ "$PVC_STATUS" = "Bound" ]; then
       ok=1
@@ -229,8 +236,10 @@ k3sDetectGlobalYaml(){
   local _k3s_paths=("${_k3s_dir}" "${_k3s_dir}/.." "${_k3s_dir}/../..")
   local _k3s_path
   for _k3s_path in "${_k3s_paths[@]}"; do
-    local _k3s_abs_path=$(realpath -e "$_k3s_path" 2>/dev/null || realpath "$_k3s_path")
-    local _k3s_ns="$(FindFileByExt "$_k3s_abs_path" global yml yaml)"
+    local _k3s_abs_path
+    _k3s_abs_path=$(realpath -e "$_k3s_path" 2>/dev/null || realpath "$_k3s_path")
+    local _k3s_ns
+    _k3s_ns="$(FindFileByExt "$_k3s_abs_path" global yml yaml)"
     if [ -f "$_k3s_ns" ]; then
       printf '%s' "$_k3s_ns"
       return 0
@@ -246,8 +255,10 @@ k3sDetectNamespaceYaml(){
   local _k3s_paths=("${_k3s_dir}" "${_k3s_dir}/.." "${_k3s_dir}/../..")
   local _k3s_path
   for _k3s_path in "${_k3s_paths[@]}"; do
-    local _k3s_abs_path=$(realpath -e "$_k3s_path" 2>/dev/null || realpath "$_k3s_path")
-    local _k3s_ns="$(FindFileByExt "$_k3s_abs_path" namespace yml yaml)"
+    local _k3s_abs_path
+    _k3s_abs_path=$(realpath -e "$_k3s_path" 2>/dev/null || realpath "$_k3s_path")
+    local _k3s_ns
+    _k3s_ns="$(FindFileByExt "$_k3s_abs_path" namespace yml yaml)"
     if [ -f "$_k3s_ns" ]; then
       printf '%s' "$_k3s_ns"
       return 0
@@ -260,14 +271,17 @@ readonly k3sDetectNamespaceYaml
 
 k3sTryApply(){
   Usage $# -eq 1 'k3sTryApply <yml_path>'
-  local _k3s_dir="$(dirname "$1")"
-  local _k3s_base="$(Filename "$1")"
-  local _k3s_yaml="$(FindFileByExt "$_k3s_dir" "$_k3s_base" yml yaml)"
+  local _k3s_dir
+  local _k3s_base
+  local _k3s_yaml
+  _k3s_dir="$(dirname "$1")"
+  _k3s_base="$(Filename "$1")"
+  _k3s_yaml="$(FindFileByExt "$_k3s_dir" "$_k3s_base" yml yaml)"
   if [ ! -f "$_k3s_yaml" ]; then
     return 0
   fi
 
-  Info "sudo k3s kubectl apply -f $(LastN 3 '/' $_k3s_yaml)"
+  Info "sudo k3s kubectl apply -f $(LastN 3 '/' "$_k3s_yaml")"
   sudo k3s kubectl apply -f "$_k3s_yaml"
 }
 export k3sTryApply
@@ -275,22 +289,26 @@ readonly k3sTryApply
 
 k3sTryDelete(){
   Usage $# -eq 1 'k3sTryApply <yml_path>'
-  local _k3s_dir="$(dirname "$1")"
-  local _k3s_base="$(Filename "$1")"
-  local _k3s_yaml="$(FindFileByExt "$_k3s_dir" "$_k3s_base" yml yaml)"
+  local _k3s_dir
+  local _k3s_base
+  local _k3s_yaml
+  _k3s_dir="$(dirname "$1")"
+  _k3s_base="$(Filename "$1")"
+  _k3s_yaml="$(FindFileByExt "$_k3s_dir" "$_k3s_base" yml yaml)"
   if [ ! -f "$_k3s_yaml" ]; then
     return 0
   fi
 
   Install yq
 
-  local _k3s_namespace="$(yq -e -r '.metadata.namespace' "$_k3s_yaml" | head -1)"
+  local _k3s_namespace
+  _k3s_namespace="$(yq -e -r '.metadata.namespace' "$_k3s_yaml" | head -1)"
   if [ -z "$_k3s_namespace" ] || [ "$_k3s_namespace" = 'null' ]; then
     Notice "miss matching namespace, using 'default': yq -e -r '.metadata.namespace' $_k3s_yaml | head -1"
     _k3s_namespace='default'
   fi
 
-  Info "sudo k3s kubectl delete -n $_k3s_namespace -f $(LastN 3 '/' $_k3s_yaml)"
+  Info "sudo k3s kubectl delete -n $_k3s_namespace -f $(LastN 3 '/' "$_k3s_yaml")"
   sudo k3s kubectl delete -n "$_k3s_namespace" -f "$_k3s_yaml" --ignore-not-found=true
 }
 export k3sTryDelete
@@ -299,8 +317,9 @@ readonly k3sTryDelete
 k3sPullImageSources(){
   local _k3s_dir="$1"
   local _k3s_yaml
-  find "$_k3s_dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | while read _k3s_yaml; do
-    local _k3s_image="$(kubectl apply -f "$_k3s_yaml" --dry-run=client -o jsonpath="{..containers[*].image}")"
+  find "$_k3s_dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | while read -r _k3s_yaml; do
+    local _k3s_image
+    _k3s_image="$(kubectl apply -f "$_k3s_yaml" --dry-run=client -o jsonpath="{..containers[*].image}")"
     if [ -n "$_k3s_image" ]; then
       k3sPullImage "$_k3s_image"
     fi
@@ -335,10 +354,11 @@ _k3sConvertTmpl(){
     fi
   done
 
-  local _k3s_dst="${_k3s_tmpl%.tmpl}.yaml"
+  local _k3s_dst
+  _k3s_dst="${_k3s_tmpl%.tmpl}.yaml"
   rm -f "$_k3s_dst"
   mv "$_k3s_global_tmpl_temp" "$_k3s_dst"
-  Info "convert $(LastN 3 '/' $_k3s_tmpl) => $(LastN 3 '/' $_k3s_dst)"
+  Info "convert $(LastN 3 '/' "$_k3s_tmpl") => $(LastN 3 '/' "$_k3s_dst")"
 }
 export _k3sConvertTmpl
 readonly _k3sConvertTmpl
@@ -390,7 +410,8 @@ k3sDelete(){
   Usage $# -ge 1 'k3sDelete <dir> [mute]'
   local _k3s_dir="$1"
   local _k3s_mute="${2:-}"
-  local _k3s_d="$(LastN 2 '/' "$_k3s_dir")"
+  local _k3s_d
+  _k3s_d="$(LastN 2 '/' "$_k3s_dir")"
   local _k3s_regex='.*/\(global\|namespace\|pvc\)\.\(yml\|yaml\)'
   local _k3s_yaml
 
@@ -398,8 +419,10 @@ k3sDelete(){
     k3sTryDelete "$_k3s_yaml"
   done
   if [ -z "$_k3s_mute" ]; then
-    local _k3s_en='global, pvc and namespace were not deleted. Use purge (k3sPurge) or destroy (k3sDestroy) for complete cleanup'
-    local _k3s_cn='global, pvc and namespace 被保留下来，删除需使用 purge (k3sPurge) 或 destroy (k3sDestroy) 指令'
+    local _k3s_en
+    local _k3s_cn
+    _k3s_en='global, pvc and namespace were not deleted. Use purge (k3sPurge) or destroy (k3sDestroy) for complete cleanup'
+    _k3s_cn='global, pvc and namespace 被保留下来，删除需使用 purge (k3sPurge) 或 destroy (k3sDestroy) 指令'
     NoticeD "$_k3s_en" "$_k3s_cn"
   fi
   k3sRmiNoneImages
@@ -443,8 +466,10 @@ k3sPurge(){
   local _k3s_serv="$3"
   local _k3s_selector="$4"
 
-  local _k3s_d="$(LastN 2 '/' "$_k3s_dir")"
-  local _k3s_confirm="$(Dict "[DANGEROUS] delete pvc ($_k3s_d)?" "[危险] 确定删除 PVC ($_k3s_d)？")"
+  local _k3s_d
+  _k3s_d="$(LastN 2 '/' "$_k3s_dir")"
+  local _k3s_confirm
+  _k3s_confirm="$(Dict "[DANGEROUS] delete pvc ($_k3s_d)?" "[危险] 确定删除 PVC ($_k3s_d)？")"
   if ! Confirm "$_k3s_confirm"; then return 0; fi
 
   k3sDelete "$_k3s_dir" mute
@@ -454,8 +479,10 @@ k3sPurge(){
     k3sTryDeletePV "$_k3s_namespace" "$_k3s_serv" "$_k3s_selector"
   fi
 
-  local _k3s_en='global and namespace were not deleted. Use destroy (k3sDestroy) for complete cleanup'
-  local _k3s_cn='global 和 namespace 通常与其他服务共享，删除需使用 destroy (k3sDestroy) 指令'
+  local _k3s_en
+  local _k3s_cn
+  _k3s_en='global and namespace were not deleted. Use destroy (k3sDestroy) for complete cleanup'
+  _k3s_cn='global 和 namespace 通常与其他服务共享，删除需使用 destroy (k3sDestroy) 指令'
   NoticeD "$_k3s_en" "$_k3s_cn"
 }
 export k3sPurge
@@ -483,7 +510,8 @@ k3sNsenter(){
   local _k3s_selector="$4"
   local _k3s_container="${5:-}"
 
-  local _k3s_pod=$(sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector" -o jsonpath='{.items[0].metadata.name}')
+  local _k3s_pod
+  _k3s_pod=$(sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector" -o jsonpath='{.items[0].metadata.name}')
   if [ -z "$_k3s_pod" ]; then
     return 1
   fi
@@ -493,7 +521,8 @@ k3sNsenter(){
   fi
 
   if [ "$_k3s_ns_cmd" != 'sh' ]; then
-    sudo k3s kubectl exec "${_k3s_args[@]}" -- $_k3s_ns_cmd $_k3s_ns_args  # 不要加引号
+    # shellcheck disable=SC2086    # 不要加引号
+    sudo k3s kubectl exec "${_k3s_args[@]}" -- $_k3s_ns_cmd $_k3s_ns_args
     return 0
   fi
 
@@ -508,7 +537,8 @@ readonly k3sNsenter
 
 k3sDetectNamespace(){
   local _k3s_dir="$1"
-  local _k3s_ns="$(k3sDetectNamespaceYaml "$_k3s_dir" 2>/dev/null || true)"
+  local _k3s_ns
+  _k3s_ns="$(k3sDetectNamespaceYaml "$_k3s_dir" 2>/dev/null || true)"
   local _k3s_namespace
   if [ -n "$_k3s_ns" ]; then
     _k3s_namespace="$(kubectl apply -f "$_k3s_ns" --dry-run=client -o jsonpath='{range .items[?(@.kind=="Namespace")]}{.metadata.name}{end}')"
@@ -519,7 +549,7 @@ k3sDetectNamespace(){
   fi
 
   local _k3s_yaml
-  find "$_k3s_dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | while read _k3s_yaml; do
+  find "$_k3s_dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | while read -r _k3s_yaml; do
     _k3s_namespace="$(kubectl apply -f "$_k3s_yaml" --dry-run=client -o jsonpath="{.metadata.namespace}")"
     if [ -n "$_k3s_namespace" ]; then
       printf '%s' "$_k3s_namespace"
@@ -531,19 +561,28 @@ export k3sDetectNamespace
 readonly k3sDetectNamespace
 
 _k3s_cmd_list(){
-  local _k3s_here=$(basename "$1")
+  local _k3s_here
+  _k3s_here=$(basename "$1")
   local _k3s_sub_cmd="$2"
-  local _k3s_h="$(ToPlaceholder $_k3s_here)"
-  local _k3s_here_n=${#_k3s_here}
+  local _k3s_h
+  _k3s_h="$(ToPlaceholder "$_k3s_here")"
+  local _k3s_here_n
+  _k3s_here_n=${#_k3s_here}
   local _k3s_u1="Usage: $_k3s_here build|rebuild|status|restart|delete|purge"
   local _k3s_u2="       $_k3s_h ns|nsenter [command=$_k3s_sub_cmd]"
-  local _k3s_n=$(Max "${#_k3s_u1}" "${#_k3s_u2}")
-  local _k3s_u1_p=$(StrRepeat $((_k3s_n - ${#_k3s_u1})))
-  local _k3s_u2_p=$(StrRepeat $((_k3s_n - ${#_k3s_u2})))
+  local _k3s_n
+  _k3s_n=$(Max "${#_k3s_u1}" "${#_k3s_u2}")
+  local _k3s_u1_p
+  local _k3s_u2_p
+  _k3s_u1_p=$(StrRepeat $((_k3s_n - ${#_k3s_u1})))
+  _k3s_u2_p=$(StrRepeat $((_k3s_n - ${#_k3s_u2})))
 
-  local _k3s_cmd_n=${#_k3s_sub_cmd}
-  local _k3s_ap=$(StrRepeat "$_k3s_n" '-')
-  local _k3s_c=$(ToPlaceholder "$_k3s_n")
+  local _k3s_cmd_n
+  _k3s_cmd_n=${#_k3s_sub_cmd}
+  local _k3s_ap
+  _k3s_ap=$(StrRepeat "$_k3s_n" '-')
+  local _k3s_c
+  _k3s_c=$(ToPlaceholder "$_k3s_n")
   local _k3s_a="----${_k3s_ap}"
   echo "+${_k3s_a}+"
   printf "|  ${_CYAN_}%s${_NC_}  %s|\n" "$_k3s_u1" "$_k3s_u1_p"
@@ -565,7 +604,8 @@ _k3s_build(){
   local _k3s_script="$1"
   local _k3s_selector="$2"
   local _k3s_container="$3"
-  local _k3s_dir="$(AbsDir "$_k3s_script")"
+  local _k3s_dir
+  _k3s_dir="$(AbsDir "$_k3s_script")"
   k3sBuild "$_k3s_dir"
   k3sWaitReady "$K3S_NAMESPACE"  "$_k3s_selector" "$_k3s_container"
 }
@@ -574,7 +614,8 @@ _k3s_rebuild(){
   local _k3s_script="$1"
   local _k3s_selector="$2"
   local _k3s_container="$3"
-  local _k3s_dir="$(AbsDir "$_k3s_script")"
+  local _k3s_dir
+  _k3s_dir="$(AbsDir "$_k3s_script")"
   k3sDelete "$_k3s_dir"
   _k3s_build "$_k3s_script"  "$_k3s_selector" "$_k3s_container"
 }
@@ -596,7 +637,8 @@ k3sLogs(){
   if [ -z "$_k3s_id" ]; then
     Info "sudo k3s kubectl logs -n $_k3s_namespace -l $_k3s_selector -f"
     if sudo k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector"; then
-      local _k3s_err=$(sudo k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector" 2>&1)
+      local _k3s_err
+      _k3s_err=$(sudo k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector" 2>&1)
       Notice "$_k3s_err"
       if [ "$_k3s_err" != "No resources found in $_k3s_namespace namespace." ]; then
         return 0
@@ -612,7 +654,8 @@ k3sLogs(){
       fi
     fi
     Error "container $_k3s_container is dead"
-    local _k3s_pod=$(sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector" -o jsonpath='{.items[0].metadata.name}')
+    local _k3s_pod
+    _k3s_pod=$(sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector" -o jsonpath='{.items[0].metadata.name}')
     if [ -z "$_k3s_pod" ]; then
       Info "try: kubectl describe pod -n $_k3s_namespace -l $_k3s_selector"
       k3sErrorLog
@@ -620,7 +663,8 @@ k3sLogs(){
     fi
     Info "sudo k3s kubectl describe pod $_k3s_pod -n $_k3s_namespace"
     sudo k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace"
-    local _k3s_error="$(sudo k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace" | grep -Ei "Error|Failed|Warning" )"
+    local _k3s_error
+    _k3s_error="$(sudo k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace" | grep -Ei "Error|Failed|Warning" )"
     if [ -n "$_k3s_error" ]; then echo ''; Panic "${_k3s_error}"; fi
 
   elif [ "$_k3s_id" = 'pod' ]; then
@@ -645,7 +689,7 @@ export k3sRestart
 readonly k3sRestart
 
 k3sRunIt(){
-  Usage $# 1 4 'k3sRunIt <table> [interact|bash] [namespace]  [bash=/bin/sh]'
+  Usage $# 1 4 'k3sRunIt <td> [interact|bash] [namespace]  [bash=/bin/sh]'
   local _k3s_image="$1"
   local _k3s_interact="${2:-}"
   local _k3s_namespace="${3:-}"
@@ -713,7 +757,8 @@ export k3sCurl
 readonly k3sCurl
 
 k3sCommands(){
-  local _k8s_usage=$(cat << EOF
+  local _k8s_usage
+  _k8s_usage=$(cat << EOF
 1. k3sCommands <script> <command> <sub command> <sub command arg> <serv> <selector> <container>
 2. k3sCommands - <tls_service> <domain> <tls_alt> [expire_days=365]  ==> create tls service
 EOF
@@ -742,7 +787,8 @@ EOF
     _k3s_expire_days="${11:-365}"
   fi
 
-  local _k3s_dir="$(AbsDir "$_k3s_script")"
+  local _k3s_dir
+  _k3s_dir="$(AbsDir "$_k3s_script")"
   K3S_NAMESPACE="$(k3sDetectNamespace "$_k3s_dir")"
   if [ -z "$K3S_NAMESPACE" ]; then
     PanicD 'no namespace detected' '没有检测到namespace'

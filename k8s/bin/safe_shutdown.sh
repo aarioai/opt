@@ -29,7 +29,7 @@ exec_shutdown(){
 
 main(){
   if ! IAmRoot; then
-    exec sudo "$BASH_SOURCE" "$@"
+    exec sudo "${BASH_SOURCE[0]}" "$@"
     return 0
   fi
 

@@ -3,8 +3,7 @@ set -euo pipefail
 
 . /opt/aa/lib/aa-posix-lib.sh
 
-readonly aliyuncs="registry.cn-hangzhou.aliyuncs.com/"
-
+# readonly aliyuncs="registry.cn-hangzhou.aliyuncs.com/"
 
 main(){
   #local aliyuncs_len=${#aliyuncs}

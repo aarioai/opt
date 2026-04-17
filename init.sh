@@ -2,7 +2,6 @@
 
 set -eu
 
-
 chgOwner(){
   user="${1:-}"
   group="${2:-}"
@@ -23,12 +22,12 @@ chgOwner(){
   chown -R "$user":"$group" /opt/aa
 }
 
-
 main(){
   if [ "$(id -u)" != '0' ]; then
-    echo '[error] sudo ./init.sh [chg_owner] [chg_group]'
-    exit 1
+    exec sudo "$0" "$@"
+    return 0
   fi
+
   chg_owner="${1:-}"
   chg_group="${2:-}"
 

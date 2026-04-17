@@ -122,10 +122,10 @@ _install_(){
   case "$_install_manager" in
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
@@ -133,34 +133,34 @@ _install_(){
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
       echo ">>> $_install_sudo opkg update $_install_quite"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo opkg update $_install_quite
       echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
@@ -857,12 +857,12 @@ CleanPkgManager(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
       ;;
     'opkg')
@@ -903,19 +903,19 @@ _uninstall_(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
-      # shellcheck disable=SC2086
+      # shellcheck disable=SC2086    # 不要加引号
       $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
       CleanPkgManager
       ;;
@@ -1884,7 +1884,8 @@ WordsBetween(){
   IFS=' '
 
   # 将字符串拆分为位置参数
-  set -- "$_wordsbetween_str"
+  # shellcheck disable=SC2086    # 不要加引号
+  set -- $_wordsbetween_str
   _wordsbetween_total_words=$#
 
   # 恢复原来的 IFS
@@ -1930,7 +1931,8 @@ WordsBetween(){
 
   # 重新设置 IFS 进行分词
   IFS=' '
-  set -- "$_wordsbetween_str"
+  # shellcheck disable=SC2086    # 不要加引号
+  set -- $_wordsbetween_str
 
   # 移动到起始位置
   shift "$_wordsbetween_start"
@@ -1978,7 +1980,8 @@ WordsRange(){
 
   # 将字符串拆分为单词数组
   IFS=' '
-  set -- "$_wordsrange_str"
+  # shellcheck disable=SC2086    # 不要加引号
+  set -- $_wordsrange_str
   _wordsrange_total_words=$#
 
   # 处理起始索引

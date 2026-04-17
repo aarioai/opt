@@ -17,16 +17,19 @@ usage(){
 
 getContainerID(){
   # dockerps 会带颜色
-  local id=$(dockerps | sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep -E "$1\s" | awk '{print $1}')
+  local id
+  id=$(dockerps | sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep -E "$1\s" | awk '{print $1}')
   printf '%s' "$id"
 }
 
 # Example: enterContainer fc6e5d39aea4 sh
 # https://man7.org/linux/man-pages/man1/nsenter.1.html
 enterContainer(){
-  local container=$(getContainerID "$1")
+  local container
+  container=$(getContainerID "$1")
   shift
-  local target=$(docker inspect --format '{{.State.Pid}}' "$container")
+  local target
+  target=$(docker inspect --format '{{.State.Pid}}' "$container")
   if [ -z "$target" ] ; then
     Panic "docker inspect --format {{.State.Pid}} ${container} failed"
   fi
