@@ -819,12 +819,12 @@ EOF
     'status') k3sStatus "$K3S_NAMESPACE" "$_k3s_selector" "$_k3s_container" ;;
     'restart') k3sRestart "$K3S_NAMESPACE" "$_k3s_serv";;
     'delete')
-      k3sDelete "$_k3s_dir"
       _k3s_delete_tls
+      k3sDelete "$_k3s_dir"
       ;;
     'purge')
-      k3sPurge "$_k3s_dir" "$K3S_NAMESPACE" "$_k3s_serv" "$_k3s_selector"
       _k3s_delete_tls
+      k3sPurge "$_k3s_dir" "$K3S_NAMESPACE" "$_k3s_serv" "$_k3s_selector"
       ;;
     'destroy') k3sDestroy "$K3S_NAMESPACE" ;;
     'ns'|'nsenter') k3sNsenter "$_k3s_sub_cmd" "$_k3s_sub_cmd_arg" "$K3S_NAMESPACE" "$_k3s_selector" "$_k3s_container" ;;

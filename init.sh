@@ -36,7 +36,8 @@ main(){
   # 兼容软链接子目录
   find -L /opt -type d -name "bin" -exec chmod -R a+x {} \;
   find -L /opt -type f -name "*.sh" -exec chmod a+x {} \;
-  echo ' >>> [done]'
+
+  ls -al /opt/aa/bin
 }
 
 main "$@"
