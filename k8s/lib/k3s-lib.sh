@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+if [ -x "./k8s-lib.sh" ]; then . ./k8s-lib.sh; else . /opt/k8s/lib/k8s-lib.sh; fi
 
 export REGISTRIES_YAML
 readonly REGISTRIES_YAML='/etc/rancher/k3s/registries.yaml'
