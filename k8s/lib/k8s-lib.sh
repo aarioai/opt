@@ -17,6 +17,7 @@ k8sCheckTLSRefresh(){
   local _k8s_dir="$1"
   local _k8s_content="$2"
   local _k8s_expire_days="$3"
+  Info "check tls refresh $_k8s_dir $_k8s_content $_k8s_expire_days"
 
   if [ ! -f "${_k8s_dir}/content.txt" ] || [ ! -f "${_k8s_dir}/expire.txt" ]; then
     return 0

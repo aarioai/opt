@@ -81,14 +81,14 @@ readonly k8sGenerateKubeconfig
 
 # 删除所有未使用的<none>镜像
 k3sRmiNoneImages(){
-
+  Info "rmi <non> images"
   local _k3s_unused_images
   _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
   local image
   for image in $_k3s_unused_images; do
     # 检查是否有容器使用这个镜像
     if ! sudo k3s crictl ps -q | xargs -r sudo k3s crictl inspect 2>/dev/null | grep -q "$image"; then
-      echo "sudo k3s crictl rmi $image"
+      Info "sudo k3s crictl rmi $image"
       sudo k3s crictl rmi "$image" 2>/dev/null || true
     fi
   done
@@ -160,6 +160,8 @@ k3sPvcStatus(){
   Usage $# -eq 2 'k3sPvcStatus <namespace> <pvc name>'
   local _k3s_namespace="$1"
   local _k3s_name="$2"
+  Info "get pvc status => namespace: $_k3s_namespace, pvc_name: $_k3s_name"
+
   local ok=0
 
   local i
@@ -383,6 +385,8 @@ k3sBuild(){
   Usage $# -eq 1 'k3sBuild <dir>'
   local _k3s_dir="$1"
 
+  Info "build $_k3s_dir"
+
   k3sConvertTmpl "$_k3s_dir"
 
   # 虽然构建会自动下载，但是下载有时候会很慢，导致部署流程很慢。安全起见，预先下载
@@ -412,6 +416,8 @@ k3sDelete(){
   Usage $# -ge 1 'k3sDelete <dir> [mute]'
   local _k3s_dir="$1"
   local _k3s_mute="${2:-}"
+  Info "delete $_k3s_dir $_k3s_mute"
+
   local _k3s_d
   _k3s_d="$(LastN 2 '/' "$_k3s_dir")"
   local _k3s_regex='.*/\(global\|namespace\|pvc\)\.\(yml\|yaml\)'
