@@ -131,3 +131,10 @@ EOF
 }
 export k8sCreateBeijingTLS
 readonly k8sCreateBeijingTLS
+
+k8sRmiNoneImages(){
+  Info "sudo nerdctl image prune -f"
+  sudo nerdctl image prune -f
+}
+export k8sRmiNoneImages
+readonly k8sRmiNoneImages

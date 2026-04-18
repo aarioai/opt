@@ -79,23 +79,6 @@ EOF
 export k8sGenerateKubeconfig
 readonly k8sGenerateKubeconfig
 
-# 删除所有未使用的<none>镜像
-k3sRmiNoneImages(){
-  Info "rmi <non> images"
-  local _k3s_unused_images
-  _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
-  local image
-  for image in $_k3s_unused_images; do
-    # 检查是否有容器使用这个镜像
-    if ! sudo k3s crictl ps -q | xargs -r sudo k3s crictl inspect 2>/dev/null | grep -q "$image"; then
-      Info "sudo k3s crictl rmi $image"
-      sudo k3s crictl rmi "$image" 2>/dev/null || true
-    fi
-  done
-}
-export k3sRmiNoneImages
-readonly k3sRmiNoneImages
-
 _k3sPull(){
   local _k3s_image="$1"
 
@@ -433,7 +416,7 @@ k3sDelete(){
     _k3s_cn='global, pvc and namespace 被保留下来，删除需使用 purge (k3sPurge) 或 destroy (k3sDestroy) 指令'
     NoticeD "$_k3s_en" "$_k3s_cn"
   fi
-  k3sRmiNoneImages
+  k8sRmiNoneImages
 }
 export k3sDelete
 readonly k3sDelete
