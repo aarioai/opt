@@ -1,11 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ -x "../lib/aa-posix-lib.sh" ]; then
-  . ../lib/aa-posix-lib.sh
-else
-  . /opt/aa/lib/aa-posix-lib.sh
-fi
+# https://github.com/aarioai/opt
+if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 main(){
     if [ $# -lt 2 ]; then PanicUsage "$0 <mod> <file> [file]..."; fi

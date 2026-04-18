@@ -1,13 +1,8 @@
 #!/bin/sh
 set -eu
 
-# Optional: tar, openssl(auto install)
-
-if [ -x "../lib/aa-posix-lib.sh" ]; then
-  . ../lib/aa-posix-lib.sh
-else
-  . /opt/aa/lib/aa-posix-lib.sh
-fi
+# https://github.com/aarioai/opt
+if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 usage(){
   cat << EOF

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-. /opt/aa/lib/aa-posix-lib.sh
+if [ -x "./aa/lib/aa-posix-lib.sh" ]; then . ./aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 HERE="$(AbsDir "${BASH_SOURCE[0]}")"
 readonly HERE

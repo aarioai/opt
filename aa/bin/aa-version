@@ -1,10 +1,4 @@
 #!/bin/sh
 set -eu
 
-lib='/opt/aa/lib/aa-posix-lib.sh'
-
-if [ -f "../lib/aa-posix-lib.sh" ]; then
-  lib='../lib/aa-posix-lib.sh'
-fi
-
-md5sum "$lib"
+md5sum '../lib/aa-posix-lib.sh'

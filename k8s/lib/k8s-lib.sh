@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-. /opt/aa/lib/aa-posix-lib.sh
+# https://github.com/aarioai/opt
+if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 K8S_TEST_POD='run-test'
 export K8S_TEST_POD

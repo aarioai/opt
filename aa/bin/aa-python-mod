@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-. /opt/aa/lib/aa-posix-lib.sh
+# https://github.com/aarioai/opt
+if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 venv=${venv:-"/opt/python-venv"}
 

@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-. /opt/k8s/lib/k8s-lib.sh
+# https://github.com/aarioai/opt
+if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 export REGISTRIES_YAML
 readonly REGISTRIES_YAML='/etc/rancher/k3s/registries.yaml'
@@ -80,6 +81,7 @@ readonly k8sGenerateKubeconfig
 
 # 删除所有未使用的<none>镜像
 k3sRmiNoneImages(){
+
   local _k3s_unused_images
   _k3s_unused_images=$(sudo k3s crictl images | grep '<none>' | awk '{print $3}')
   local image

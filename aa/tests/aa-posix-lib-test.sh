@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
+# https://github.com/aarioai/opt
+if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 config="./aa-posix-lib-test.conf"
 if [ ! -f "$config" ]; then config="/opt/aa/tests/aa-posix-lib-test.conf"; fi
 
 lib="../lib/aa-posix-lib.sh"
 if [ ! -f "$lib" ]; then lib="/opt/aa/lib/aa-posix-lib.sh"; fi
-# shellcheck source=../lib/aa-posix-lib.sh
-. "$lib"
 
 export IN_CHINESE=1
 HERE="$(AbsDir "$0")"

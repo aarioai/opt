@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-. /opt/aa/lib/aa-posix-lib.sh
+# https://github.com/aarioai/opt
+if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+
 #  virtualbox 直接 shutdown 会导致 mysql/ redis 缓存数据丢失；docker stop 会通知内部程序（如mysqld，让其flush完成后，再停止）
 
 declare cmd

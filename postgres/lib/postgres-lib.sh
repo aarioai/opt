@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-. /opt/aa/lib/aa-posix-lib.sh
+# https://github.com/aarioai/opt
+if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
 POSTGRES_USER=${POSTGRES_USER:-postgres}
 
