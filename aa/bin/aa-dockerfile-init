@@ -9,6 +9,9 @@ if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/a
 AA_LOG_NO_COLOR=1
 export AA_LOG_NO_COLOR
 
+aa_root="$(ParentDir "$0")"
+readonly aa_root
+
 
 # 1777 表示只有创建者和root可以删除；0777 任何人都可以删除
 # 1=x, w=2, 4=r
@@ -137,7 +140,8 @@ main(){
   initDirs
   initTimezone
 
-  ../tests/aa-posix-lib-test.sh
+
+  "$aa_root"/tests/aa-posix-lib-test.sh
 }
 
 main "$@"
