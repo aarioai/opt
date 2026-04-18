@@ -137,7 +137,7 @@ main(){
   initDirs
   initTimezone
 
-  $ROOT/tests/aa-posix-lib-test.sh
+  ../tests/aa-posix-lib-test.sh
 }
 
 main "$@"
