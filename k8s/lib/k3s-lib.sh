@@ -407,7 +407,6 @@ k3sDelete(){
   local _k3s_yaml
 
   find "$_k3s_dir" -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) ! -regex "$_k3s_regex" -print0 | while IFS= read -r -d '' _k3s_yaml; do
-    Debug "$_k3s_yaml"
     k3sTryDelete "$_k3s_yaml"
   done
 
