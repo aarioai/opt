@@ -82,7 +82,7 @@ readonly k8sGenerateKubeconfig
 _k3sPull(){
   local _k3s_image="$1"
 
-  if [ -f "$REGISTRIES_YAML" ] && Install yq; then
+  if [ -f "$REGISTRIES_YAML" ]; then
     case "$_k3s_image" in
       "$K8S_ALIYUN_HOST"/*)
         local _k3s_username
@@ -286,13 +286,13 @@ k3sTryDelete(){
     return 0
   fi
 
-  Install yq
-
   local _k3s_namespace
-  _k3s_namespace="$(yq -e -r '.metadata.namespace' "$_k3s_yaml" | head -1)"
+  Info "yq -r '.metadata.namespace' \"$_k3s_yaml\"  | sed -n '1p;q'"
+  _k3s_namespace="$(yq -r '.metadata.namespace' "$_k3s_yaml" | sed -n '1p;q')"
+
+  Debug "$_k3s_namespace"
   if [ -z "$_k3s_namespace" ] || [ "$_k3s_namespace" = 'null' ]; then
-    Notice "miss matching namespace, using 'default': yq -e -r '.metadata.namespace' $_k3s_yaml | head -1"
-    _k3s_namespace='default'
+    PanicD "not found .metadata.namespace" "配置缺少.metadata.namespace"
   fi
 
   Info "sudo k3s kubectl delete -n $_k3s_namespace -f $(LastN 3 '/' "$_k3s_yaml")"
@@ -407,8 +407,11 @@ k3sDelete(){
   local _k3s_yaml
 
   find "$_k3s_dir" -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) ! -regex "$_k3s_regex" -print0 | while IFS= read -r -d '' _k3s_yaml; do
+    Debug "$_k3s_yaml"
     k3sTryDelete "$_k3s_yaml"
   done
+
+
   if [ -z "$_k3s_mute" ]; then
     local _k3s_en
     local _k3s_cn
@@ -416,6 +419,7 @@ k3sDelete(){
     _k3s_cn='global, pvc and namespace 被保留下来，删除需使用 purge (k3sPurge) 或 destroy (k3sDestroy) 指令'
     NoticeD "$_k3s_en" "$_k3s_cn"
   fi
+
   k8sRmiNoneImages
 }
 export k3sDelete
@@ -747,7 +751,16 @@ k3sCurl(){
 export k3sCurl
 readonly k3sCurl
 
+
+_init(){
+  if ! command -v yq >/dev/null 2>&1; then
+    Install yq
+  fi
+}
+
 k3sCommands(){
+  _init
+
   local _k8s_usage
   _k8s_usage=$(cat << EOF
 1. k3sCommands <script> <command> <sub command> <sub command arg> <serv> <selector> <container>
