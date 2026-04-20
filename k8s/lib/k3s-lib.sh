@@ -290,7 +290,6 @@ k3sTryDelete(){
   Info "yq -r '.metadata.namespace' \"$_k3s_yaml\"  | sed -n '1p;q'"
   _k3s_namespace="$(yq -r '.metadata.namespace' "$_k3s_yaml" | sed -n '1p;q')"
 
-  Debug "$_k3s_namespace"
   if [ -z "$_k3s_namespace" ] || [ "$_k3s_namespace" = 'null' ]; then
     PanicD "not found .metadata.namespace" "配置缺少.metadata.namespace"
   fi
