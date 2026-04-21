@@ -122,6 +122,17 @@ testChgrpR() {
   return 0
 }
 
+testCompareVersion(){
+  testing "CompareVersion"
+  assert "CompareVersion 1.2.3 1.2.4" "-1" "$(CompareVersion "1.2.3" "1.2.4")"
+  assert "CompareVersion 1.2.3 1.2.3" "0" "$(CompareVersion "1.2.3" "1.2.3")"
+  assert "CompareVersion 1.0.99 1.2.0" "-1" "$(CompareVersion "1.0.99" "1.2.0")"
+
+  assert "CompareVersion v1.0.99 v1.2.0" "-1" "$(CompareVersion "v1.0.99" "v1.2.0")"
+  assert "CompareVersion v1.0.99 1.2.0" "-1" "$(CompareVersion "v1.0.99" "1.2.0")"
+  assert "CompareVersion 2.0.1 v1.99.99" "1" "$(CompareVersion "2.0.1" "v1.99.99")"
+}
+
 testIncrVersion(){
   testing "IncrVersion"
   prev=''
@@ -1026,6 +1037,7 @@ main() {
   testIAmRoot
   testCpuArchitecture
 
+  testCompreVersion
   testIncrVersion
   testASCII
 

@@ -23,7 +23,7 @@ chgOwner(){
 }
 
 main(){
-  if [ "$(id -u)" != '0' ]; then
+  if [ "$(id -u)" != '0' ] && command -v sudo >/dev/null 2>&1; then
     exec sudo "$0" "$@"
     return 0
   fi

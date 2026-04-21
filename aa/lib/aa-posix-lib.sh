@@ -122,10 +122,10 @@ _install_(){
   case "$_install_manager" in
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
@@ -133,34 +133,34 @@ _install_(){
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
       echo ">>> $_install_sudo opkg update $_install_quite"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo opkg update $_install_quite
       echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
@@ -825,6 +825,90 @@ CpuArch() {
 export CpuArch
 readonly CpuArch
 
+# Compare two versions. Supports up to 5 version segments (e.g., 1.2.3.4.5)
+# Print 0 if ver1 == ver2, 1 if ver1 > ver2, -1 if ver1 < ver2
+CompareVersion(){
+    _compareversion_ver1="$1"
+    _compareversion_ver2="$2"
+
+    case "$_compareversion_ver1" in
+      v*)  _compareversion_ver1="${_compareversion_ver1#v}" ;;
+    esac
+    case "$_compareversion_ver2" in
+      v*)  _compareversion_ver2="${_compareversion_ver2#v}" ;;
+    esac
+
+    if [ "$_compareversion_ver1" = "$_compareversion_ver2" ]; then
+      printf '%d' 0
+      return
+    fi
+    # Split by dot
+    _compareversion_old_ifs="$IFS"
+    IFS='.'
+    # shellcheck disable=SC2086    # set -- no need quotes
+    set -- $_compareversion_ver1
+    _compareversion_p1_1="$1"
+    _compareversion_p1_2="${2:-0}"
+    _compareversion_p1_3="${3:-0}"
+    _compareversion_p1_4="${4:-0}"
+    _compareversion_p1_5="${5:-0}"
+
+    # shellcheck disable=SC2086    # set -- no need quotes
+    set -- $_compareversion_ver2
+    _compareversion_p2_1="$1"
+    _compareversion_p2_2="${2:-0}"
+    _compareversion_p2_3="${3:-0}"
+    _compareversion_p2_4="${4:-0}"
+    _compareversion_p2_5="${5:-0}"
+    IFS="$_compareversion_old_ifs"
+
+    # Compare each part
+    if [ "$_compareversion_p1_1" -gt "$_compareversion_p2_1" ]; then
+      printf '%d' 1
+      return
+    elif [ "$_compareversion_p1_1" -lt "$_compareversion_p2_1" ]; then
+      printf '%d' -1
+      return
+    fi
+
+    if [ "$_compareversion_p1_2" -gt "$_compareversion_p2_2" ]; then
+      printf '%d' 1
+      return
+    elif [ "$_compareversion_p1_2" -lt "$_compareversion_p2_2" ]; then
+      printf '%d' -1
+      return
+    fi
+
+    if [ "$_compareversion_p1_3" -gt "$_compareversion_p2_3" ]; then
+      printf '%d' 1
+      return
+    elif [ "$_compareversion_p1_3" -lt "$_compareversion_p2_3" ]; then
+      printf '%d' -1
+      return
+    fi
+
+    if [ "$_compareversion_p1_4" -gt "$_compareversion_p2_4" ]; then
+      printf '%d' 1
+      return
+    elif [ "$_compareversion_p1_4" -lt "$_compareversion_p2_4" ]; then
+      printf '%d' -1
+      return
+    fi
+
+    if [ "$_compareversion_p1_5" -gt "$_compareversion_p2_5" ]; then
+      printf '%d' 1
+      return
+    elif [ "$_compareversion_p1_5" -lt "$_compareversion_p2_5" ]; then
+      printf '%d' -1
+      return
+    fi
+
+    # Equal
+    printf '%d' 0
+}
+export CompareVersion
+readonly CompareVersion
+
 # Increment version with configurable max value per segment. Supports up to 5 version segments (e.g., 1.2.3.4.5)
 # Usage: IncrVersion "1.2.99" 99  -> returns "1.3.0"
 #        IncrVersion "v1.99.99" 99 -> returns "v2.0.0"
@@ -847,7 +931,7 @@ IncrVersion() {
   # Split into parts
   _incrversion_old_ifs="$IFS"
   IFS='.'
-  # shellcheck disable=SC2086    # set -- 不要加引号
+  # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_incrversion_ver
   IFS="$_incrversion_old_ifs"
 
@@ -963,12 +1047,12 @@ CleanPkgManager(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
       ;;
     'opkg')
@@ -1009,19 +1093,19 @@ _uninstall_(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
-      # shellcheck disable=SC2086    # set -- 不要加引号
+      # shellcheck disable=SC2086    # set -- no need quotes
       $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
       CleanPkgManager
       ;;
@@ -2036,7 +2120,7 @@ WordsBetween(){
   IFS=' '
 
   # 将字符串拆分为位置参数
-  # shellcheck disable=SC2086    # set -- 不要加引号
+  # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsbetween_str
   _wordsbetween_total_words=$#
 
@@ -2083,7 +2167,7 @@ WordsBetween(){
 
   # 重新设置 IFS 进行分词
   IFS=' '
-  # shellcheck disable=SC2086    # set -- 不要加引号
+  # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsbetween_str
 
   # 移动到起始位置
@@ -2132,7 +2216,7 @@ WordsRange(){
 
   # 将字符串拆分为单词数组
   IFS=' '
-  # shellcheck disable=SC2086    # set -- 不要加引号
+  # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsrange_str
   _wordsrange_total_words=$#
 
