@@ -505,6 +505,19 @@ HighlightD(){
 export HighlightD
 readonly HighlightD
 
+
+Verbose(){
+  Usage $# -eq 2 'Verbose <-v or --verbose or ""> <info>'
+  _verbose="$1"
+  _verbose_info="$2"
+
+  if [ "$_verbose" = '-v' ] || [ "$_verbose" = '--verbose' ]; then
+    Info "$_verbose_info"
+  fi
+}
+export Verbose
+readonly Verbose
+
 Heading(){
   if [ "$QUITE_LOGS" -eq 0 ]; then
     if [ "$AA_LOG_NO_COLOR" != '1' ]; then
@@ -819,7 +832,7 @@ readonly CpuArch
 #        IncrVersion "1.2.1" 99 2  -> returns "1.2.3"
 #        IncrVersion "1.0.9" 9  -> returns "1.1.0"
 IncrVersion() {
-  Usage "$#" 1 3 'IncrVersion <version> [max=99] [increment=1]'
+  Usage $# 1 3 'IncrVersion <version> [max=99] [increment=1]'
   _incrversion_ver="$1"
   _incrversion_max_value="${2:-99}"
   _incrversion_increment="${3:-1}"
@@ -3068,3 +3081,35 @@ GenerateRSAKeys() {
 }
 export GenerateRSAKeys
 readonly GenerateRSAKeys
+
+# Get the latest git tag after optionally syncing with remote
+# Example:
+#   tag=$(LatestGitTag)      # sync with remote
+#   tag=$(LatestGitTag 0)    # use local tags only
+LatestGitTag(){
+  Usage $# -le 1 'LatestGitTag [pull=1]'
+
+  _latestgittag_pull="${1:-1}"
+
+  if [ "$_latestgittag_pull" = '1' ]; then
+    # Fetch remote tags (prune removes remote-tracking branches that no longer exist)
+    git fetch  origin --prune --tags 2>/dev/null
+
+    # delete all local tags (suppress all output)
+    git tag -l | while read -r _latestgittag; do
+      git tag -d "$_latestgittag" >/dev/null 2>&1
+    done
+
+    # fetch remote tags into local
+    git fetch origin --tags 2>/dev/null
+  fi
+
+  _latestgittag_commit=$(git rev-list --tags --max-count=1 2>/dev/null)
+  if [ -z "$_latestgittag_commit" ]; then
+    printf '%s' ''
+    return
+  fi
+  git describe --tags "$_latestgittag_commit" 2>/dev/null || printf '%s' ''
+}
+export LatestGitTag
+readonly LatestGitTag

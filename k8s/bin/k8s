@@ -18,7 +18,7 @@ main(){
     return 0
   fi
 
-  Usage "$#" ge 1 "k8s <cmd> [options]"
+  Usage $# ge 1 "k8s <cmd> [options]"
   local cmd="$1"
   shift
   case "$cmd" in

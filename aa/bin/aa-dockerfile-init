@@ -129,7 +129,7 @@ preinstallPackages(){
 }
 
 main(){
-  Usage "$#" 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
+  Usage $# 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
   os=${1:-}
 
   echo "[uname -a] >>> $(uname -a)"
