@@ -3168,43 +3168,48 @@ readonly GenerateRSAKeys
 
 # Get the latest git tag after optionally syncing with remote
 # Example:
-#   tag=$(LatestGitTag -pull)      # sync with remote
-#   tag=$(LatestGitTag)    # use local tags only
+#   tag=$(HighestGitTag -pull)      # sync with remote
+#   tag=$(HighestGitTag)    # use local tags only
 # shellcheck disable=SC2120
-LatestGitTag(){
-  Usage $# -le 1 'LatestGitTag [-pull -> pull remote tags]'
-  _latestgittag_pull="${1:-}"
+HighestGitTag(){
+  Usage $# -le 1 'HighestGitTag [-pull -> pull remote tags]'
+  _highestgittag_pull="${1:-}"
 
-  if [ "$_latestgittag_pull" = '-pull' ]; then
+  if [ "$_highestgittag_pull" = '-pull' ]; then
     # Fetch remote tags (prune removes remote-tracking branches that no longer exist)
     git fetch  origin --prune --tags >/dev/null 2>&1
 
     # delete all local tags (suppress all output)
-    git tag -l | while read -r _latestgittag; do
-      git tag -d "$_latestgittag" >/dev/null 2>&1
+    git tag -l | while read -r _highestgittag; do
+      git tag -d "$_highestgittag" >/dev/null 2>&1
     done
 
     # fetch remote tags into local
     git fetch origin --tags >/dev/null 2>&1
   fi
 
-  _latestgittag_commit=$(git rev-list --tags --max-count=1 >/dev/null 2>&1)
-  if [ -z "$_latestgittag_commit" ]; then
-    printf '%s' ''
-    return
-  fi
-  git describe --tags "$_latestgittag_commit" >/dev/null 2>&1 || printf '%s' ''
+  _highestgittag_highest=''
+  for _highestgittag in $(git tag -l 2>/dev/null); do
+    if [ -z "$_highestgittag_highest" ]; then
+      _highestgittag_highest="$_highestgittag"
+    else
+      _highestgittag_compare=$(CompareVersion "$_highestgittag" "$_highestgittag_highest")
+      if [ "$_highestgittag_compare" -eq 1 ]; then
+        _highestgittag_highest="$_highestgittag"
+      fi
+    fi
+  done
+  printf '%s' "$_highestgittag_highest"
 }
-export LatestGitTag
-readonly LatestGitTag
-
+export HighestGitTag
+readonly HighestGitTag
 
 IncrRemoteGitTag(){
   Usage $# -le 1 'IncrRemoteGitTag [-d -> delete previous tag]'
 
   _incrremotegittag_delete="${1:-}"
 
-  _incrremotegittag_latestTag=$(LatestGitTag -pull)
+  _incrremotegittag_latestTag=$(HighestGitTag -pull)
 
   if [ -z "$_incrremotegittag_latestTag" ]; then
     PanicD "increse git tag must contains at least one exists tag" "增加git tag版本数，必须之前存在至少一个版本"
