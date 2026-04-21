@@ -122,6 +122,41 @@ testChgrpR() {
   return 0
 }
 
+testIncrVersion(){
+  testing "IncrVersion"
+  prev=''
+  want=''
+  #assert "IncrVersion $prev" "$want" "$(IncrVersion "$prev")"
+
+  prev='0.0.1'
+  want='0.0.2'
+  assert "IncrVersion $prev" "$want" "$(IncrVersion "$prev")"
+
+  prev='1.2.99'
+  want='1.3.0'
+  assert "IncrVersion $prev" "$want" "$(IncrVersion "$prev")"
+
+  prev='v1.99.99'
+  want='v2.0.0'
+  assert "IncrVersion $prev" "$want" "$(IncrVersion "$prev")"
+
+  prev='v1.2.1'
+  want='v1.2.3'
+  assert "IncrVersion $prev 99 2" "$want" "$(IncrVersion "$prev" 99 2)"
+
+  prev='1.2.1'
+  want='1.2.5'
+  assert "IncrVersion $prev 99 4" "$want" "$(IncrVersion "$prev" 99 4)"
+
+  prev='1.0.9'
+  want='1.1.0'
+  assert "IncrVersion $prev 9" "$want" "$(IncrVersion "$prev" 9)"
+
+  prev='1.0.99.98'
+  want='1.1.0.0'
+  assert "IncrVersion $prev 99 2" "$want" "$(IncrVersion "$prev" 99 2)"
+}
+
 testASCII() {
   testing 'EncodeASCII/DecodeASCII/AddASCII'
   char='X'
@@ -965,6 +1000,8 @@ testGenerateRSAKeys() {
   fi
 }
 
+
+
 main() {
   if [ $# -ne 1 ]; then
     HighlightD "Testing a single function, you can use: $0 [func_name]" "测试单个函数，可以使用：$0 [函数名]"
@@ -988,6 +1025,8 @@ main() {
   testCrossServiceSignal
   testIAmRoot
   testCpuArchitecture
+
+  testIncrVersion
   testASCII
 
   testChwonR
@@ -1044,6 +1083,8 @@ main() {
   testParseConfig
   testSetConfig
   testGenerateRSAKeys
+
+
 
   Info "Test Success"
 }

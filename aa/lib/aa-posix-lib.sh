@@ -122,10 +122,10 @@ _install_(){
   case "$_install_manager" in
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
@@ -133,34 +133,34 @@ _install_(){
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
       echo ">>> $_install_sudo opkg update $_install_quite"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo opkg update $_install_quite
       echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
@@ -812,7 +812,102 @@ CpuArch() {
 export CpuArch
 readonly CpuArch
 
+# Increment version with configurable max value per segment. Supports up to 5 version segments (e.g., 1.2.3.4.5)
+# Usage: IncrVersion "1.2.99" 99  -> returns "1.3.0"
+#        IncrVersion "v1.99.99" 99 -> returns "v2.0.0"
+#        IncrVersion "" -> ""
+#        IncrVersion "1.2.1" 99 2  -> returns "1.2.3"
+#        IncrVersion "1.0.9" 9  -> returns "1.1.0"
+IncrVersion() {
+  Usage "$#" 1 3 'IncrVersion <version> [max=99] [increment=1]'
+  _incrversion_ver="$1"
+  _incrversion_max_value="${2:-99}"
+  _incrversion_increment="${3:-1}"
+  _incrversion_prefix=""
 
+  [ -z "$_incrversion_ver" ] && { printf '%s' ""; return; }
+
+  case "$_incrversion_ver" in
+    v*) _incrversion_prefix="v"; _incrversion_ver="${_incrversion_ver#v}" ;;
+  esac
+
+  # Split into parts
+  _incrversion_old_ifs="$IFS"
+  IFS='.'
+  # shellcheck disable=SC2086    # set -- 不要加引号
+  set -- $_incrversion_ver
+  IFS="$_incrversion_old_ifs"
+
+  # Get parts as variables
+  _incrversion_p1="${1:-0}"
+  _incrversion_p2="${2:-0}"
+  _incrversion_p3="${3:-0}"
+  _incrversion_p4="${4:-0}"
+  _incrversion_p5="${5:-0}"
+  _incrversion_count=$#
+
+  # Increment from rightmost
+  _incrversion_carry=$_incrversion_increment
+
+  # Part 5
+  if [ $_incrversion_count -ge 5 ]; then
+    _incrversion_p5=$((_incrversion_p5 + _incrversion_carry))
+    _incrversion_carry=$((_incrversion_p5 / (_incrversion_max_value + 1)))
+    _incrversion_p5=$((_incrversion_p5 % (_incrversion_max_value + 1)))
+  fi
+
+  # Part 4
+  if [ $_incrversion_count -ge 4 ] && [ "$_incrversion_carry" -ne 0 ]; then
+    _incrversion_p4=$((_incrversion_p4 + _incrversion_carry))
+    _incrversion_carry=$((_incrversion_p4 / (_incrversion_max_value + 1)))
+    _incrversion_p4=$((_incrversion_p4 % (_incrversion_max_value + 1)))
+  fi
+
+  # Part 3
+  if [ $_incrversion_count -ge 3 ] && [ "$_incrversion_carry" -ne 0 ]; then
+    _incrversion_p3=$((_incrversion_p3 + _incrversion_carry))
+    _incrversion_carry=$((_incrversion_p3 / (_incrversion_max_value + 1)))
+    _incrversion_p3=$((_incrversion_p3 % (_incrversion_max_value + 1)))
+  fi
+
+  # Part 2
+  if [ $_incrversion_count -ge 2 ] && [ "$_incrversion_carry" -ne 0 ]; then
+    _incrversion_p2=$((_incrversion_p2 + _incrversion_carry))
+    _incrversion_carry=$((_incrversion_p2 / (_incrversion_max_value + 1)))
+    _incrversion_p2=$((_incrversion_p2 % (_incrversion_max_value + 1)))
+  fi
+
+  # Part 1
+  if [ "$_incrversion_carry" -ne 0 ]; then
+    _incrversion_p1=$((_incrversion_p1 + _incrversion_carry))
+    if [ $_incrversion_p1 -gt "$_incrversion_max_value" ]; then
+      # Need to add new part
+      _incrversion_new=$((_incrversion_p1 / (_incrversion_max_value + 1)))
+      _incrversion_p1=$((_incrversion_p1 % (_incrversion_max_value + 1)))
+      # Shift and add
+      _incrversion_p5=$_incrversion_p4
+      _incrversion_p4=$_incrversion_p3
+      _incrversion_p3=$_incrversion_p2
+      _incrversion_p2=$_incrversion_p1
+      _incrversion_p1=$_incrversion_new
+      _incrversion_count=$((_incrversion_count + 1))
+    fi
+  fi
+
+  # Build result
+  _incrversion_result=""
+  case $_incrversion_count in
+    1) _incrversion_result="$_incrversion_p1" ;;
+    2) _incrversion_result="${_incrversion_p1}.${_incrversion_p2}" ;;
+    3) _incrversion_result="${_incrversion_p1}.${_incrversion_p2}.${_incrversion_p3}" ;;
+    4) _incrversion_result="${_incrversion_p1}.${_incrversion_p2}.${_incrversion_p3}.${_incrversion_p4}" ;;
+    5) _incrversion_result="${_incrversion_p1}.${_incrversion_p2}.${_incrversion_p3}.${_incrversion_p4}.${_incrversion_p5}" ;;
+  esac
+
+  printf '%s' "${_incrversion_prefix}${_incrversion_result}"
+}
+export IncrVersion
+readonly IncrVersion
 
 Install(){
   Usage $# -ge 1 'Install <app> [app]...'
@@ -855,12 +950,12 @@ CleanPkgManager(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
       ;;
     'opkg')
@@ -901,19 +996,19 @@ _uninstall_(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
-      # shellcheck disable=SC2086    # 不要加引号
+      # shellcheck disable=SC2086    # set -- 不要加引号
       $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
       CleanPkgManager
       ;;
@@ -1928,7 +2023,7 @@ WordsBetween(){
   IFS=' '
 
   # 将字符串拆分为位置参数
-  # shellcheck disable=SC2086    # 不要加引号
+  # shellcheck disable=SC2086    # set -- 不要加引号
   set -- $_wordsbetween_str
   _wordsbetween_total_words=$#
 
@@ -1975,7 +2070,7 @@ WordsBetween(){
 
   # 重新设置 IFS 进行分词
   IFS=' '
-  # shellcheck disable=SC2086    # 不要加引号
+  # shellcheck disable=SC2086    # set -- 不要加引号
   set -- $_wordsbetween_str
 
   # 移动到起始位置
@@ -2024,7 +2119,7 @@ WordsRange(){
 
   # 将字符串拆分为单词数组
   IFS=' '
-  # shellcheck disable=SC2086    # 不要加引号
+  # shellcheck disable=SC2086    # set -- 不要加引号
   set -- $_wordsrange_str
   _wordsrange_total_words=$#
 
