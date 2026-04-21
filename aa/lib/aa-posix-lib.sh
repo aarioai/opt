@@ -3084,16 +3084,16 @@ readonly GenerateRSAKeys
 
 # Get the latest git tag after optionally syncing with remote
 # Example:
-#   tag=$(LatestGitTag)      # sync with remote
-#   tag=$(LatestGitTag 0)    # use local tags only
+#   tag=$(LatestGitTag -pull)      # sync with remote
+#   tag=$(LatestGitTag)    # use local tags only
+# shellcheck disable=SC2120
 LatestGitTag(){
-  Usage $# -le 1 'LatestGitTag [pull=1]'
+  Usage $# -le 1 'LatestGitTag [-pull -> pull remote tags]'
+  _latestgittag_pull="${1:-}"
 
-  _latestgittag_pull="${1:-1}"
-
-  if [ "$_latestgittag_pull" = '1' ]; then
+  if [ "$_latestgittag_pull" = '-pull' ]; then
     # Fetch remote tags (prune removes remote-tracking branches that no longer exist)
-    git fetch  origin --prune --tags 2>/dev/null
+    git fetch  origin --prune --tags >/dev/null 2>&1
 
     # delete all local tags (suppress all output)
     git tag -l | while read -r _latestgittag; do
@@ -3101,15 +3101,49 @@ LatestGitTag(){
     done
 
     # fetch remote tags into local
-    git fetch origin --tags 2>/dev/null
+    git fetch origin --tags >/dev/null 2>&1
   fi
 
-  _latestgittag_commit=$(git rev-list --tags --max-count=1 2>/dev/null)
+  _latestgittag_commit=$(git rev-list --tags --max-count=1 >/dev/null 2>&1)
   if [ -z "$_latestgittag_commit" ]; then
     printf '%s' ''
     return
   fi
-  git describe --tags "$_latestgittag_commit" 2>/dev/null || printf '%s' ''
+  git describe --tags "$_latestgittag_commit" >/dev/null 2>&1 || printf '%s' ''
 }
 export LatestGitTag
 readonly LatestGitTag
+
+
+IncrRemoteGitTag(){
+  Usage $# -le 1 'IncrRemoteGitTag [-d -> delete previous tag]'
+
+  _incrremotegittag_delete="${1:-}"
+
+  _incrremotegittag_latestTag=$(LatestGitTag -pull)
+
+  if [ -z "$_incrremotegittag_latestTag" ]; then
+    PanicD "increse git tag must contains at least one exists tag" "增加git tag版本数，必须之前存在至少一个版本"
+  fi
+
+  _incrremotegittag_new=$(IncrVersion "$_incrremotegittag_latestTag")
+  if [ -z "$_incrremotegittag_new" ] || [ "$_incrremotegittag_new" = "$_incrremotegittag_latestTag" ]; then
+    PanicD "increse git tag $_incrremotegittag_latestTag failed" "git tag $_incrremotegittag_latestTag 不是标准版本类型"
+  fi
+
+  if [ "$_incrremotegittag_delete" = '-d' ]; then
+    Info "git tag -d $_incrremotegittag_latestTag"
+    git tag -d "$_incrremotegittag_latestTag"
+
+    Info "git push origin --delete tag $_incrremotegittag_latestTag"
+    git push origin --delete tag "$_incrremotegittag_latestTag"
+  fi
+
+  Info "git tag $_incrremotegittag_new"
+  git tag "$_incrremotegittag_new"
+
+  Info "git push origin --tags"
+  git push origin --tags
+}
+export IncrRemoteGitTag
+readonly IncrRemoteGitTag
