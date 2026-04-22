@@ -99,13 +99,8 @@ _k3sPull(){
     esac
   fi
 
-  Info "sudo k3s crictl pull $_k3s_image"
-  local _k3s_hightlight_en
-  local _k3s_hightlight_cn
-  _k3s_hightlight_en="Slow? Try:${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
-  _k3s_hightlight_cn="拉取慢？手动拉更快：${LF}${TAB4}k3s ctr images pull --print-chainid --local --user <username>:<password> $_k3s_image"
-  HighlightD "$_k3s_hightlight_en" "$_k3s_hightlight_cn"
-  sudo k3s crictl pull "$_k3s_image"
+  Info "sudo nerdctl pull $_k3s_image"
+  sudo nerdctl pull "$_k3s_image"
 }
 export _k3sPull
 readonly _k3sPull
