@@ -32,15 +32,20 @@ ownDir(){
 
   aa-chmod-or-mkdir "$mod_owner" "$dir"
 
+  Info "grep $XUSER /etc/passwd"
+  grep "$XUSER" /etc/passwd
+
   if [ -z "${XGROUP:-}" ]; then
+    Info "chown -R $XUSER $dir"
     chown -R "$XUSER" "$dir"
   else
+    Info "chown -R $XUSER:$XGROUP $dir"
     chown -R "$XUSER":"$XGROUP" "$dir"
   fi
 }
 
 initDirs(){
-  echo '[init directories]'
+  Info '[init directories]'
   mkdir -p "$TMPDIR"
   chmod 1777 "$TMPDIR"
 
@@ -54,14 +59,14 @@ initDirs(){
 }
 
 initTimezone(){
-  echo "init timezone => $TZ"
+  Info "init timezone => $TZ"
   if [ -n "${TZ:-}" ]; then aa-set-timezone "$TZ"; fi
 }
 
 preinstallPackages(){
   os="$1"
 
-  echo "[preinstall packages => $os]"
+  Info "[preinstall packages => $os]"
 
   case "$os" in
     'alpine')
@@ -132,9 +137,9 @@ main(){
   Usage $# 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
   os=${1:-}
 
-  echo "[uname -a] >>> $(uname -a)"
+  Info "[uname -a] >>> $(uname -a)"
 
-  if [ -f "/etc/os-release" ]; then echo "[cat /etc/os-release]"; cat /etc/os-release; fi
+  if [ -f "/etc/os-release" ]; then Info "[cat /etc/os-release]"; cat /etc/os-release; fi
 
   preinstallPackages "$os"
   initDirs
