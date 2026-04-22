@@ -32,9 +32,6 @@ ownDir(){
 
   aa-chmod-or-mkdir "$mod_owner" "$dir"
 
-  Info "grep $XUSER /etc/passwd"
-  grep "$XUSER" /etc/passwd
-
   if [ -z "${XGROUP:-}" ]; then
     Info "chown -R $XUSER $dir"
     chown -R "$XUSER" "$dir"
@@ -133,14 +130,27 @@ preinstallPackages(){
   esac
 }
 
-main(){
-  Usage $# 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
-  os=${1:-}
-
+showEnv(){
   Info "[uname -a] >>> $(uname -a)"
 
   if [ -f "/etc/os-release" ]; then Info "[cat /etc/os-release]"; cat /etc/os-release; fi
 
+  if [ -n "${XUSER:-}" ]; then
+    Info "grep $XUSER /etc/passwd"
+    grep "$XUSER" /etc/passwd
+    if [ -n "${XGROUP:-}" ] && [ "$XGROUP" != "$XUSER" ]; then
+      Info "grep $XGROUP /etc/passwd"
+      grep "$XGROUP" /etc/passwd
+    fi
+  fi
+
+}
+
+main(){
+  Usage $# 0 1 'aa-dockerfile-init [os=alpine|busybox|debian|oraclelinux|ubi|ubuntu]'
+  os=${1:-}
+
+  showEnv
   preinstallPackages "$os"
   initDirs
   initTimezone
