@@ -1037,7 +1037,7 @@ main() {
   testIAmRoot
   testCpuArchitecture
 
-  testCompreVersion
+  testCompareVersion
   testIncrVersion
   testASCII
 
@@ -1095,8 +1095,6 @@ main() {
   testParseConfig
   testSetConfig
   testGenerateRSAKeys
-
-
 
   Info "Test Success"
 }

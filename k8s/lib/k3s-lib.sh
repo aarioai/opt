@@ -108,12 +108,12 @@ readonly _k3sPull
 k3sPullImage(){
   local _k3s_pullimage_usage
   _k3s_pullimage_usage=$(cat << EOF
-k3sPullImage <name|image> [source=docker.io|natived|coff|worked]
+k3sPullImage <name|image> [source=docker.io|visible|deny]
 Example:
   k3sPullImage docker.io/library/redis:latest
   k3sPullImage redis:latest                   ==>  docker.io/library/redis:latest
   k3sPullImage rancher/mirrored-pause:3.6     ==>  docker.io/rancher/mirrored-pause:3.6
-  k3sPullImage redis:mirror natived           ==>  $K8S_ALIYUN_HOST/natived/redis:mirror
+  k3sPullImage redis:mirror visible           ==>  $K8S_ALIYUN_HOST/visible/redis:mirror
 EOF
 )
   Usage $# 1 2 "$_k3s_pullimage_usage"
@@ -581,7 +581,7 @@ _k3s_cmd_list(){
   printf "|  ${_CYAN_}       %s run <td> [command=/bin/sh]${_NC_}            %s|\n" "$_k3s_h" "$_k3s_c"
   echo "+${_k3s_a}+"
   echo "|  E.g. : $_k3s_here ns|nsenter sh                            $_k3s_c|"
-  echo "|         $_k3s_h pull redis:mirror natived                $_k3s_c|"
+  echo "|         $_k3s_h pull redis:mirror visible                $_k3s_c|"
   echo "|         $_k3s_h pull redis:latest docker.io              $_k3s_c|"
   echo "|         $_k3s_h pull docker.io/rancher/mirrored-pause    $_k3s_c|"
   echo "|         $_k3s_h curl http://cluster.local:15672/api      $_k3s_c|"
