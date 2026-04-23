@@ -3337,8 +3337,8 @@ IncrRemoteGitTag(){
   Info "git tag $_incrremotegittag_new"
   git tag "$_incrremotegittag_new"
 
-  Info "git push origin --tags"
-  git push origin --tags
+  Info "git push origin $_incrremotegittag_new"
+  git push origin "$_incrremotegittag_new"
 }
 export IncrRemoteGitTag
 readonly IncrRemoteGitTag
