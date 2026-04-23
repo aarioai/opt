@@ -3272,6 +3272,81 @@ GenerateRSAKeys() {
 export GenerateRSAKeys
 readonly GenerateRSAKeys
 
+# Detect private key file
+DetectPrivateKeyPemFile(){
+  Usage $# -eq 1 'DetectPrivateKeyPemFile <dir>'
+  _detectprivatekeypemfile_dir="$1"
+  if [ ! -d "$_detectprivatekeypemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  InstallGrep 2>/dev/null || return 1
+
+  for _detectprivatekeypemfile in "$_detectprivatekeypemfile_dir"/*; do
+    [ -f "$_detectprivatekeypemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*PRIVATE KEY-----" "$_detectprivatekeypemfile" 2>/dev/null; then
+      printf '%s' "$_detectprivatekeypemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectPrivateKeyPemFile
+readonly DetectPrivateKeyPemFile
+
+# Detect public key file
+DetectPublicKeyPemFile(){
+  Usage $# -eq 1 'DetectPublicKeyPemFile <dir>'
+  _detectpublickeypemfile_dir="$1"
+  if [ ! -d "$_detectpublickeypemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  InstallGrep 2>/dev/null || return 1
+
+  for _detectpublickeypemfile in "$_detectpublickeypemfile_dir"/*; do
+    [ -f "$_detectpublickeypemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*PUBLIC KEY-----" "$_detectpublickeypemfile" 2>/dev/null; then
+      printf '%s' "$_detectpublickeypemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectPublicKeyPemFile
+readonly DetectPublicKeyPemFile
+
+# Detect Cert file
+DetectCertPemFile(){
+  Usage $# -eq 1 'DetectCertPemFile <dir>'
+  _detectcertpemfile_dir="$1"
+  if [ ! -d "$_detectcertpemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  if ! InstallGrep 2>/dev/null; then
+    printf ''
+    return
+  fi
+
+  for _detectcertpemfile in "$_detectcertpemfile_dir"/*; do
+    [ -f "$_detectcertpemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*CERTIFICATE-----" "$_detectcertpemfile" 2>/dev/null; then
+      printf '%s' "$_detectcertpemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectCertPemFile
+readonly DetectCertPemFile
+
 # Get the latest git tag after optionally syncing with remote
 # Example:
 #   tag=$(HighestGitTag -pull)      # sync with remote

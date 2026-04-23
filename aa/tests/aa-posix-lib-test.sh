@@ -1044,6 +1044,7 @@ testSetConfig() {
   got=$(ParseConfig "$config" "test-datetime")
   assert 'SetConfig' "$want" "$got"
 }
+
 testGenerateRSAKeys() {
   testing 'GenerateRSAKeys'
   if ! command -v openssl >/dev/null 2>&1; then
@@ -1057,13 +1058,11 @@ testGenerateRSAKeys() {
   GenerateRSAKeys 'stream' "$(whoami)" "$temp" "A$prefix-" 512
   f="${temp}/A${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
-    printf '%s\n' "GenerateRSAKeys stream failed"
-    exit
+    Panic '%s\n' "GenerateRSAKeys stream failed"
   fi
 
   if [ -f "${f}-512.priv" ] || [ -f "${f}-512.pub" ]; then
-    printf '%s\n' "GenerateRSAKeys stream failed, found .priv/.pub"
-    exit
+    Panic "GenerateRSAKeys stream failed, found .priv/.pub"
   fi
 
   # 测试full模式
@@ -1073,17 +1072,21 @@ testGenerateRSAKeys() {
   GenerateRSAKeys 'full' "$(whoami)" "$temp" "B$prefix-" 512
   f="${temp}/B${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
-    printf '%s\n' "GenerateRSAKeys full failed"
-    exit
+    Panic "GenerateRSAKeys full failed"
   fi
 
   if [ ! -s "${f}-512.priv" ] || [ ! -s "${f}-512.pub" ]; then
-    printf '%s\n' "GenerateRSAKeys full failed, not found .priv/.pub"
-    exit
+    Panic "GenerateRSAKeys full failed, not found .priv/.pub"
   fi
+
+  got=$(DetectPrivateKeyPemFile "$temp")
+  Info "detect private key pem file: $got"
+  assert 'DetectPrivateKeyPemFile' "${f}-512.priv" "$got"
+
+  got=$(DetectPublicKeyPemFile "$temp")
+  Info "detect public key pem file: $got"
+  assert 'DetectPrivateKeyPemFile' "${f}-512.pub" "$got"
 }
-
-
 
 main() {
   if [ $# -ne 1 ]; then
@@ -1172,6 +1175,7 @@ main() {
   testParseArrays
   testParseConfig
   testSetConfig
+
   testGenerateRSAKeys
 
   Info "Test Success"

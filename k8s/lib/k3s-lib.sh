@@ -751,6 +751,7 @@ _init(){
   fi
 }
 
+# 如果需要导入 tls cert/key，则直接在 /etc/cert/<domain>/ 目录下
 k3sCommands(){
   _init
 

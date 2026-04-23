@@ -8,43 +8,7 @@ K8S_TEST_POD='run-test'
 export K8S_TEST_POD
 readonly K8S_TEST_POD
 
-K8S_ALIYUN_HOST='registry.cn-hangzhou.aliyuncs.com'
-export K8S_ALIYUN_HOST
-readonly K8S_ALIYUN_HOST
 
-k8sCheckTLSRefresh(){
-  Usage $# -eq 3 'k8sCheckTLSRefresh <cert_dir> <content> <expire_days>'
-  local _k8s_dir="$1"
-  local _k8s_content="$2"
-  local _k8s_expire_days="$3"
-  Info "check tls refresh $_k8s_dir $_k8s_content $_k8s_expire_days"
-
-  if [ ! -f "${_k8s_dir}/content.txt" ] || [ ! -f "${_k8s_dir}/expire.txt" ]; then
-    return 0
-  fi
-  local _k8s_old_content
-  local _k8s_old_expire
-  local _k8s_old_expire_days
-
-  _k8s_old_content=$(cat "${_k8s_dir}/content.txt")
-  _k8s_old_expire=$(cat "${_k8s_dir}/expire.txt")
-  _k8s_old_expire_days=$(echo "$_k8s_old_expire" | grep -o '[0-9]\+ days' | grep -o '[0-9]\+' | head -1)
-  if [ "$_k8s_content" != "$_k8s_old_content" ] || [ "$_k8s_expire_days" != "$_k8s_old_expire_days" ]; then
-    return 0
-  fi
-
-  local _k8s_t1
-  local _k8s_t2
-  _k8s_t1=$(date -d "$_k8s_old_expire" +%s)
-  _k8s_t2=$(date -d '+ 30 days' +%s)        # 最后30天内，都需要更新
-  if [ -z "$_k8s_t1" ] || [ "$_k8s_t1" -le "$_k8s_t2" ]; then
-    return 0
-  fi
-
-  return 1
-}
-export k8sCheckTLSRefresh
-readonly k8sCheckTLSRefresh
 
 k8sCreateTLS(){
   local _k8s_usage
@@ -73,11 +37,11 @@ EOF
   _k8s_today=$(date +'%Y-%m-%d')
   local _k8s_expire="$_k8s_today + $_k8s_expire_days days"        # date -d "$_k8s_expire" +%Y-%m-%d
 
-  if k8sCheckTLSRefresh "$_k8s_dir" "$_k8s_content" "$_k8s_expire_days"; then
+  if [ ! -d "$_k8s_dir" ]; then
     # 生成自签名证书（支持 IP 和域名）
-    Info "sudo openssl req -x509 -nodes -days $_k8s_expire_days -newkey rsa:2048  -keyout $_k8s_dir/tls.key -out $_k8s_dir/tls.crt -subj $_k8s_subj -addext subjectAltName=$_k8s_alt"
+    Info "sudo openssl req -x509 -nodes -days $_k8s_expire_days -newkey rsa:2048  -keyout $_k8s_dir/privkey.pem -out $_k8s_dir/tls.crt -subj $_k8s_subj -addext subjectAltName=$_k8s_alt"
     if ! sudo openssl req -x509 -nodes -days "$_k8s_expire_days" -newkey rsa:2048 \
-      -keyout "$_k8s_dir/tls.key" -out "$_k8s_dir/tls.crt" \
+      -keyout "$_k8s_dir/privkey.pem" -out "$_k8s_dir/tls.crt" \
       -subj "$_k8s_subj" -addext "subjectAltName=$_k8s_alt" >/dev/null; then
       PanicD "Generate $_k8s_domain TLS certs failed" "生成 $_k8s_domain 的TLS证书失败"
     fi
@@ -100,7 +64,7 @@ EOF
   fi
 
   # 创建 Kubernetes TLS Secret
-  sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --cert="$_k8s_dir/tls.crt" --key="$_k8s_dir/tls.key"
+  sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --cert="$_k8s_dir/tls.crt" --key="$_k8s_dir/privkey.pem"
 
   # 验证 Secret
   Info "sudo kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
