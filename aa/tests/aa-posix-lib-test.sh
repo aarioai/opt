@@ -46,6 +46,42 @@ assert(){
   fi
 }
 
+testYes(){
+  testing 'Yes'
+  if Yes; then Panic 'Wrong Yes'; fi
+  if Yes ''; then Panic '"" is not yes'; fi
+  if Yes 0; then Panic '0 is not yes'; fi
+  if Yes 2; then Panic '2 is not yes'; fi
+  if Yes -1; then Panic '-1 is not yes'; fi
+  if Yes 'false'; then Panic 'false is not yes'; fi
+
+  if ! Yes 1; then Panic '1 is yes'; fi
+  if ! Yes '1'; then Panic '"1" is yes'; fi
+  if ! Yes 'yes'; then Panic 'yes is yes'; fi
+  if ! Yes 'Yes'; then Panic 'Yes is yes'; fi
+  if ! Yes 'YES'; then Panic 'YES is yes'; fi
+  if ! Yes 'y'; then Panic 'y is yes'; fi
+  if ! Yes 'Y'; then Panic 'Y is yes'; fi
+  if ! Yes 'true'; then Panic 'true is yes'; fi
+  if ! Yes 'True'; then Panic 'True is yes'; fi
+  if ! Yes 'TRUE'; then Panic 'TRUE is yes'; fi
+  if ! Yes 't'; then Panic 't is yes'; fi
+  if ! Yes 'T'; then Panic 'T is yes'; fi
+  if ! Yes 'ok'; then Panic 'ok is yes'; fi
+  if ! Yes 'Ok'; then Panic 'Ok is yes'; fi
+  if ! Yes 'OK'; then Panic 'OK is yes'; fi
+  if ! Yes 'on'; then Panic 'on is yes'; fi
+  if ! Yes 'On'; then Panic 'On is yes'; fi
+  if ! Yes 'ON'; then Panic 'ON is yes'; fi
+  if ! Yes 'enable'; then Panic 'enable is yes'; fi
+  if ! Yes 'Enable'; then Panic 'Enable is yes'; fi
+  if ! Yes 'ENABLE'; then Panic 'ENABLE is yes'; fi
+  if ! Yes 'enabled'; then Panic 'enabled is yes'; fi
+  if ! Yes 'Enabled'; then Panic 'Enabled is yes'; fi
+  if ! Yes 'ENABLED'; then Panic 'ENABLED is yes'; fi
+}
+
+
 testIsInt(){
   testing 'IsInt'
   if ! IsInt '1230'; then Panic "1230 should be an interger"; fi

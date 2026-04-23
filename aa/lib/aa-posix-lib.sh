@@ -22,7 +22,7 @@ export TMPDIR="${TMPDIR:-/tmp}"
 export QUITE_LOGS="${QUITE_LOGS:-0}"
 export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
 export IN_CHINESE=0         # 如果将此设置为 -1，则强制输出英文；设为 1，强制输出中文；否则自动判断系统是否是中文
-AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色
+AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色， {Yes}
 
 # 换行符
 # printf/echo 都会移除掉尾部的空行。试了很多办法，只有这样写才可以
@@ -65,21 +65,31 @@ readonly _LIGHT_CYAN_='\033[1;96m'
 export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
 
+Yes(){
+  _yes="${1:-}"
+  case $_yes in
+    enabled|Enabled|ENABLED|enable|Enable|ENABLE|ok|Ok|OK|on|On|ON|t|T|true|True|TRUE|y|Y|yes|Yes|YES|1) return 0;;
+    *) return 1;;
+  esac
+}
+export Yes
+readonly Yes
+
 DetectPkgManager(){
   if command -v apk >/dev/null 2>&1; then
-    printf '%s' 'apk'           # alpine
+    printf '%s' 'apk'       # alpine
   elif command -v apt-get >/dev/null 2>&1; then
-    printf '%s' 'apt-get'       # debian/ubuntu. apt 被视为不稳定的，因此脚本使用 apt-get
+    printf '%s' 'apt-get'   # debian/ubuntu. apt 被视为不稳定的，因此脚本使用 apt-get
   elif command -v dnf >/dev/null 2>&1; then
     printf '%s' 'dnf'       # UBI, Fedora/CentOS 8+, better than yum
   elif command -v microdnf >/dev/null 2>&1; then
-    printf '%s' 'microdnf'      # UBI-minimal, oraclelinux
+    printf '%s' 'microdnf'  # UBI-minimal, oraclelinux
   elif command -v opkg >/dev/null 2>&1; then
     printf '%s' 'opkg'
   elif command -v pacman >/dev/null 2>&1; then
     printf '%s' 'pacman'
   elif command -v yum >/dev/null 2>&1; then
-    printf '%s' 'yum'           # CentOS 8-
+    printf '%s' 'yum'       # CentOS 8-
   elif command -v zypper >/dev/null 2>&1; then
     printf '%s' 'zypper'
   else
@@ -284,10 +294,10 @@ readonly IsInChinese
 
 _isInt_(){
   _isnumber=${1:-}
-  _isnumber_negative=${2:-0}
+  _isnumber_enable_negative=${2:-0}
 
   # enable negative number
-  if [ "$_isnumber_negative" = "1" ]; then
+  if Yes "$_isnumber_enable_negative"; then
     _isnumber=${_isnumber#-}
   fi
 
@@ -330,10 +340,10 @@ PanicUsage() {
   if [ "$QUITE_LOGS" -eq 0 ]; then
     _panicusage_u='Usage: '
     if IsInChinese; then _panicusage_u='使用方法：'; fi
-    if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-      printf "%s ${_RED_}%s%s${_NC_}\n" "$(Now)" "$_panicusage_u" "$1" >&2
-    else
+    if Yes "$AA_LOG_NO_COLOR"; then
       printf "%s %s%s\n" "$(Now)" "$_panicusage_u" "$1" >&2
+    else
+      printf "%s ${_RED_}%s%s${_NC_}\n" "$(Now)" "$_panicusage_u" "$1" >&2
     fi
   fi
   exit 1
@@ -470,20 +480,22 @@ PrintColor(){
   Usage $# -ge 2 'PrintColor <color> {message}'
   _printcolor=$1
   shift
-  if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-    printf "${_printcolor}%s${_NC_}\n" "$*"
-  else
+  if Yes "$AA_LOG_NO_COLOR"; then
     printf "%s\n" "$*"
+  else
+    printf "${_printcolor}%s${_NC_}\n" "$*"
+
   fi
 }
 export PrintColor
 readonly PrintColor
 
 Lowlight(){
-  if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-    printf "${_GRAY_}%s${_NC_}\n" "$*"
-  else
+  if Yes "$AA_LOG_NO_COLOR"; then
     printf "%s\n" "$*"
+  else
+    printf "${_GRAY_}%s${_NC_}\n" "$*"
+
   fi
 }
 export Lowlight
@@ -497,10 +509,11 @@ export LowlightD
 readonly LowlightD
 
 Highlight(){
-  if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-    printf "${_LIGHT_MAGENTA_}%s${_NC_}\n" "$*"
-  else
+  if Yes "$AA_LOG_NO_COLOR"; then
     printf "%s\n" "$*"
+  else
+    printf "${_LIGHT_MAGENTA_}%s${_NC_}\n" "$*"
+
   fi
 }
 export Highlight
@@ -528,10 +541,10 @@ readonly Verbose
 
 Heading(){
   if [ "$QUITE_LOGS" -eq 0 ]; then
-    if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-      printf "\n${_LIGHT_YELLOW_}%s${_NC_}\n" "$*"
-    else
+    if Yes "$AA_LOG_NO_COLOR"; then
       printf "\n%s\n" "$*"
+    else
+      printf "\n${_LIGHT_YELLOW_}%s${_NC_}\n" "$*"
     fi
   fi
   _saveToLogFile "" "$@"
@@ -590,10 +603,10 @@ _log_() {
   _log_message="$*"
 
   if [ "$QUITE_LOGS" -eq 0 ]; then
-    if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-      printf "%s ${_log_color}%s${_NC_}\n" "$(Now)" "${_log_level}${_log_message}"
-    else
+    if Yes "$AA_LOG_NO_COLOR"; then
       printf "%s %s\n" "$(Now)" "${_log_level}${_log_message}"
+    else
+      printf "%s ${_log_color}%s${_NC_}\n" "$(Now)" "${_log_level}${_log_message}"
     fi
   fi
 }
@@ -699,7 +712,7 @@ export PanicD
 readonly PanicD
 
 IsInt(){
-  Usage $# 1 2 'if ! IsInt <string> [enable_negative=0|1]; then ... fi'
+  Usage $# 1 2 'if ! IsInt <string> [enable_negative={Yes}]; then ... fi'
   _isInt_ "$@"
 }
 export IsInt
@@ -758,10 +771,10 @@ Confirm(){
   Usage $# -le 1 'if Confirm <message>; then ... fi'
   _confirm_msg="${1:-"$(Dict "Are you sure?" "确定？")"}"
 
-  if [ "$AA_LOG_NO_COLOR" != '1' ]; then
-    printf "${_RED_}%s ${_NC_}[y/N] \n" "$_confirm_msg"
-  else
+  if Yes "$AA_LOG_NO_COLOR"; then
     printf "%s [y/N] \n" "$_confirm_msg"
+  else
+    printf "${_RED_}%s ${_NC_}[y/N] \n" "$_confirm_msg"
   fi
 
   read -r _confirm_resp
@@ -3103,7 +3116,7 @@ SetConfig() {
 # 整行匹配，并过滤掉重复的
 # Require: StrIn
 MatchedLines(){
-  Usage $# 2 3 'MatchedLines <file> <pattern> [trim=1|0] | while IFS= read -r match; do ... done'
+  Usage $# 2 3 'MatchedLines <file> <pattern> [trim={Yes}] | while IFS= read -r match; do ... done'
   _matchedlines_file="$1"
   _matchedlines_pattern="$2"
   _matchedlines_trim="${3:-1}"
@@ -3113,7 +3126,7 @@ MatchedLines(){
   _matchedlines_result="$TAB"
   InstallGrep
   grep "^[[:space:]]*${_matchedlines_pattern}.*[[:space:]]*$" "$_matchedlines_file" | while IFS= read -r _matchedlines_match; do
-    if [ "$_matchedlines_trim" = '1' ]; then
+    if Yes "$_matchedlines_trim"; then
       # trim left spaces
       _matchedlines_match="${_matchedlines_match#"${_matchedlines_match%%[![:space:]]*}"}"
       # trim right spaces
