@@ -68,7 +68,8 @@ preinstallPackages(){
   case "$os" in
     'alpine')
       # alpine: ~5MB，是其他linux的1/10，优先使用 alpine
-      Install tzdata procps ca-certificates
+      # alpine 使用 su-exec，而不是gosu
+      Install tzdata procps ca-certificates su-exec
       CleanPkgManager
       ;;
     'busybox')
