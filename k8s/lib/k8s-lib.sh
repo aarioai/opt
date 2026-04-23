@@ -64,7 +64,7 @@ EOF
   local _k8s_expire_days="${6:-365}"
   local _k8s_dir="${7:-"/etc/cert/$_k8s_domain"}"
 
-  if ! IsNumber "$_k8s_expire_days"; then PanicUsage "$_k8s_usage"; fi
+  if ! IsInt "$_k8s_expire_days"; then PanicUsage "$_k8s_usage"; fi
 
   ChmodOrMkdir 755 "$_k8s_dir"            # 进入目录，需要 x 权限
 

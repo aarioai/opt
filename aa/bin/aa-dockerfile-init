@@ -132,6 +132,8 @@ preinstallPackages(){
 
 showEnv(){
   Info "[uname -a] >>> $(uname -a)"
+  Info "[cpu cores] >>> $(CpuCores)"
+  Info "[ulimit -n] >>> $(UlimitN)"
 
   if [ -f "/etc/os-release" ]; then Info "[cat /etc/os-release]"; cat /etc/os-release; fi
 

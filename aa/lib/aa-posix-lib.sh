@@ -282,18 +282,26 @@ IsInChinese(){
 export IsInChinese
 readonly IsInChinese
 
-_isNumber_(){
-  InstallGrep
-  if ! printf '%s' "${1:-}" | grep '^[[:digit:]]*$' >/dev/null 2>&1; then
-    return 1
+_isInt_(){
+  _isnumber=${1:-}
+  _isnumber_negative=${2:-0}
+
+  # enable negative number
+  if [ "$_isnumber_negative" = "1" ]; then
+    _isnumber=${_isnumber#-}
   fi
+
+  case $_isnumber in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
 }
-readonly _isNumber_
+readonly _isInt_
 
 PanicIfNotNumber(){
   Usage $# -ge 1 'PanicIfNotNumber <arg> [arg]...'
   for _panicifnotumber in "$@"; do
-    if ! _isNumber_ "$_panicifnotumber"; then Panic "'$_panicifnotumber' is not a valid number"; fi
+    if ! _isInt_ "$_panicifnotumber"; then Panic "'$_panicifnotumber' is not a valid number"; fi
   done
 }
 export PanicIfNotNumber
@@ -351,12 +359,12 @@ EOF
   _usage_expected="$3"
   shift 3
   _usage_msg="$*"
-  if ! _isNumber_ "$_usage_n" || ! _isNumber_ "$_usage_expected" ; then
+  if ! _isInt_ "$_usage_n" || ! _isInt_ "$_usage_expected" ; then
     PanicUsage "$_usage_tip"
   fi
 
   # handle: Usage <count> <min> <max> <message>
-  if _isNumber_ "$_usage_flag"; then
+  if _isInt_ "$_usage_flag"; then
     if [ "$_usage_n" -ge "$_usage_flag" ] && [ "$_usage_n" -le "$_usage_expected" ]; then
       return 0
     fi
@@ -690,12 +698,21 @@ PanicD(){
 export PanicD
 readonly PanicD
 
-IsNumber(){
-  Usage $# -eq 1 'if ! IsNumber <string>; then ... fi'
-  _isNumber_ "$1"
+IsInt(){
+  Usage $# 1 2 'if ! IsInt <string> [enable_negative=0|1]; then ... fi'
+  _isInt_ "$@"
 }
-export IsNumber
-readonly IsNumber
+export IsInt
+readonly IsInt
+
+IsPositiveInt(){
+  Usage $# -eq 1 'if ! IsPositiveInt <string>; then ... fi'
+  _ispositiveint="$1"
+  if ! _isInt_ "$_ispositiveint" || [ "$_ispositiveint" -le 0 ]; then
+    return 1
+  fi
+  return 0
+}
 
 Abs(){
   Usage $# -eq 1 'Abs <number>'
@@ -824,6 +841,82 @@ CpuArch() {
 }
 export CpuArch
 readonly CpuArch
+
+# Require: IsPositiveInt
+CpuCores(){
+  if command -v nproc >/dev/null 2>&1; then
+    _cpucores=$(nproc 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+
+  if command -v getconf >/dev/null 2>&1; then
+    _cpucores=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+
+    _cpucores=$(getconf NPROCESSORS_CONF 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+
+  if [ -r /proc/cpuinfo ]; then
+    _cpucores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+
+    _cpucores=$(grep '^cpu cores' /proc/cpuinfo 2>/dev/null | head -1 | awk '{print $4}')
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+
+  # BSD OS
+  if command -v sysctl >/dev/null 2>&1; then
+    _cpucores=$(sysctl -n hw.ncpu 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+
+    _cpucores=$(sysctl -n hw.logicalcpu 2>/dev/null)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+
+  # Solaris/Illumos
+  if command -v kstat >/dev/null 2>&1 && command -v wc >/dev/null 2>&1; then
+    _cpucores=$(kstat -p cpu_info:0::core_id 2>/dev/null | wc -l)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+
+  # Solaris
+  if command -v psrinfo >/dev/null 2>&1 && command -v wc >/dev/null 2>&1; then
+    _cpucores=$(psrinfo 2>/dev/null | wc -l)
+    if IsPositiveInt "$_cpucores"; then printf '%d' "$_cpucores"; return; fi
+  fi
+  printf 0
+}
+export CpuCores
+readonly CpuCores
+
+UlimitN(){
+  if command -v ulimit >/dev/null 2>&1; then
+    # shellcheck disable=SC3045
+    _ulimitn=$(ulimit -n 2>/dev/null)
+    if IsPositiveInt "$_ulimitn"; then printf '%d' "$_ulimitn"; return; fi
+  fi
+
+  if command -v getconf >/dev/null 2>&1; then
+    _ulimitn=$(getconf OPEN_MAX 2>/dev/null)
+    if IsPositiveInt "$_ulimitn"; then printf '%d' "$_ulimitn"; return; fi
+  fi
+
+  if [ -r /proc/self/limits ]; then
+    _ulimitn=$(awk '/Max open files/ {print $4}' /proc/self/limits 2>/dev/null)
+    if IsPositiveInt "$_ulimitn"; then printf '%d' "$_ulimitn"; return; fi
+  fi
+
+  # BSD OS
+  if command -v sysctl >/dev/null 2>&1; then
+    _ulimitn=$(sysctl -n kern.maxfilesperproc 2>/dev/null)
+    if IsPositiveInt "$_ulimitn"; then printf '%d' "$_ulimitn"; return; fi
+  fi
+
+  printf 0
+}
+export UlimitN
+readonly UlimitN
 
 # Compare two versions. Supports up to 5 version segments (e.g., 1.2.3.4.5)
 # Print 0 if ver1 == ver2, 1 if ver1 > ver2, -1 if ver1 < ver2
@@ -2574,7 +2667,7 @@ AddUserNx(){
   fi
 
   # --gid
-  if IsNumber "$_addusernx_group"; then
+  if IsInt "$_addusernx_group"; then
     if command -v adduser >/dev/null 2>&1; then
       if [ -n "$_addusernx_group" ];then
         # @warn do not quote $_addusernx_r

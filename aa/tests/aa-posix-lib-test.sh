@@ -46,6 +46,30 @@ assert(){
   fi
 }
 
+testIsInt(){
+  testing 'IsInt'
+  if ! IsInt '1230'; then Panic "1230 should be an interger"; fi
+  if ! IsInt '0123' 1; then Panic "0123 should be an interger"; fi
+  if IsInt '-123'; then Panic "-123 should be a non-negative number"; fi
+  if ! IsInt '-123' 1; then Panic "-123 should be an interger"; fi
+  if IsInt 'o2o'; then Panic "o2o is not number"; fi
+
+  if IsInt '2-5' 1; then Panic "2-5 is not number"; fi
+  if IsInt '5-' 1; then Panic "5- is not number"; fi
+  if IsInt '-o2o' 1; then Panic "-o2o is not number"; fi
+  if IsInt '-' 1; then Panic "- is not number"; fi
+  if ! IsInt '-0' 1; then Panic "-0 should be an interger"; fi
+}
+
+testIsPositiveInt(){
+  testing 'IsPositiveInt'
+  if ! IsPositiveInt 1; then Panic "1 is a positive interger"; fi
+  if ! IsPositiveInt 010; then Panic "010 is a positive interger"; fi
+  if IsPositiveInt 0; then Panic "0 is not positive"; fi
+  if IsPositiveInt -5; then Panic "-5 is not positive"; fi
+}
+
+
 testLog() {
   temp=$(mktemp -d)
   trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
@@ -107,11 +131,23 @@ testIAmRoot() {
   assert 'IAmRoot' "$is_root" "$got"
 }
 
-testCpuArchitecture() {
+testCpuArch() {
   testing 'CpuArch'
   arc=$(CpuArch)
   if [ "$arc" != "amd64" ] && [ "$arc" != "arm64" ]; then fail 'CpuArch' 'amd64|arm64' "$arc"; fi
+}
 
+testCpuCores(){
+  testing 'CpuCores'
+  if ! IsPositiveInt "$(CpuCores)"; then Panic 'cant get cpu cores'; fi
+}
+
+testUlimitN(){
+  testing 'UlimitN'
+  ulimitn=$(UlimitN)
+  if [ "$ulimitn" -eq 0 ]; then
+    Panic "UlimitN is not available"
+  fi
 }
 
 testChwonR() {
@@ -1028,6 +1064,9 @@ main() {
     esac
   fi
 
+  testIsInt
+  testIsPositiveInt
+
   testLog
   testAbs
   testMin
@@ -1035,7 +1074,10 @@ main() {
   testIsLF
   testCrossServiceSignal
   testIAmRoot
-  testCpuArchitecture
+
+  testCpuArch
+  testCpuCores
+  testUlimitN
 
   testCompareVersion
   testIncrVersion
