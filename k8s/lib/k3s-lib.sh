@@ -759,6 +759,7 @@ k3sCommands(){
   _k8s_usage=$(cat << EOF
 1. k3sCommands <script> <command> <sub command> <sub command arg> <serv> <selector> <container>
 2. k3sCommands - <tls_service> <domain> <tls_alt> [expire_days=365]  ==> create tls service
+    /etc/cert/<domain>/privkey.pem /etc/cert/<domain>/fullchain.pem  if not exists these file, will generate. otherwise import
 EOF
 )
   Usage $# 7 11 "$_k8s_usage"

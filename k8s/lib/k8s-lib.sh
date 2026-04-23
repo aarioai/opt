@@ -39,9 +39,9 @@ EOF
 
   if [ ! -d "$_k8s_dir" ]; then
     # 生成自签名证书（支持 IP 和域名）
-    Info "sudo openssl req -x509 -nodes -days $_k8s_expire_days -newkey rsa:2048  -keyout $_k8s_dir/privkey.pem -out $_k8s_dir/tls.crt -subj $_k8s_subj -addext subjectAltName=$_k8s_alt"
+    Info "sudo openssl req -x509 -nodes -days $_k8s_expire_days -newkey rsa:2048  -keyout $_k8s_dir/privkey.pem -out $_k8s_dir/fullchain.pem -subj $_k8s_subj -addext subjectAltName=$_k8s_alt"
     if ! sudo openssl req -x509 -nodes -days "$_k8s_expire_days" -newkey rsa:2048 \
-      -keyout "$_k8s_dir/privkey.pem" -out "$_k8s_dir/tls.crt" \
+      -keyout "$_k8s_dir/privkey.pem" -out "$_k8s_dir/fullchain.pem" \
       -subj "$_k8s_subj" -addext "subjectAltName=$_k8s_alt" >/dev/null; then
       PanicD "Generate $_k8s_domain TLS certs failed" "生成 $_k8s_domain 的TLS证书失败"
     fi
@@ -49,8 +49,8 @@ EOF
     sudo chmod 644 "$_k8s_dir"/*
 
     # 验证 crt
-    Info "sudo openssl x509 -in $_k8s_dir/tls.crt -text -noout"
-    if ! sudo openssl x509 -in "$_k8s_dir/tls.crt" -text -noout >/dev/null; then
+    Info "sudo openssl x509 -in $_k8s_dir/fullchain.pem -text -noout"
+    if ! sudo openssl x509 -in "$_k8s_dir/fullchain.pem" -text -noout >/dev/null; then
       sudo rm -rf "$_k8s_dir"
       PanicD "Verify $_k8s_domain TLS certs failed" "验证 $_k8s_domain 的TLS证书失败"
     fi
@@ -63,8 +63,16 @@ EOF
     Notice "available tls certs already exist in $_k8s_dir"
   fi
 
+  privkey_file=$(DetectPrivateKeyPemFile "$_k8s_dir")
+  cert_file=$(DetectCertPemFile "$_k8s_dir")
+
+  if [ ! -f "$privkey_file" ] && [ ! -f "$cert_file" ]; then
+    ls -al "$_k8s_dir"
+    PanicD "no detected private key file or cert file in $_k8s_dir" "${_k8s_dir}目录里没有检测到私钥或证书文件"
+  fi
+
   # 创建 Kubernetes TLS Secret
-  sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --cert="$_k8s_dir/tls.crt" --key="$_k8s_dir/privkey.pem"
+  sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --cert="$_k8s_dir/fullchain.pem" --key="$_k8s_dir/privkey.pem"
 
   # 验证 Secret
   Info "sudo kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
