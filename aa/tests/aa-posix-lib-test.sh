@@ -198,6 +198,11 @@ testUlimitN(){
   fi
 }
 
+testLanIP(){
+  testing 'LanIP'
+  Info "LanIP: $(LanIP)"
+}
+
 testChwonR() {
   return 0
 }
@@ -1168,6 +1173,7 @@ main() {
   testCpuArch
   testCpuCores
   testUlimitN
+  testLanIP
 
   testCompareVersion
   testIncrVersion

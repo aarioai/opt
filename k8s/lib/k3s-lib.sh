@@ -79,59 +79,7 @@ EOF
 export k8sGenerateKubeconfig
 readonly k8sGenerateKubeconfig
 
-_k3sPull(){
-  local _k3s_image="$1"
 
-  if [ -f "$REGISTRIES_YAML" ]; then
-    case "$_k3s_image" in
-      "$K8S_ALIYUN_HOST"/*)
-        local _k3s_username
-        local _k3s_password
-        _k3s_username=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.username" "$REGISTRIES_YAML")
-        _k3s_password=$(yq -e -r ".configs.\"$K8S_ALIYUN_HOST\".auth.password" "$REGISTRIES_YAML")
-        if [ -n "$_k3s_username" ] && [ -n "$_k3s_password" ]; then
-          Info "sudo k3s ctr images pull --print-chainid --local --user $_k3s_username:<password> $_k3s_image"
-          if k3s ctr images pull --print-chainid --local --user "$_k3s_username:$_k3s_password" "$_k3s_image"; then
-            return 0
-          fi
-        fi
-      ;;
-    esac
-  fi
-
-  Info "sudo nerdctl pull $_k3s_image"
-  sudo nerdctl pull "$_k3s_image"
-}
-export _k3sPull
-readonly _k3sPull
-
-k3sPullImage(){
-  local _k3s_pullimage_usage
-  _k3s_pullimage_usage=$(cat << EOF
-k3sPullImage <name|image> [source=docker.io|visible|deny]
-Example:
-  k3sPullImage docker.io/library/redis:latest
-  k3sPullImage redis:latest                   ==>  docker.io/library/redis:latest
-  k3sPullImage rancher/mirrored-pause:3.6     ==>  docker.io/rancher/mirrored-pause:3.6
-  k3sPullImage redis:mirror visible           ==>  $K8S_ALIYUN_HOST/visible/redis:mirror
-EOF
-)
-  Usage $# 1 2 "$_k3s_pullimage_usage"
-  local _k3s_image="$1"
-  local _k3s_source="${2:-docker.io}"
-
-  if [ -z "$_k3s_image" ] || WordIn "$_k3s_image" '-h -help --help'; then
-    PanicUsage "$_k3s_pullimage_usage"
-  fi
-
-  case "$_k3s_source" in
-    -h|-help|--help) PanicUsage "$_k3s_pullimage_usage" ;;
-    'docker.io') _k3sPull "$_k3s_image" ;;
-    *) _k3sPull "$K8S_ALIYUN_HOST/$_k3s_source/$_k3s_image" ;;
-  esac
-}
-export k3sPullImage
-readonly k3sPullImage
 
 # 获取 PVC 状态
 k3sPvcStatus(){
@@ -282,7 +230,6 @@ k3sTryDelete(){
   fi
 
   local _k3s_namespace
-  Info "yq -r '.metadata.namespace' \"$_k3s_yaml\"  | sed -n '1p;q'"
   _k3s_namespace="$(yq -r '.metadata.namespace' "$_k3s_yaml" | sed -n '1p;q')"
 
   if [ -z "$_k3s_namespace" ] || [ "$_k3s_namespace" = 'null' ]; then
@@ -302,7 +249,7 @@ k3sPullImageSources(){
     local _k3s_image
     _k3s_image="$(kubectl apply -f "$_k3s_yaml" --dry-run=client -o jsonpath="{..containers[*].image}")"
     if [ -n "$_k3s_image" ]; then
-      k3sPullImage "$_k3s_image"
+      sudo nerdctl pull "$_k3s_image"
     fi
   done
 }
@@ -758,7 +705,7 @@ k3sCommands(){
   local _k8s_usage
   _k8s_usage=$(cat << EOF
 1. k3sCommands <script> <command> <sub command> <sub command arg> <serv> <selector> <container>
-2. k3sCommands - <tls_service> <domain> [cert_dir=/etc/cert/<domain>] [SAN=DNS:<doman>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]==> create tls service
+2. k3sCommands - <tls_service> <domain> [cert_dir=../../aa/cert/<domain>] [SAN=DNS:<doman>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365] ==> create tls service
 EOF
 )
   Usage $# 7 15 "$_k8s_usage"
@@ -769,6 +716,9 @@ EOF
   local _k3s_serv="$5"
   local _k3s_selector="$6"
   local _k3s_container="$7"
+
+  local _k3s_dir
+  _k3s_dir="$(AbsDir "$_k3s_script")"
 
   # Handling TLS
   local _k3s_with_tls=0
@@ -785,7 +735,7 @@ EOF
     _k3s_with_tls=1
     _k3s_tls_service="$8"
     _k3s_domain="$9"
-    _k3s_cert_dir="${10:-"/etc/cert/$_k3s_domain"}"
+    _k3s_cert_dir="${10:-"$(ParentDir "$_k3s_dir" 2)/aa/cert/$_k3s_domain"}"
     _k3s_tls_san="${11:-"DNS:$_k3s_domain"}"
     _k3s_tls_sub="${12:-"/CN=$_k3s_domain"}"
     _k3s_privkey_filename="${13:-"privkey.pem"}"
@@ -793,8 +743,6 @@ EOF
     _k3s_cert_days=${15:-365}
   fi
 
-  local _k3s_dir
-  _k3s_dir="$(AbsDir "$_k3s_script")"
   K3S_NAMESPACE="$(k3sDetectNamespace "$_k3s_dir")"
   if [ -z "$K3S_NAMESPACE" ]; then
     PanicD 'no namespace detected' '没有检测到namespace'
@@ -802,14 +750,16 @@ EOF
   _k3s_create_tls(){
     if [ "$_k3s_with_tls" -eq 1 ]; then
       k3sTryApplyGlobal "$_k3s_dir"
+      Info "cert dir: $_k3s_cert_dir"
       if [ ! -f "$_k3s_cert_dir/$_k3s_cert_filename" ]; then
-        if ! GenerateLeafCert "$_k3s_domain" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days"; then
+        Info "GenerateLeafCert $_k3s_domain $_k3s_cert_dir $_k3s_tls_san $_k3s_tls_sub $_k3s_privkey_filename $_k3s_cert_filename $_k3s_cert_days"
+        if ! GenerateLeafCert "$_k3s_domain" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days" >/dev/null 2>&1; then
           PanicD "create leaf certificate failed" "创建自签名证书失败"
         fi
       fi
-      _k3s_privkey="$_k3s_privkey_filename"
-      _k3s_cert="$_k3s_cert_filename"
-      k8sCreateTlsSecret "$K3S_NAMESPACE" "$_k3s_tls_service"
+      local _k3s_privkey="$_k3s_cert_dir/$_k3s_privkey_filename"
+      local _k3s_cert="$_k3s_cert_dir/$_k3s_cert_filename"
+      k8sCreateTlsSecret "$K3S_NAMESPACE" "$_k3s_tls_service" "$_k3s_privkey" "$_k3s_cert"
     fi
   }
   _k3s_delete_tls(){

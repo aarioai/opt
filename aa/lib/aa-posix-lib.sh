@@ -945,6 +945,34 @@ IsOsMingw(){
 export IsOsMingw
 readonly IsOsMingw
 
+# 通过默认路由获取本机IP
+LanIP(){
+  _lanip=''
+  if command -v ip >/dev/null 2>&1; then
+    # 通过默认路由获取本机 IP
+    _lanip_route=$(ip route | grep default | head -1)
+    _lanip_iface=$(echo "$_lanip_route" | grep -oP '(?<=dev\s)\S+')
+    _lanip=$(ip -4 addr show "$_lanip_iface" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+
+    if [ -z "$_lanip" ]; then
+      # 使用默认路由获取本机IP
+      _lanip=$(ip -4 route get 1 2>/dev/null | grep -oE 'src ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | sed 's/src //')
+    fi
+  fi
+
+  # old OS
+  if [ -z "$_lanip" ] && command -v ifconfig >/dev/null 2>&1; then
+    _lanip=$(ifconfig | grep -oE 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -oE '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -1)
+  fi
+
+  # mingw64
+  if [ -z "$_lanip" ] && command -v route >/dev/null 2>&1; then
+    _lanip=$(route print | grep -m1 '0.0.0.0' | awk '{print $4}' | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}')
+  fi
+
+  printf '%s' "$_lanip"
+}
+
 # Compare two versions. Supports up to 5 version segments (e.g., 1.2.3.4.5)
 # Print 0 if ver1 == ver2, 1 if ver1 > ver2, -1 if ver1 < ver2
 CompareVersion(){
@@ -3413,7 +3441,7 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "sudo openssl genrsa -out $_signcertbyca_ckf 2048"
-      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048
+      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048  >/dev/null 2>&1
       sudo chmod 600 "$_signcertbyca_ckf"
     fi
 
@@ -3422,8 +3450,7 @@ SignCertByCA(){
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
-        -addext "$_signcertbyca_addext"; then
-
+        -addext "$_signcertbyca_addext" >/dev/null 2>&1; then
       ErrorD "Generate CSR failed for $_signcertbyca_domain" "生成CSR失败: $_signcertbyca_domain"
       Debug "sudo openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
       return 1
@@ -3441,7 +3468,7 @@ SignCertByCA(){
       -CAcreateserial                     \
       -out "$_signcertbyca_ck"            \
       -days "$_signcertbyca_expire_days"  \
-      -copy_extensions copy; then
+      -copy_extensions copy >/dev/null 2>&1; then
     ErrorD "CA signing failed for $_signcertbyca_domain" "CA签发失败: $_signcertbyca_domain"
     Debug "sudo openssl x509 -req -in $_signcertbyca_server_csr -CA $_signcertbyca_ca_cert_file -CAkey $_signcertbyca_ca_key_file -CAcreateserial -out $_signcertbyca_ck -days $_signcertbyca_expire_days -copy_extensions copy"
     return 1
@@ -3472,7 +3499,7 @@ readonly SignCertByCA
 # 基于指定私钥，创建自签名证书（支持 IP 和域名）
 # E.g., SignLeafCert 'x.x' ''
 SignLeafCert(){
-  Usage $# 1 7 'SignLeafCert <domain|IP> [dir=/etc/cert/<domain|IP>] [SAN=DNS:<domain|IP>] [subj=/CN=<domain|IP>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  Usage $# 1 7 'SignLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
   _signleafcert_domain="$1"
   _signleafcert_cert_dir="${2:-"/etc/cert/$_signleafcert_domain"}"
   _signleafcert_san="${3:-"DNS:$_signleafcert_domain"}"
@@ -3499,7 +3526,7 @@ SignLeafCert(){
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
       -addext "subjectAltName=$_signleafcert_san" \
-      -days "$_signleafcert_expire_days" ; then
+      -days "$_signleafcert_expire_days" >/dev/null 2>&1; then
     ErrorD "Create $_signleafcert_domain TLS certs failed (private key:$_signleafcert_ckf)" "创建 $_signleafcert_domain 的TLS证书失败（密钥：$_signleafcert_ckf)"
     Debug "sudo openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
     return 1
@@ -3525,53 +3552,53 @@ readonly SignLeafCert
 
 # 生成自签名证书（支持 IP 和域名）
 GenerateLeafCert(){
-    Usage $# 1 7 'GenerateLeafCert <domain|IP> [dir=/etc/cert/<domain|IP>] [SAN=DNS:<domain|IP>] [subj=/CN=<domain|IP>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
-    _generateleafcert_domain="$1"
-    _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_domain"}"
-    _generateleafcert_san="${43:-"DNS:$_generateleafcert_domain"}"
-    _generateleafcert_subj="${4:-"/CN=$_generateleafcert_domain"}"
-    _generateleafcert_cert_key_filename=${5:-"privkey.pem"}
-    _generateleafcert_cert_filename=${6:-"cert.pem"}
-    _generateleafcert_expire_days="${7:-365}"
+  Usage $# 1 7 'GenerateLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  _generateleafcert_domain="$1"
+  _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_domain"}"
+  _generateleafcert_san="${3:-"DNS:$_generateleafcert_domain"}"
+  _generateleafcert_subj="${4:-"/CN=$_generateleafcert_domain"}"
+  _generateleafcert_cert_key_filename=${5:-"privkey.pem"}
+  _generateleafcert_cert_filename=${6:-"cert.pem"}
+  _generateleafcert_expire_days="${7:-365}"
 
-    _generateleafcert_ckf="$_generateleafcert_cert_dir/$_generateleafcert_cert_key_filename"
-    _generateleafcert_ck="$_generateleafcert_cert_dir/$_generateleafcert_cert_filename"
+  _generateleafcert_ckf="$_generateleafcert_cert_dir/$_generateleafcert_cert_key_filename"
+  _generateleafcert_ck="$_generateleafcert_cert_dir/$_generateleafcert_cert_filename"
 
-    if [ -f "$_generateleafcert_ckf" ]; then
-      SignLeafCert "$_generateleafcert_domain" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
-      return $?
-    fi
+  if [ -f "$_generateleafcert_ckf" ]; then
+    SignLeafCert "$_generateleafcert_domain" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
+    return $?
+  fi
 
-    if IsOsMingw; then
-      _generateleafcert_subj=$(printf '%s' "$_generateleafcert_subj" | sed 's|/|//|g')
-    fi
+  if IsOsMingw; then
+    _generateleafcert_subj=$(printf '%s' "$_generateleafcert_subj" | sed 's|/|//|g')
+  fi
 
-    mkdir -p "$_generateleafcert_cert_dir"
+  mkdir -p "$_generateleafcert_cert_dir"
 
-    Info "Generating leaf certificate..."
-    if ! sudo openssl req -x509 -nodes -newkey rsa:2048 \
-        -days "$_generateleafcert_expire_days"  \
-        -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
-        -subj "$_generateleafcert_subj" \
-        -addext "subjectAltName=$_generateleafcert_san"; then
-      ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
-      Debug "sudo openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
-      return 1
-    fi
+  Info "Generating leaf certificate..."
+  if ! sudo openssl req -x509 -nodes -newkey rsa:2048 \
+      -days "$_generateleafcert_expire_days"  \
+      -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
+      -subj "$_generateleafcert_subj" \
+      -addext "subjectAltName=$_generateleafcert_san" >/dev/null 2>&1; then
+    ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
+    Debug "sudo openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
+    return 1
+  fi
 
-    sudo chmod 644 "$_generateleafcert_ckf"
-    sudo chmod 644 "$_generateleafcert_ck"
-    ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
+  sudo chmod 644 "$_generateleafcert_ckf"
+  sudo chmod 644 "$_generateleafcert_ck"
+  ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
-    Info "Verifying leaf certificate..."
-    if ! sudo openssl x509 -in "$_generateleafcert_ck" -text -noout; then
-      sudo rm -rf "$_generateleafcert_cert_dir"
-      ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
-      Debug "sudo openssl x509 -in $_generateleafcert_ck -text -noout"
-      return 1
-    fi
+  Info "Verifying leaf certificate..."
+  if ! sudo openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+    sudo rm -rf "$_generateleafcert_cert_dir"
+    ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
+    Debug "sudo openssl x509 -in $_generateleafcert_ck -text -noout"
+    return 1
+  fi
 
-    echo "$(Now)${TAB4}${_generateleafcert_domain}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
+  echo "$(Now)${TAB4}${_generateleafcert_domain}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
 }
 export GenerateLeafCert
 readonly GenerateLeafCert

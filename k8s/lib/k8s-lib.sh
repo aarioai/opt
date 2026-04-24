@@ -17,7 +17,7 @@ k8sCreateTlsSecret(){
 
   Info "Creating tls secret..."
   Debug "sudo kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
-  if ! sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert"; then
+  if ! sudo kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert" >/dev/null; then
     PanicD "create tls secret failed" "创建tls secret失败"
   fi
 
