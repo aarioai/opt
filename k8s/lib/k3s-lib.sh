@@ -751,18 +751,17 @@ _init(){
   fi
 }
 
-# 如果需要导入 tls cert/key，则直接在 /etc/cert/<domain>/ 目录下
+# 如果需要导入 tls cert/key，则直接在 _cert/<domain>/ 目录下
 k3sCommands(){
   _init
 
   local _k8s_usage
   _k8s_usage=$(cat << EOF
 1. k3sCommands <script> <command> <sub command> <sub command arg> <serv> <selector> <container>
-2. k3sCommands - <tls_service> <domain> <tls_alt> [expire_days=365]  ==> create tls service
-    /etc/cert/<domain>/privkey.pem /etc/cert/<domain>/fullchain.pem  if not exists these file, will generate. otherwise import
+2. k3sCommands - <tls_service> <domain> [cert_dir=/etc/cert/<domain>] [SAN=DNS:<doman>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]==> create tls service
 EOF
 )
-  Usage $# 7 11 "$_k8s_usage"
+  Usage $# 7 15 "$_k8s_usage"
   local _k3s_script="$1"
   local _k3s_cmd="$2"
   local _k3s_sub_cmd="$3"
@@ -775,15 +774,23 @@ EOF
   local _k3s_with_tls=0
   local _k3s_tls_service=''
   local _k3s_domain=''
-  local _k3s_tls_alt=''
-  local _k3s_expire_days=''
+  local _k3s_cert_dir=''
+  local _k3s_tls_san=''
+  local _k3s_tls_sub=''
+  local _k3s_privkey_filename=''
+  local _k3s_cert_filename=''
+  local _k3s_cert_days=365
   if [ $# -gt 7 ]; then
-    Usage $# 10 11 "$_k8s_usage"
+    Usage $# 9 15 "$_k8s_usage"
     _k3s_with_tls=1
     _k3s_tls_service="$8"
     _k3s_domain="$9"
-    _k3s_tls_alt="${10}"
-    _k3s_expire_days="${11:-365}"
+    _k3s_cert_dir="${10:-"/etc/cert/$_k3s_domain"}"
+    _k3s_tls_san="${11:-"DNS:$_k3s_domain"}"
+    _k3s_tls_sub="${12:-"/CN=$_k3s_domain"}"
+    _k3s_privkey_filename="${13:-"privkey.pem"}"
+    _k3s_cert_filename="${14:-"cert.pem"}"
+    _k3s_cert_days=${15:-365}
   fi
 
   local _k3s_dir
@@ -795,7 +802,14 @@ EOF
   _k3s_create_tls(){
     if [ "$_k3s_with_tls" -eq 1 ]; then
       k3sTryApplyGlobal "$_k3s_dir"
-      k8sCreateBeijingTLS "$K3S_NAMESPACE" "$_k3s_tls_service" "$_k3s_domain" "$_k3s_tls_alt" "$_k3s_expire_days"
+      if [ ! -f "$_k3s_cert_dir/$_k3s_cert_filename" ]; then
+        if ! GenerateLeafCert "$_k3s_domain" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days"; then
+          PanicD "create leaf certificate failed" "创建自签名证书失败"
+        fi
+      fi
+      _k3s_privkey="$_k3s_privkey_filename"
+      _k3s_cert="$_k3s_cert_filename"
+      k8sCreateTlsSecret "$K3S_NAMESPACE" "$_k3s_tls_service"
     fi
   }
   _k3s_delete_tls(){

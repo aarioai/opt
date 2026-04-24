@@ -4,9 +4,6 @@ set -eu
 # https://github.com/aarioai/opt
 if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
 
-config="./aa-posix-lib-test.conf"
-if [ ! -f "$config" ]; then config="/opt/aa/tests/aa-posix-lib-test.conf"; fi
-
 lib="../lib/aa-posix-lib.sh"
 if [ ! -f "$lib" ]; then lib="/opt/aa/lib/aa-posix-lib.sh"; fi
 
@@ -16,7 +13,22 @@ readonly HERE
 dictTesting="$(Dict "testing" "测试")"
 readonly dictTesting
 
-Lowlight "${dictTesting} <${lib}>  <${config}>"
+Lowlight "${dictTesting} <${lib}>"
+
+solo=0
+
+testsFile(){
+  name="$1"
+  if [ -f "./$name" ]; then
+    printf '%s' "./$name"
+    return 0
+  fi
+  if [ -f "/opt/aa/tests/$name" ]; then
+    printf '%s' "/opt/aa/tests/$name"
+    return 0
+  fi
+  return 1
+}
 
 testing(){
   if [ "$QUITE_LOGS" -eq 0 ]; then printf "${_LIGHT_CYAN_}>> ${dictTesting} %s${_NC_}\n" "$*"; fi
@@ -545,6 +557,13 @@ testPackLF() {
 
 testReplace() {
   testing 'Replace'
+
+#  s='/C=cn/CN=x.x'
+#  want='//C=cn//CN=x.x'
+#  got=$(Replace "$s" '/' "//")
+#  assert 'Replace' "$want" "$got"
+#
+
   s="AA,BB,CC,DD"
   want="AA${LF}BB${LF}CC${LF}DD"
   got=$(Replace "$s" ',' "$LF")
@@ -1029,6 +1048,8 @@ testParseArrays() {
 }
 testParseConfig() {
   testing 'ParseConfig'
+  config=$(testsFile 'aa-posix-lib-test.conf')
+
   want="/var/run/mysqld/mysqld.pid"
   got=$(ParseConfig "$config" "pid-file")
   assert 'ParseConfig' "$want" "$got"
@@ -1040,6 +1061,8 @@ testParseConfig() {
 testSetConfig() {
   testing 'SetConfig'
   want="$(date)"
+  config=$(testsFile 'aa-posix-lib-test.conf')
+
   SetConfig "test-datetime=${want}" "$config"
   got=$(ParseConfig "$config" "test-datetime")
   assert 'SetConfig' "$want" "$got"
@@ -1088,6 +1111,33 @@ testGenerateRSAKeys() {
   assert 'DetectPrivateKeyPemFile' "${f}-512.pub" "$got"
 }
 
+testSignCertByCA(){
+  testing "SignCertByCA"
+  mkdir -p "$HERE/tmp"
+
+  ca_cert=$(testsFile "x.x-CA.cert")
+  ca_key=$(testsFile "x.x-CA.key")
+  output="$HERE/tmp/cert-ca/x.x"
+
+  # 如果不存在，可以通过下面生成
+  # openssl genrsa -out ./x.x-CA.key 2048
+  # 一直留空按Enter即可，Common Name 必要要填要签名的域名
+  # openssl req -new -x509 -key ./x.x-CA.key -out ./x.x-CA.cert -days 36500
+  rm -rf "$output"
+  SignCertByCA "$ca_key" "$ca_cert" 'x.x' "$output"
+  # 复用 server.csr
+  SignCertByCA "$ca_key" "$ca_cert" 'x.x' "$output"
+}
+
+testGenerateLeafCert(){
+  testing "GenerateLeafCert and SignLeafCert"
+  mkdir -p "$HERE/tmp"
+  output="$HERE/tmp/cert/x.x"
+  GenerateLeafCert 'x.x' "$output"
+
+  SignLeafCert 'x.x' "$output"
+}
+
 main() {
   if [ $# -ne 1 ]; then
     HighlightD "Testing a single function, you can use: $0 [func_name]" "测试单个函数，可以使用：$0 [函数名]"
@@ -1096,6 +1146,7 @@ main() {
 
   # 测试单个函数
   if [ $# -eq 1 ]; then
+    solo=1
     func="$1"
     case "$func" in
       test*) "$func"; return $? ;;
@@ -1177,6 +1228,8 @@ main() {
   testSetConfig
 
   testGenerateRSAKeys
+  testSignCertByCA
+  testGenerateLeafCert
 
   Info "Test Success"
 }

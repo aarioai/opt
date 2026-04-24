@@ -931,6 +931,20 @@ UlimitN(){
 export UlimitN
 readonly UlimitN
 
+IsOsMingw(){
+  # shellcheck disable=SC3028
+  case "${OSTYPE:-}" in
+    *msys*|*mingw*|*cygwin*)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+  esac
+}
+export IsOsMingw
+readonly IsOsMingw
+
 # Compare two versions. Supports up to 5 version segments (e.g., 1.2.3.4.5)
 # Print 0 if ver1 == ver2, 1 if ver1 > ver2, -1 if ver1 < ver2
 CompareVersion(){
@@ -1912,15 +1926,20 @@ CountMatches() {
 export CountMatches
 readonly CountMatches
 
-# Replace matched string
+# Replace matched string with break lines      处理多行字符串的替换
 # Required: IndexOf, Substr, CutLeft, Replace
+# Warn: <old> cant be a part of <new>
 Replace() {
-  Usage $# 3 4 'Replace <string> <old> <new> [n=1 replace once, otherwise replace all]'
+  Usage $# 3 4 'Replace <string> <old> <new> [once=once replace once, otherwise replace all]'
   _replace_s=$1
   _replace_old=$2
   _replace_new="$3"
-  _replace_all=1 #
-  if [ $# -ge 4 ] && [ "$4" -eq 1 ]; then _replace_all=0; fi
+  _replace_once="${4:-}"
+  if [ "$_replace_once" != 'once' ] && [ "$_replace_once" != '1' ]; then _replace_once=''; fi
+
+  if StrIn "$_replace_old" "$_replace_new" ; then
+    PanicD "Replace: Recursion detected - old string '${_replace_old}' found within new string '${_replace_new}'. This would cause infinite loop during recursive replacement operations." "Replace函数：检测到递归风险 - 旧字符串 '${_replace_old}' 包含在新字符串 '${_replace_new}' 中，这会导致替换过程中的无限循环"
+  fi
 
   _replace_index=$(IndexOf "$_replace_old" "$_replace_s")
 
@@ -1935,7 +1954,7 @@ Replace() {
 
   _replace_s=$(CutLeft "${_replace_next}" "$_replace_s")
 
-  if [ "$_replace_all" -eq 0 ]; then
+  if [ -n "$_replace_once" ]; then
     printf '%s' "$_replace_s"
     return 0
   fi
@@ -3187,6 +3206,82 @@ ReplaceYamlConfig(){
 export ReplaceYamlConfig
 readonly ReplaceYamlConfig
 
+
+# Detect private key file
+DetectPrivateKeyPemFile(){
+  Usage $# -eq 1 'DetectPrivateKeyPemFile <dir>'
+  _detectprivatekeypemfile_dir="$1"
+  if [ ! -d "$_detectprivatekeypemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  InstallGrep 2>/dev/null || return 1
+
+  for _detectprivatekeypemfile in "$_detectprivatekeypemfile_dir"/*; do
+    [ -f "$_detectprivatekeypemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*PRIVATE KEY-----" "$_detectprivatekeypemfile" 2>/dev/null; then
+      printf '%s' "$_detectprivatekeypemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectPrivateKeyPemFile
+readonly DetectPrivateKeyPemFile
+
+# Detect public key file
+DetectPublicKeyPemFile(){
+  Usage $# -eq 1 'DetectPublicKeyPemFile <dir>'
+  _detectpublickeypemfile_dir="$1"
+  if [ ! -d "$_detectpublickeypemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  InstallGrep 2>/dev/null || return 1
+
+  for _detectpublickeypemfile in "$_detectpublickeypemfile_dir"/*; do
+    [ -f "$_detectpublickeypemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*PUBLIC KEY-----" "$_detectpublickeypemfile" 2>/dev/null; then
+      printf '%s' "$_detectpublickeypemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectPublicKeyPemFile
+readonly DetectPublicKeyPemFile
+
+# Detect Cert file
+DetectCertPemFile(){
+  Usage $# -eq 1 'DetectCertPemFile <dir>'
+  _detectcertpemfile_dir="$1"
+  if [ ! -d "$_detectcertpemfile_dir" ]; then
+    printf ''
+    return
+  fi
+
+  if ! InstallGrep 2>/dev/null; then
+    printf ''
+    return
+  fi
+
+  for _detectcertpemfile in "$_detectcertpemfile_dir"/*; do
+    [ -f "$_detectcertpemfile" ] || continue
+
+    if grep -q -- "-----BEGIN.*CERTIFICATE-----" "$_detectcertpemfile" 2>/dev/null; then
+      printf '%s' "$_detectcertpemfile"
+      return
+    fi
+  done
+  printf ''
+}
+export DetectCertPemFile
+readonly DetectCertPemFile
+
 _generateRSAKey_() {
   _generatersakey_size="$1"
   _generatersakey_full="$2"
@@ -3272,80 +3367,214 @@ GenerateRSAKeys() {
 export GenerateRSAKeys
 readonly GenerateRSAKeys
 
-# Detect private key file
-DetectPrivateKeyPemFile(){
-  Usage $# -eq 1 'DetectPrivateKeyPemFile <dir>'
-  _detectprivatekeypemfile_dir="$1"
-  if [ ! -d "$_detectprivatekeypemfile_dir" ]; then
-    printf ''
-    return
+# 由CA签发 fullchain.pem，CA 证书可签发子证书。自签名证书不可以签发子证书。
+# fullchain.pem 的本质是：服务器证书 + 中间证书（CA chain）拼接在一起。
+# 可以使用letsencrypt等第三方下发的CA证书。也可以临时自己签发一个CA证书：
+#   sudo openssl genrsa -out myCA.key 2048                                # 生成CA密钥文件
+#   sudo openssl req -new -x509 -key myCA.key -out myCA.cert -days 36500   # 创建CA证书 --> 一直留空按Enter即可，Common Name 必要要填要签名的域名
+# E.g., SignCertByCA "$ca_key" "$ca_cert" 'x.x' 'DNS:x.x' ./
+SignCertByCA(){
+  Usage $# 3 11 'SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [csr_filename=server.csr] [out_filename=fullchain.pem] [days=365]'
+  _signcertbyca_ca_key_file="$1"
+  _signcertbyca_ca_cert_file="$2"
+  _signcertbyca_domain="$3"
+  _signcertbyca_cert_dir="${4:-"/etc/cert/$_signcertbyca_domain"}"
+  _signcertbyca_san="${5:-"DNS:$_signcertbyca_domain"}"
+  _signcertbyca_subj="${6:-"/CN=$_signcertbyca_domain"}"
+  _signcertbyca_cert_key_filename=${7:-"privkey.pem"}
+  _signcertbyca_cert_filename=${8:-"cert.pem"}
+  _signcertbyca_server_csr_filename="${9:-"server.csr"}"
+  _signcertbyca_out_filename="${10:-"fullchain.pem"}"
+  _signcertbyca_expire_days="${11:-365}"
+
+  _signcertbyca_addext="subjectAltName=$_signcertbyca_san"
+  _signcertbyca_ckf="$_signcertbyca_cert_dir/$_signcertbyca_cert_key_filename"
+  _signcertbyca_ck="$_signcertbyca_cert_dir/$_signcertbyca_cert_filename"
+  _signcertbyca_server_csr="$_signcertbyca_cert_dir/$_signcertbyca_server_csr_filename"
+  _signcertbyca_out="$_signcertbyca_cert_dir/$_signcertbyca_out_filename"
+
+  if IsOsMingw; then
+    _signcertbyca_subj=$(printf '%s' "$_signcertbyca_subj" | sed 's|/|//|g')
   fi
 
-  InstallGrep 2>/dev/null || return 1
+  if [ ! -f "$_signcertbyca_ca_cert_file" ]; then
+    ErrorD "CA certificate not found: $_signcertbyca_ca_cert_file" "CA证书不存在: $_signcertbyca_ca_cert_file"
+    return 1
+  fi
+  if [ ! -f "$_signcertbyca_ca_key_file" ]; then
+    ErrorD "CA private key not found: $_signcertbyca_ca_key_file" "CA私钥不存在: $_signcertbyca_ca_key_file"
+    return 1
+  fi
 
-  for _detectprivatekeypemfile in "$_detectprivatekeypemfile_dir"/*; do
-    [ -f "$_detectprivatekeypemfile" ] || continue
+  mkdir -p "$_signcertbyca_cert_dir"
 
-    if grep -q -- "-----BEGIN.*PRIVATE KEY-----" "$_detectprivatekeypemfile" 2>/dev/null; then
-      printf '%s' "$_detectprivatekeypemfile"
-      return
+  # Create server.csr
+  if [ ! -f "$_signcertbyca_server_csr" ]; then
+    if [ ! -f "$_signcertbyca_ckf" ]; then
+      Info "Generating private key..."
+      Debug "sudo openssl genrsa -out $_signcertbyca_ckf 2048"
+      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048
+      sudo chmod 600 "$_signcertbyca_ckf"
     fi
-  done
-  printf ''
-}
-export DetectPrivateKeyPemFile
-readonly DetectPrivateKeyPemFile
 
-# Detect public key file
-DetectPublicKeyPemFile(){
-  Usage $# -eq 1 'DetectPublicKeyPemFile <dir>'
-  _detectpublickeypemfile_dir="$1"
-  if [ ! -d "$_detectpublickeypemfile_dir" ]; then
-    printf ''
-    return
-  fi
+    Info "Generating CSR.."
+    if ! sudo openssl req -new            \
+        -key "$_signcertbyca_ckf"         \
+        -out "$_signcertbyca_server_csr"  \
+        -subj "$_signcertbyca_subj"       \
+        -addext "$_signcertbyca_addext"; then
 
-  InstallGrep 2>/dev/null || return 1
-
-  for _detectpublickeypemfile in "$_detectpublickeypemfile_dir"/*; do
-    [ -f "$_detectpublickeypemfile" ] || continue
-
-    if grep -q -- "-----BEGIN.*PUBLIC KEY-----" "$_detectpublickeypemfile" 2>/dev/null; then
-      printf '%s' "$_detectpublickeypemfile"
-      return
+      ErrorD "Generate CSR failed for $_signcertbyca_domain" "生成CSR失败: $_signcertbyca_domain"
+      Debug "sudo openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
+      return 1
     fi
-  done
-  printf ''
+  fi
+
+  # openssl req -x509 生成自签名证书（同时生成private key）
+  # openssl x509 签发已有的证书（基于CA或private key）
+  Info "Signing certificate with CA..."
+
+  if ! sudo openssl x509 -req             \
+      -in "$_signcertbyca_server_csr"     \
+      -CA "$_signcertbyca_ca_cert_file"   \
+      -CAkey "$_signcertbyca_ca_key_file" \
+      -CAcreateserial                     \
+      -out "$_signcertbyca_ck"            \
+      -days "$_signcertbyca_expire_days"  \
+      -copy_extensions copy; then
+    ErrorD "CA signing failed for $_signcertbyca_domain" "CA签发失败: $_signcertbyca_domain"
+    Debug "sudo openssl x509 -req -in $_signcertbyca_server_csr -CA $_signcertbyca_ca_cert_file -CAkey $_signcertbyca_ca_key_file -CAcreateserial -out $_signcertbyca_ck -days $_signcertbyca_expire_days -copy_extensions copy"
+    return 1
+  fi
+
+
+  ChmodOrCreate 666 "$_signcertbyca_out"
+  cat "$_signcertbyca_ck" "$_signcertbyca_ca_cert_file" > "$_signcertbyca_out"
+
+  sudo chmod 600 "$_signcertbyca_ckf"
+  sudo chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
+
+  Info "Verifying certificate..."
+  if ! sudo openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null 2>&1; then
+    ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
+    Debug "sudo openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
+    sudo rm -rf "$_signcertbyca_cert_dir"
+    return 1
+  fi
+
+  ChmodOrCreate 666  "${_signcertbyca_cert_dir}/change.log"
+  echo "$(Now)${TAB4}${_signcertbyca_domain}${TAB4}${_signcertbyca_san}${TAB4}${_signcertbyca_subj}${TAB4}+${_signcertbyca_expire_days} days (CA: $(basename "$_signcertbyca_ck"))" >> "${_signcertbyca_cert_dir}/change.log"
+  return 0
 }
-export DetectPublicKeyPemFile
-readonly DetectPublicKeyPemFile
+export SignCertByCA
+readonly SignCertByCA
 
-# Detect Cert file
-DetectCertPemFile(){
-  Usage $# -eq 1 'DetectCertPemFile <dir>'
-  _detectcertpemfile_dir="$1"
-  if [ ! -d "$_detectcertpemfile_dir" ]; then
-    printf ''
-    return
+# 基于指定私钥，创建自签名证书（支持 IP 和域名）
+# E.g., SignLeafCert 'x.x' ''
+SignLeafCert(){
+  Usage $# 1 7 'SignLeafCert <domain|IP> [dir=/etc/cert/<domain|IP>] [SAN=DNS:<domain|IP>] [subj=/CN=<domain|IP>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  _signleafcert_domain="$1"
+  _signleafcert_cert_dir="${2:-"/etc/cert/$_signleafcert_domain"}"
+  _signleafcert_san="${3:-"DNS:$_signleafcert_domain"}"
+  _signleafcert_subj="${4:-"/CN=$_signleafcert_domain"}"
+  _signleafcert_cert_key_filename=${5:-"privkey.pem"}
+  _signleafcert_cert_filename=${6:-"cert.pem"}
+  _signleafcert_expire_days="${7:-365}"
+
+  _signleafcert_ckf="$_signleafcert_cert_dir/$_signleafcert_cert_key_filename"
+  _signleafcert_ck="$_signleafcert_cert_dir/$_signleafcert_cert_filename"
+
+  if [ ! -f "$_signleafcert_ckf" ]; then
+    ErrorD "$_signleafcert_ckf is not a readable file" "$_signleafcert_ckf 不是一个可读文件"
+    return 1
   fi
 
-  if ! InstallGrep 2>/dev/null; then
-    printf ''
-    return
+  if IsOsMingw; then
+    _signleafcert_subj=$(printf '%s' "$_signleafcert_subj" | sed 's|/|//|g')
   fi
 
-  for _detectcertpemfile in "$_detectcertpemfile_dir"/*; do
-    [ -f "$_detectcertpemfile" ] || continue
+  Info "Sign leaf certificate..."
+  if ! sudo openssl req -x509 -new  \
+      -key "$_signleafcert_ckf"   \
+      -out "$_signleafcert_ck"    \
+      -subj "$_signleafcert_subj" \
+      -addext "subjectAltName=$_signleafcert_san" \
+      -days "$_signleafcert_expire_days" ; then
+    ErrorD "Create $_signleafcert_domain TLS certs failed (private key:$_signleafcert_ckf)" "创建 $_signleafcert_domain 的TLS证书失败（密钥：$_signleafcert_ckf)"
+    Debug "sudo openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
+    return 1
+  fi
 
-    if grep -q -- "-----BEGIN.*CERTIFICATE-----" "$_detectcertpemfile" 2>/dev/null; then
-      printf '%s' "$_detectcertpemfile"
-      return
+  sudo chmod 600 "$_signleafcert_ckf"
+  sudo chmod 644 "$_signleafcert_ck"
+
+  Info "Verifying leaf certificate..."
+  if ! sudo openssl x509 -in "$_signleafcert_ck" -text -noout; then
+    sudo rm -rf "$_signleafcert_cert_dir"
+    ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
+    Debug "sudo openssl x509 -in $_signleafcert_ck -text -noout"
+    return 1
+  fi
+
+  ChmodOrCreate 666  "${_signleafcert_cert_dir}/change.log"
+  echo "$(Now)${TAB4}${_signleafcert_domain}${TAB4}${_signleafcert_san}${TAB4}${_signleafcert_subj}${TAB4}by ${_signleafcert_ckf}${TAB4}+${_signleafcert_expire_days} days" >> "${_signleafcert_cert_dir}/change.log"
+  return 0
+}
+export SignLeafCert
+readonly SignLeafCert
+
+# 生成自签名证书（支持 IP 和域名）
+GenerateLeafCert(){
+    Usage $# 1 7 'GenerateLeafCert <domain|IP> [dir=/etc/cert/<domain|IP>] [SAN=DNS:<domain|IP>] [subj=/CN=<domain|IP>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+    _generateleafcert_domain="$1"
+    _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_domain"}"
+    _generateleafcert_san="${43:-"DNS:$_generateleafcert_domain"}"
+    _generateleafcert_subj="${4:-"/CN=$_generateleafcert_domain"}"
+    _generateleafcert_cert_key_filename=${5:-"privkey.pem"}
+    _generateleafcert_cert_filename=${6:-"cert.pem"}
+    _generateleafcert_expire_days="${7:-365}"
+
+    _generateleafcert_ckf="$_generateleafcert_cert_dir/$_generateleafcert_cert_key_filename"
+    _generateleafcert_ck="$_generateleafcert_cert_dir/$_generateleafcert_cert_filename"
+
+    if [ -f "$_generateleafcert_ckf" ]; then
+      SignLeafCert "$_generateleafcert_domain" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
+      return $?
     fi
-  done
-  printf ''
+
+    if IsOsMingw; then
+      _generateleafcert_subj=$(printf '%s' "$_generateleafcert_subj" | sed 's|/|//|g')
+    fi
+
+    mkdir -p "$_generateleafcert_cert_dir"
+
+    Info "Generating leaf certificate..."
+    if ! sudo openssl req -x509 -nodes -newkey rsa:2048 \
+        -days "$_generateleafcert_expire_days"  \
+        -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
+        -subj "$_generateleafcert_subj" \
+        -addext "subjectAltName=$_generateleafcert_san"; then
+      ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
+      Debug "sudo openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
+      return 1
+    fi
+
+    sudo chmod 644 "$_generateleafcert_ckf"
+    sudo chmod 644 "$_generateleafcert_ck"
+    ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
+
+    Info "Verifying leaf certificate..."
+    if ! sudo openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+      sudo rm -rf "$_generateleafcert_cert_dir"
+      ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
+      Debug "sudo openssl x509 -in $_generateleafcert_ck -text -noout"
+      return 1
+    fi
+
+    echo "$(Now)${TAB4}${_generateleafcert_domain}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
 }
-export DetectCertPemFile
-readonly DetectCertPemFile
+export GenerateLeafCert
+readonly GenerateLeafCert
 
 # Get the latest git tag after optionally syncing with remote
 # Example:
