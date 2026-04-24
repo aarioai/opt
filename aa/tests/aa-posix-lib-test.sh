@@ -1075,10 +1075,7 @@ testSetConfig() {
 
 testGenerateRSAKeys() {
   testing 'GenerateRSAKeys'
-  if ! command -v openssl >/dev/null 2>&1; then
-    Warn "GenerateRSAKeys: need install openssl"
-    return 0
-  fi
+
   # 测试stream模式
   prefix=$(Now -N)
   temp=$(mktemp -d)
@@ -1233,9 +1230,13 @@ main() {
   testParseConfig
   testSetConfig
 
-  testGenerateRSAKeys
-  testSignCertByCA
-  testGenerateLeafCert
+  if command -v openssl >/dev/null 2>&1; then
+    testGenerateRSAKeys
+    testSignCertByCA
+    testGenerateLeafCert
+  else
+    Warn "GenerateRSAKeys/SignCertByCA/GenerateLeafCert: need install openssl"
+  fi
 
   Info "Test Success"
 }

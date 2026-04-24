@@ -199,7 +199,7 @@ readonly _install_
 InstallGrep(){
   if ! command -v grep >/dev/null 2>&1; then
     _install_sudo=''
-    if [ "$(id -u)" != '0' ] && command -v sudo >/dev/null 2>&1; then
+    if CanSudo; then
       _install_sudo='sudo'
     fi
     _install_ grep "$_install_sudo"
@@ -805,6 +805,14 @@ IAmRoot() {
 export IAmRoot
 readonly IAmRoot
 
+CanSudo(){
+  if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    return 1
+  fi
+}
+export CanSudo
+readonly CanSudo
+
 # 获取CPU类型：amd 或 arm 架构
 CpuArch() {
   # debian/ubuntu
@@ -1158,7 +1166,7 @@ Install(){
   Usage $# -ge 1 'Install <app> [app]...'
 
   _install_sudo=''
-  if ! IAmRoot && command -v sudo >/dev/null 2>&1; then
+  if CanSudo; then
     _install_sudo='sudo'
   fi
 
@@ -1184,7 +1192,7 @@ CleanPkgManager(){
 
   Info "clean package manager: $_cleanpkgmanager"
   _cleanpkgmanager_sudo=''
-  if ! IAmRoot && command -v sudo >/dev/null 2>&1; then
+  if CanSudo; then
     _cleanpkgmanager_sudo='sudo'
   fi
 
@@ -1227,7 +1235,7 @@ _uninstall_(){
   _uninstall_pkg="$1"
 
   _uninstall_sudo=''
-  if ! IAmRoot && command -v sudo >/dev/null 2>&1; then
+  if CanSudo; then
     _uninstall_sudo='sudo'
   fi
 
@@ -2787,7 +2795,7 @@ MkdirP(){
     return 0
   fi
 
-  if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+  if ! CanSudo ; then
     return 1
   fi
 
@@ -2813,7 +2821,7 @@ ChownR() {
     if chown -R "$_chownr_user" "$_chownr_dir" 2>/dev/null; then
       continue
     fi
-    if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    if ! CanSudo; then
       Warn "failed to ChownR $_chownr_user $_chownr_dir"
       continue
     fi
@@ -2838,7 +2846,7 @@ ChgrpR() {
     if chgrp -R "$_chgrpr_group" "$_chgrpr_dir" 2>/dev/null; then
       continue
     fi
-    if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    if ! CanSudo; then
       Warn "failed to ChgrpR $_chgrpr_group $_chgrpr_dir"
       continue
     fi
@@ -2860,7 +2868,7 @@ ChmodOrMkdir(){
     if chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir" 2>/dev/null; then
       continue
     fi
-    if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    if ! CanSudo; then
       Warn "failed to ChmodOrMkdir $_chmodormkdir_mod $_chmodormkdir_dir"
       continue
     fi
@@ -2882,7 +2890,7 @@ ChmodOrCreate(){
     if chmod "$_chmodorcreate_mod" "$_chmodorcreate_file" 2>/dev/null; then
       continue
     fi
-    if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    if ! CanSudo; then
       Warn "failed to ChmodOrCreate $_chmodorcreate_mod $_chmodorcreate_file"
       continue
     fi
@@ -2916,7 +2924,7 @@ ChownOrMkdir(){
       if chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir" 2>/dev/null; then
         continue
       fi
-      if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+      if ! CanSudo; then
         Warn "failed to ChownOrMkdir $_chownormkdir_group $_chownormkdir_dir"
         continue
       fi
@@ -3441,7 +3449,7 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "sudo openssl genrsa -out $_signcertbyca_ckf 2048"
-      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048  >/dev/null 2>&1
+      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
       sudo chmod 600 "$_signcertbyca_ckf"
     fi
 
@@ -3450,7 +3458,7 @@ SignCertByCA(){
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
-        -addext "$_signcertbyca_addext" >/dev/null 2>&1; then
+        -addext "$_signcertbyca_addext" >/dev/null; then
       ErrorD "Generate CSR failed for $_signcertbyca_domain" "生成CSR失败: $_signcertbyca_domain"
       Debug "sudo openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
       return 1
@@ -3468,7 +3476,7 @@ SignCertByCA(){
       -CAcreateserial                     \
       -out "$_signcertbyca_ck"            \
       -days "$_signcertbyca_expire_days"  \
-      -copy_extensions copy >/dev/null 2>&1; then
+      -copy_extensions copy >/dev/null; then
     ErrorD "CA signing failed for $_signcertbyca_domain" "CA签发失败: $_signcertbyca_domain"
     Debug "sudo openssl x509 -req -in $_signcertbyca_server_csr -CA $_signcertbyca_ca_cert_file -CAkey $_signcertbyca_ca_key_file -CAcreateserial -out $_signcertbyca_ck -days $_signcertbyca_expire_days -copy_extensions copy"
     return 1
@@ -3482,7 +3490,7 @@ SignCertByCA(){
   sudo chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
-  if ! sudo openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null 2>&1; then
+  if ! sudo openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
     Debug "sudo openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
     sudo rm -rf "$_signcertbyca_cert_dir"
@@ -3526,7 +3534,7 @@ SignLeafCert(){
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
       -addext "subjectAltName=$_signleafcert_san" \
-      -days "$_signleafcert_expire_days" >/dev/null 2>&1; then
+      -days "$_signleafcert_expire_days" >/dev/null; then
     ErrorD "Create $_signleafcert_domain TLS certs failed (private key:$_signleafcert_ckf)" "创建 $_signleafcert_domain 的TLS证书失败（密钥：$_signleafcert_ckf)"
     Debug "sudo openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
     return 1
@@ -3580,7 +3588,7 @@ GenerateLeafCert(){
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
-      -addext "subjectAltName=$_generateleafcert_san" >/dev/null 2>&1; then
+      -addext "subjectAltName=$_generateleafcert_san" >/dev/null; then
     ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
     Debug "sudo openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
     return 1
@@ -3614,15 +3622,15 @@ HighestGitTag(){
 
   if [ "$_highestgittag_pull" = '-pull' ]; then
     # Fetch remote tags (prune removes remote-tracking branches that no longer exist)
-    git fetch  origin --prune --tags >/dev/null 2>&1
+    git fetch origin --prune --tags >/dev/null
 
     # delete all local tags (suppress all output)
     git tag -l | while read -r _highestgittag; do
-      git tag -d "$_highestgittag" >/dev/null 2>&1
+      git tag -d "$_highestgittag" >/dev/null
     done
 
     # fetch remote tags into local
-    git fetch origin --tags >/dev/null 2>&1
+    git fetch origin --tags >/dev/null
   fi
 
   _highestgittag_highest=''
