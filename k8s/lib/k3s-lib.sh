@@ -634,7 +634,6 @@ k3sRunIt(){
     _k3s_bash="$_k3s_interact"
     _k3s_interact=''
   fi
-  k3sPullImage "$_k3s_image"
 
   local _k3s_ns=''
   if [ -n "$_k3s_namespace" ]; then
@@ -792,7 +791,6 @@ EOF
     'destroy') k3sDestroy "$K3S_NAMESPACE" ;;
     'ns'|'nsenter') k3sNsenter "$_k3s_sub_cmd" "$_k3s_sub_cmd_arg" "$K3S_NAMESPACE" "$_k3s_selector" "$_k3s_container" ;;
     'logs') k3sLogs "$K3S_NAMESPACE" "$_k3s_selector" "$_k3s_container" "$_k3s_sub_cmd" ;;
-    'pull') k3sPullImage "$_k3s_sub_cmd" "$_k3s_sub_cmd_arg" ;;
     'curl') k3sCurl "$_k3s_sub_cmd" "$_k3s_sub_cmd_arg" "$K3S_NAMESPACE" ;;
     'run') k3sRunIt "$_k3s_sub_cmd" "$_k3s_sub_cmd_arg" "$K3S_NAMESPACE" ;;
     *)  _k3s_cmd_list "$0" "$_k3s_sub_cmd";;
