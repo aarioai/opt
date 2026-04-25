@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+
+# https://github.com/aarioai/opt
+if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+
+readonly usage="Usage: $0 <cmd>
+    - install <version> <intel|amd64|arm64>
+"
+
+download(){
+  url="$1"
+  tgz="$2"
+
+  result=1
+  wget_installed=0
+  curl_installed=0
+  if command -v wget >/dev/null 2>&1; then
+    wget_installed=1
+    wget "$url" && result=0
+  elif [ "$result" -eq 1 ] && command -v curl >/dev/null 2>&1; then
+    curl_installed=1
+    curl -o "$tgz" "$url" && result=0
+  fi
+
+  if [ "$result" -eq 0 ]; then
+    return 0
+  fi
+
+  if [ "$wget_installed" -eq 0 ] && Install wget >/dev/null 2>&1 && command -v wget >/dev/null 2>&1; then
+      download "$version" "$arc" && result=0
+  fi
+
+  if [ "$result" -eq 1 ] && [ "$curl_installed" -eq 0 ] && Install curl >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+      download "$version" "$arc" && result=0
+  fi
+
+  return $result
+}
+
+install(){
+  version="$1"
+  arc="$2"
+  case "$arc" in
+    intel|amd64) arc='amd64';;
+    arm) arc="arm64" ;;
+    *) Panic "invalid $arc"
+  esac
+
+  temp=$(mktemp -d)
+  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  cd "$temp"
+
+  tgz="go${version}.linux-${arc}.tar.gz"
+  url="https://go.dev/dl/$tgz"
+
+  if ! download "$url" "$tgz"; then
+    Panic "Download $url failed"
+  fi
+
+  Install tar
+  rm -rf /usr/local/go
+  tar -C /usr/local -xzf "$tgz"
+}
+
+main(){
+  Usage $# -ge 1 "$usage"
+  cmd="$1"
+  shift
+
+  case "$cmd" in
+    install) install "$@";;
+    *) Panic "$usage";;
+  esac
+}
+
+main "$@"
