@@ -1,4 +1,5 @@
 aa/tests/tmp
+aa/tests/*.srl
 
 # General Git Ignore File
 # https://github.com/aarioai/rules/blob/main/config/.gitignore

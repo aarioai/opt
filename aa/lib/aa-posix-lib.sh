@@ -27,6 +27,7 @@ AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色， {Yes}
 # 换行符
 # printf/echo 都会移除掉尾部的空行。试了很多办法，只有这样写才可以
 export LF
+# LF 跟 "\n" 和 $(printf '\n') 不是一样的
 readonly LF="
 "
 export TAB
@@ -64,6 +65,11 @@ export _LIGHT_CYAN_
 readonly _LIGHT_CYAN_='\033[1;96m'
 export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
+
+export _SHORT_SENTINEL_TOKEN_
+readonly _SHORT_SENTINEL_TOKEN_="  [>)@}<[(:{  "   # 必须没有出现在 _SENTINEL_TOKEN_ 里，且不易出现在正常文本中，且不存在 # 和 / 以及 \（避免替换异常）
+export _SENTINEL_TOKEN_         # see DynamicSentinelToken()
+readonly _SENTINEL_TOKEN_="${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}"  # 正常内容永远不会存在的安全字符串，为了不影响sed，不要存在 / 和 #
 
 Yes(){
   _yes="${1:-}"
@@ -1747,29 +1753,26 @@ Substr() {
 
   _substr_is_first_line=1
   _substr_value=$(printf '%s\n' "$_substr_s" | while IFS= read -r _substr_line; do
-    # 第一行为空，表示上面截取掉导致第一个字符是换行符
-    if [ -z "$_substr_line" ]; then _substr_is_first_line=0; fi
+    if Yes "$_substr_is_first_line"; then
+      _substr_is_first_line=0
+    else
+      printf '%s' "$LF"
+    fi
 
     _substr_length_temp="$_substr_length"
     _substr_length=$((_substr_length - ${#_substr_line}))
 
     if [ "$_substr_length" -gt 1 ]; then
-      if [ "$_substr_is_first_line" -ne 1 ]; then printf '\n'; fi
-      _substr_is_first_line=0
       if [ -n "$_substr_line" ]; then printf '%s' "$_substr_line"; fi
       _substr_length=$((_substr_length - 1))
       continue
     fi
 
     if [ "$_substr_length" -eq 1 ]; then
-      if [ "$_substr_is_first_line" -ne 1 ]; then printf '\n'; fi
-      _substr_is_first_line=0
       if [ -n "$_substr_line" ]; then printf '%s' "$_substr_line"; fi
       return 0
     fi
     if [ "$_substr_length" -eq 0 ]; then
-      if [ "$_substr_is_first_line" -ne 1 ]; then printf '\n'; fi
-      _substr_is_first_line=0
       if [ -n "$_substr_line" ]; then printf '%s' "$_substr_line"; fi
       return 0
     fi
@@ -1962,44 +1965,130 @@ CountMatches() {
 export CountMatches
 readonly CountMatches
 
-# Replace matched string with break lines      处理多行字符串的替换
-# Required: IndexOf, Substr, CutLeft, Replace
-# Warn: <old> cant be a part of <new>
-Replace() {
-  Usage $# 3 4 'Replace <string> <old> <new> [once=once replace once, otherwise replace all]'
+# Replace matched string recursively, the source string cant contains break lines
+# E.g., ReplaceLineRecursive 'abcbcbcbcbcd' 'abc' 'a' ==> ad
+ReplaceLineRecursive(){
+  Usage $# -eq 3 'ReplaceLineRecursive <str> <old> <new>'
+  _replacelinerecursive_str="$1"
+  _replacelinerecursive_pattern="$2"
+  _replacelinerecursive_replacement="$3"
+
+  case "$_replacelinerecursive_str" in
+    *"$_replacelinerecursive_pattern"*)
+      _replacelinerecursive_new_str=$(printf "%s" "$_replacelinerecursive_str" | sed "s/$_replacelinerecursive_pattern/$_replacelinerecursive_replacement/g")
+      ReplaceLineRecursive "$_replacelinerecursive_new_str" "$_replacelinerecursive_pattern" "$_replacelinerecursive_replacement"
+      ;;
+    *)
+      printf "%s" "$_replacelinerecursive_str"
+      ;;
+  esac
+}
+export ReplaceLineRecursive
+readonly ReplaceLineRecursive
+
+DynamicSentinelToken(){
+  Usage $# 1 2 'DynamicSentinelToken <str> [sentinel=_SENTINEL_TOKEN_]'
+  _dynamicsentineltoken_str="$1"
+  _dynamicsentineltoken=${2:-"$_SENTINEL_TOKEN_"}
+
+  if [ "$_dynamicsentineltoken_str" = "$_SHORT_SENTINEL_TOKEN_" ]; then
+    PanicD "string cannot be $_SHORT_SENTINEL_TOKEN_" "字符不能是 $_SHORT_SENTINEL_TOKEN_"
+  fi
+
+  ReplaceLineRecursive "$_dynamicsentineltoken" "$_dynamicsentineltoken_str" "$_SHORT_SENTINEL_TOKEN_"
+}
+export DynamicSentinelToken
+readonly DynamicSentinelToken
+
+# Replace matched string once, the source string can contains break lines      处理多行字符串的替换
+# Required: ReplaceOnce
+ReplaceOnce() {
+  Usage $# -eq 3 'ReplaceOnce <string> <old> <new>'
   _replace_s=$1
   _replace_old=$2
   _replace_new="$3"
-  _replace_once="${4:-}"
-  if [ "$_replace_once" != 'once' ] && [ "$_replace_once" != '1' ]; then _replace_once=''; fi
 
-  if StrIn "$_replace_old" "$_replace_new" ; then
-    PanicD "Replace: Recursion detected - old string '${_replace_old}' found within new string '${_replace_new}'. This would cause infinite loop during recursive replacement operations." "Replace函数：检测到递归风险 - 旧字符串 '${_replace_old}' 包含在新字符串 '${_replace_new}' 中，这会导致替换过程中的无限循环"
+  if ! ContainsLF "$_replace_s" "$_replace_old" "$_replace_new"; then
+    _replace_escaped_old=$(printf "%s" "$_replace_old" | sed 's/[][\/.^$*]/\\&/g')
+    _replace_escaped_new=$(printf "%s" "$_replace_new" | sed 's/[\/&]/\\&/g')
+    printf "%s" "$_replace_s" | sed "s/${_replace_escaped_old}/${_replace_escaped_new}/"
+    return
   fi
 
   _replace_index=$(IndexOf "$_replace_old" "$_replace_s")
-
   if [ "$_replace_index" -lt 0 ]; then
     printf '%s' "$_replace_s"
     return 0
   fi
-
-  if [ "$_replace_index" -gt 0 ]; then Substr "$_replace_s" 0 "${_replace_index}"; fi
+  if [ "$_replace_index" -gt 0 ]; then
+    _replaceonce_tmp=$(Substr "$_replace_s" 0 "${_replace_index}")
+    printf '%s' "$_replaceonce_tmp"
+    # Substr 会截掉尾部换行符
+    _replaceonce_tmp_len=$((_replace_index - ${#_replaceonce_tmp}))
+    while [ "$_replaceonce_tmp_len" -gt 0 ]; do
+      printf '|%s|' "$LF"
+      _replaceonce_tmp_len=$((_replaceonce_tmp_len - 1))
+    done
+  fi
   printf '%s' "$_replace_new"
   _replace_next=$((_replace_index + ${#_replace_old}))
-
   _replace_s=$(CutLeft "${_replace_next}" "$_replace_s")
+  printf '%s' "$_replace_s"
+}
+export ReplaceOnce
+readonly ReplaceOnce
 
-  if [ -n "$_replace_once" ]; then
-    printf '%s' "$_replace_s"
-    return 0
+# Replace all matched string, the source string can contains break lines      处理多行字符串的替换
+# Required: ReplaceOnce
+Replace() {
+  Usage $# 3 4 'Replace <string> <old> <new> [sentinel=_SENTINEL_TOKEN_]'
+  _replace_s=$1
+  _replace_old=$2
+  _replace_new="$3"
+  _replace_sentinel=${4:-"$_SENTINEL_TOKEN_"}
+
+  if ! ContainsLF "$_replace_s" "$_replace_old" "$_replace_new"; then
+    _replace_escaped_old=$(printf "%s" "$_replace_old" | sed 's/[][\/.^$*]/\\&/g')
+    _replace_escaped_new=$(printf "%s" "$_replace_new" | sed 's/[\/&]/\\&/g')
+    printf "%s" "$_replace_s" | sed "s/${_replace_escaped_old}/${_replace_escaped_new}/g"
+    return
   fi
 
-  Replace "$_replace_s" "$_replace_old" "$_replace_new"
+  _replace_sentinel=$(DynamicSentinelToken "$_replace_new" "$_replace_sentinel")
+  # handle  replace / => //, and replace recursive
+  if StrIn "$_replace_old" "$_replace_new" ; then
+    _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_old" "$_replace_sentinel")
+    while [ "$_replace_tmp" != "$_replace_s" ]; do
+      _replace_s="$_replace_tmp"
+      _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_old" "$_replace_sentinel")
+    done
+    _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_sentinel" "$_replace_new")
+    while [ "$_replace_tmp" != "$_replace_s" ]; do
+      _replace_s="$_replace_tmp"
+      _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_sentinel" "$_replace_new")
+    done
+  else
+    _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_old" "$_replace_new")
+    while [ "$_replace_tmp" != "$_replace_s" ]; do
+      _replace_s="$_replace_tmp"
+      _replace_tmp=$(ReplaceOnce "$_replace_s" "$_replace_old" "$_replace_new")
+    done
+  fi
+  printf '%s' "$_replace_s"
 }
 export Replace
 readonly Replace
 
+ContainsLF(){
+  for _containslf in "$@"; do
+    case "$_containslf" in
+      *"$LF"*) return 0;;
+    esac
+  done
+  return 1
+}
+export ContainsLF
+readonly ContainsLF
 
 # 替换所有的换行符 LF 为两个字符 '\n'
 # Warn: 传参会移除掉尾部换行符，但是不会移除开头的换行符

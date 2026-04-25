@@ -365,6 +365,12 @@ testCutLeft() {
 }
 testSubstr() {
   testing 'Substr'
+
+  assert 'Substr' "AA${LF}BB" "$(Substr "AA${LF}BB${LF}CC" 0 5)"
+  assert 'Substr' "AA${LF}BB" "$(Substr "AA${LF}BB${LF}CC" 0 6)"
+  assert 'Substr' "${LF}AA${LF}BB" "$(Substr "${LF}AA${LF}BB${LF}CC" 0 6)"
+  assert 'Substr' "${LF}AA${LF}BB" "$(Substr "${LF}AA${LF}BB${LF}CC" 0 7)"
+
   s="000,111,222,333"
   want='000'
   got=$(Substr "$s" 0 3)
@@ -539,12 +545,30 @@ testStrIn() {
   sub="$LF"
   if ! StrIn "$sub" "$s"; then fail "StrIn" true false; fi
 }
+
 testSliceIn(){
   testing 'SliceIn'
   sub="Aario"
   if SliceIn "$sub" "HAario" "Aarios" "aario"; then fail "SliceIn" false true; fi
-
   if ! SliceIn "$sub" "HAario" "Aario" "aario"; then fail "SliceIn" false true; fi
+}
+
+testContainsLF(){
+  testing 'ContainsLF'
+  if ContainsLF "abc"; then Panic "ContainsLF abc wrong"; fi
+  if ContainsLF "\n"; then Panic "ContainsLF \\n wrong"; fi
+  if ContainsLF "$(printf '\n')"; then Panic "ContainsLF \\n wrong"; fi
+
+  if ContainsLF "abc\nabc"; then Panic "ContainsLF abc wrong"; fi
+  if ContainsLF "\n" "\n"; then Panic "ContainsLF \\n wrong"; fi
+
+  if ! ContainsLF "$LF"; then Panic "ContainsLF \$LF wrong"; fi
+  if ! ContainsLF "A${LF}BC"; then Panic "ContainsLF A\$LFBC wrong"; fi
+  if ! ContainsLF "${LF}${LF}${LF}"; then Panic "ContainsLF \$LF\$LF\$LF wrong"; fi
+
+  if ! ContainsLF "abc" "$LF"; then Panic "ContainsLF abc \$LF wrong"; fi
+  if ! ContainsLF "abc" "A${LF}BC"; then Panic "ContainsLF abc A\$LFBC wrong"; fi
+  if ! ContainsLF "${LF}${LF}${LF}" "abc"; then Panic "ContainsLF \$LF\$LF\$LF abc wrong"; fi
 }
 
 testPackLF() {
@@ -560,42 +584,44 @@ testPackLF() {
   if [ "${#got}" -ne 6 ]; then fail 'UnpackLF' "len 6" "len ${#got}"; fi
 }
 
+testReplaceLineRecursive(){
+  testing 'ReplaceLineRecursive'
+  assert "ReplaceLineRecursive" "ad" "$(ReplaceLineRecursive 'abcbcbcbcbcd' 'abc' 'a')"
+  assert "ReplaceLineRecursive" "\x01${TAB}\x04" "$(ReplaceLineRecursive '\x01abc\x04' 'abc' "$TAB")"
+  assert "ReplaceLineRecursive" " \x00~^S.e_N.t\x03I.n-E.l~\x00 " "$(ReplaceLineRecursive "${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}" "$TAB" " ")"
+  assert "ReplaceLineRecursive" "\x01\x00~^S.e_N.t\x03I.n-E.l~\x00\x01" "$(ReplaceLineRecursive "${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}" "$TAB" '\\x01')"
+}
+
+testDynamicSentinelToken(){
+  testing 'DynamicSentinelToken'
+  got=$(DynamicSentinelToken "$TAB")
+  want="${_SHORT_SENTINEL_TOKEN_}\x00~^S.e_N.t\x03I.n-E.l~\x00${_SHORT_SENTINEL_TOKEN_}"
+  assert "DynamicSentinelToken" "$want" "$got"
+}
+
+testReplaceOnce(){
+  testing 'ReplaceOnce'
+  assert "ReplaceOnce" "a//b/c/d" "$(ReplaceOnce "a/b/c/d" "/" "//")"
+  assert "ReplaceOnce" "a${LF}b/c" "$(ReplaceOnce "a/b/c" "/" "$LF")"
+  assert "ReplaceOnce" "AA${LF}BB${LF}CC/DD" "$(ReplaceOnce "AA${LF}BB/CC/DD" "/" "$LF")"
+
+  # 测试换行符
+  s=$(printf '%s' "a${LF}b${LF}c")
+  want=$(printf "%s\n%s" "a,b" "c")
+  got=$(ReplaceOnce "$s" "$LF" ',')
+  assert 'ReplaceOnce' "$want" "$got"
+}
+
 testReplace() {
   testing 'Replace'
-
-#  s='/C=cn/CN=x.x'
-#  want='//C=cn//CN=x.x'
-#  got=$(Replace "$s" '/' "//")
-#  assert 'Replace' "$want" "$got"
-#
+  assert 'Replace' '//C=cn//CN=x.x' "$(Replace "/C=cn/CN=x.x" '/' "//")"
 
   s="AA,BB,CC,DD"
   want="AA${LF}BB${LF}CC${LF}DD"
   got=$(Replace "$s" ',' "$LF")
   assert 'Replace' "$want" "$got"
 
-  # 测试换行符
-  s=$(printf '%s' "a${LF}b${LF}c")
-  want=$(printf "%s\n%s" "a,b" "c")
-  got=$(Replace "$s" "$LF" ',' 1)
-  assert 'Replace' "$want" "$got"
-
-  # 测试常规
-  s="0000123456"
-  want="000123456"
-  got=$(Replace "$s" '0' '' 1)
-  assert 'Replace' "$want" "$got"
-
-  # 测试全部替换
-  want="123456"
-  got=$(Replace "$s" '0' '')
-  assert 'Replace' "$want" "$got"
-
-  # 测试替换一次多字符
-  s="abcabcabc123456"
-  want="abcabc123456"
-  got=$(Replace "$s" 'abc' '' 1)
-  assert 'Replace' "$want" "$got"
+  assert 'Replace' "123456" "$(Replace "0000102345600" '0' '')"
 
   # 测试替换全部多字符
   s="abcabcabc123456"
@@ -1196,7 +1222,13 @@ main() {
   testIndexOf
   testStrIn
   testSliceIn
+
+  testContainsLF
   testPackLF
+
+  testReplaceLineRecursive
+  testDynamicSentinelToken
+  testReplaceOnce
   testReplace
   testReplaceLF
   testReplaceLFToSpace
