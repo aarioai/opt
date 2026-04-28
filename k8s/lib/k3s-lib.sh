@@ -298,7 +298,7 @@ k3sBuild(){
   Usage $# -eq 1 'k3sBuild <dir>'
   local _k3s_workdir="$1"
 
-  Info "workdir: $_k3s_workdir"
+  Debug "workdir: $_k3s_workdir"
 
   k3sConvertTmpl "$_k3s_workdir"
 

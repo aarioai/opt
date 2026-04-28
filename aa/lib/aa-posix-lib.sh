@@ -556,18 +556,6 @@ export HighlightD
 readonly HighlightD
 
 
-Verbose(){
-  Usage $# -eq 2 'Verbose <-v or --verbose or ""> <info>'
-  _verbose="$1"
-  _verbose_info="$2"
-
-  if [ "$_verbose" = '-v' ] || [ "$_verbose" = '--verbose' ]; then
-    Info "$_verbose_info"
-  fi
-}
-export Verbose
-readonly Verbose
-
 Heading(){
   if [ "$QUITE_LOGS" -eq 0 ]; then
     if Yes "$AA_LOG_NO_COLOR"; then
@@ -576,7 +564,7 @@ Heading(){
       printf "\n${_LIGHT_YELLOW_}%s${_NC_}\n" "$*"
     fi
   fi
-  _saveToLogFile "" "$@"
+  _saveToLogFile "" "$*"
 }
 export Heading
 readonly Heading
@@ -600,7 +588,7 @@ UnsetLibLogFile(){
 export UnsetLibLogFile
 readonly UnsetLibLogFile
 
-
+# Notice: the 2nd param should be "$*" but not "$@"
 _saveToLogFile(){
   _saveToLogFileLevel=${1:+"$1 "}
   _savetologfile_msg="$2"
@@ -644,7 +632,7 @@ readonly _log_
 
 Log() {
   _log_ "" "" "$*"
-  _saveToLogFile "" "$@"
+  _saveToLogFile "" "$*"
 }
 export Log
 readonly Log
@@ -658,7 +646,7 @@ readonly LogD
 
 Debug() {
   _log_ "[debug]" "$_CYAN_" "$*"
-  _saveToLogFile "[debug]" "$@"
+  _saveToLogFile "[debug]" "$*"
 }
 export Debug
 readonly Debug
@@ -672,7 +660,7 @@ readonly DebugD
 
 Info() {
   _log_ "[info]" "$_GREEN_" "$*"
-  _saveToLogFile "[info]" "$@"
+  _saveToLogFile "[info]" "$*"
 }
 export Info
 readonly Info
@@ -686,7 +674,7 @@ readonly InfoD
 
 Notice() {
   _log_ "[notice]" "$_MAGENTA_" "$*"
-  _saveToLogFile "[notice]" "$@"
+  _saveToLogFile "[notice]" "$*"
 }
 export Notice
 readonly Notice
@@ -700,7 +688,7 @@ readonly NoticeD
 
 Warn() {
   _log_ "[warn]" "$_YELLOW_" "$*" >&2
-  _saveToLogFile "[warn]" "$@"
+  _saveToLogFile "[warn]" "$*"
 }
 export Warn
 readonly Warn
@@ -714,7 +702,7 @@ readonly WarnD
 
 Error() {
   _log_ "[error]" "$_RED_" "$*" >&2
-  _saveToLogFile "[error]" "$@"
+  _saveToLogFile "[error]" "$*"
 }
 export Error
 readonly Error
@@ -739,6 +727,18 @@ PanicD(){
 }
 export PanicD
 readonly PanicD
+
+Verbose(){
+  Usage $# -eq 2 'Verbose <-v or --verbose or ""> <info>'
+  _verbose="$1"
+  _verbose_info="$2"
+
+  if [ "$_verbose" = '-v' ] || [ "$_verbose" = '--verbose' ]; then
+    Info "$_verbose_info"
+  fi
+}
+export Verbose
+readonly Verbose
 
 IsInt(){
   Usage $# 1 2 'if ! IsInt <string> [enable_negative={Yes}]; then ... fi'

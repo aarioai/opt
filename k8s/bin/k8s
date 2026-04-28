@@ -156,14 +156,10 @@ setupDefault(){
   return 0
 }
 
-parseSetYaml(){
-  local set_yaml="$g_workdir/$K8S_SET_YAML"
-  if [ ! -f "$set_yaml" ]; then
-    return 1
-  fi
-
+initSetYaml(){
+  local set_yaml="$1"
   # find mount dir and create it
-  yq -r '.spec.template.spec.volumes[] | select(.hostPath != null) | @base64' "$set_yaml" | while read -r volume_base64; do
+  while IFS= read -r volume_base64; do
     local volume
     volume=$(echo "$volume_base64" | base64 -d)
     volume_type=$(decodeYqWithDefault "$volume" '.hostPath.type' '')
@@ -173,7 +169,21 @@ parseSetYaml(){
       Info "mkdir and chmod 777 $volume_name => $volume_path"
       ChmodOrMkdir 777 "$volume_path"
     fi
-  done
+  done < <(yq -r '.spec.template.spec.volumes[] | select(.hostPath != null) | @base64' "$set_yaml" 2>/dev/null | grep -v '^$')
+  # k3sBuild 会自动查找image，并下载
+}
+
+parseSetYaml(){
+  local with_init="${1:-}"
+  local set_yaml="$g_workdir/$K8S_SET_YAML"
+  if [ ! -f "$set_yaml" ]; then
+    return 1
+  fi
+
+  if [ "$with_init" = '-init' ]; then
+    initSetYaml "$set_yaml"
+  fi
+
   local kind
   kind=$(yq -r '.kind' "$set_yaml" | tr '[:upper:]' '[:lower:]')
   if [ -z "$kind" ] || [ "$kind" = "null" ]; then
@@ -189,11 +199,21 @@ parseSetYaml(){
   g_set_name="${kind}/${name}"
 }
 
-parseUpYaml(){
-  Usage $# -le 1 'parseUpYaml [-optional]'
-  local optional=${1:-}
 
-  parseSetYaml
+
+parseUpYaml(){
+  Usage $# -le 2 'parseUpYaml [-optional] [-init]'
+  local optional=''
+  local with_init=''
+
+  for arg in "$@"; do
+    case "$arg" in
+      -optional) optional='-optional' ;;
+      -init) with_init='-init' ;;
+    esac
+  done
+
+  parseSetYaml "$with_init"
 
   if [ ! -f "$g_up_yaml" ]; then
     if setupDefault ; then
@@ -307,9 +327,8 @@ upTlsSecrets(){
 }
 
 up(){
-  parseUpYaml
+  parseUpYaml -init
   tls=$(valueOfWithDefault '.tls' '')
-
   if [ -n "$tls" ]; then
     upTlsSecrets
   fi
@@ -334,7 +353,6 @@ status(){
 
   parseUpYaml
   k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
-
 }
 
 testRun(){

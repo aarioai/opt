@@ -38,7 +38,7 @@ testsFile(){
 
 testing(){
   if [ "$QUITE_LOGS" -eq 0 ]; then printf "${_LIGHT_CYAN_}>> ${dictTesting} %s${_NC_}\n" "$*"; fi
-  _saveToLogFile "" "$@"
+  _saveToLogFile "" "$*"
 }
 
 init(){
