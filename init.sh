@@ -24,8 +24,7 @@ chgOwner(){
 
 main(){
   if CanSudo; then
-    exec sudo "$0" "$@"
-    return 0
+    exec sudo "$0" "$@"       # exec 会替换当前shell进程，后续命令不再执行
   fi
 
   chg_owner="${1:-}"

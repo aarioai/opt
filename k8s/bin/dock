@@ -36,8 +36,7 @@ enterContainer(){
   fi
 
   if CanSudo; then
-    exec sudo nsenter -m -u -i -n -p  -t "$target" "${@}"
-    return 0
+    exec sudo nsenter -m -u -i -n -p  -t "$target" "${@}"       # exec 会替换当前shell进程，后续命令不再执行
   fi
   nsenter -m -u -i -n -p  -t "$target" "${@}"
 }

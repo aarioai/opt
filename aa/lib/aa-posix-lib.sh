@@ -24,6 +24,22 @@ export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
 export IN_CHINESE=0         # 如果将此设置为 -1，则强制输出英文；设为 1，强制输出中文；否则自动判断系统是否是中文
 AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色， {Yes}
 
+export TRUE=1
+readonly TRUE
+
+export FALSE=0
+readonly FALSE
+
+export OPTIONAL='OPTIONAL'
+readonly OPTIONAL
+
+export REQUIRED='REQUIRED'
+readonly REQUIRED
+
+export WITH_PANIC='WITH_PANIC'
+readonly WITH_PANIC
+
+
 # 换行符
 # printf/echo 都会移除掉尾部的空行。试了很多办法，只有这样写才可以
 export LF
@@ -66,6 +82,12 @@ readonly _LIGHT_CYAN_='\033[1;96m'
 export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
 
+export CERT_KEY_FILE='privkey.pem'
+export CERT_FILE='cert.pem'
+export CERT_CSR_FILE='server.csr'
+export CERT_FULLCHAIN_FILE='fullchain.pem'
+export CERT_EXPIRE_DAYS=365
+
 export _SHORT_SENTINEL_TOKEN_
 readonly _SHORT_SENTINEL_TOKEN_="  [>)@}<[(:{  "   # 必须没有出现在 _SENTINEL_TOKEN_ 里，且不易出现在正常文本中，且不存在 # 和 / 以及 \（避免替换异常）
 export _SENTINEL_TOKEN_         # see DynamicSentinelToken()
@@ -74,7 +96,7 @@ readonly _SENTINEL_TOKEN_="${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}"  # 正常�
 Yes(){
   _yes="${1:-}"
   case $_yes in
-    enabled|Enabled|ENABLED|enable|Enable|ENABLE|ok|Ok|OK|on|On|ON|t|T|true|True|TRUE|y|Y|yes|Yes|YES|1) return 0;;
+    enabled|Enabled|ENABLED|enable|Enable|ENABLE|ok|Ok|OK|on|On|ON|require|Require|REQUIRE|required|Required|REQUIRED|t|T|true|True|TRUE|y|Y|yes|Yes|YES|1) return 0;;
     *) return 1;;
   esac
 }
@@ -519,7 +541,6 @@ Highlight(){
     printf "%s\n" "$*"
   else
     printf "${_LIGHT_MAGENTA_}%s${_NC_}\n" "$*"
-
   fi
 }
 export Highlight
@@ -986,6 +1007,101 @@ LanIP(){
 
   printf '%s' "$_lanip"
 }
+export LanIP
+readonly LanIP
+
+IsIPv4(){
+  case "$1" in
+    ''|*[!0-9.]*) return 1 ;;
+    *)
+      IFS=.
+      set -- $1
+      [ $# -eq 4 ] || return 1
+      for octet; do
+        case "$octet" in
+          ''|*[!0-9]*) return 1 ;;
+          *)
+            [ "$octet" -ge 0 ] && [ "$octet" -le 255 ] || return 1
+            [ ${#octet} -gt 1 ] && [ "${octet#0}" != "$octet" ] && return 1
+            ;;
+        esac
+      done
+      return 0
+      ;;
+  esac
+}
+export IsIPv4
+readonly IsIPv4
+
+IsIPv6(){
+  case "$1" in
+    *:*)
+      case "$1" in
+        *[!0-9a-fA-F:]*)
+          return 1
+          ;;
+        *)
+          colon_count=$(echo "$1" | tr -cd ':' | wc -c)
+          [ "$colon_count" -ge 2 ] && [ "$colon_count" -le 7 ] && return 0
+          case "$1" in
+            *::*) return 0 ;;
+            *) return 1 ;;
+          esac
+            ;;
+      esac
+      ;;
+    *) return 1 ;;
+  esac
+}
+export IsIPv6
+readonly IsIPv6
+
+IsIP(){
+ IsIPv4 "$1" || IsIPv6 "$1"
+}
+export IsIP
+readonly IsIP
+
+IsDomain() {
+  IsIP "$1" && return 1
+
+  case "$1" in
+    ""|*[!a-zA-Z0-9.-]*) return 1 ;;  # 包含非法字符
+    *..*) return 1 ;;                  # repeat 2 dots
+    .*) return 1 ;;                    # start with a dot
+    *.) return 1 ;;                    # end with a dot
+    -*|*-) return 1 ;;                 # start or end with a -
+    *.*)
+ _old_ifs="$IFS"
+       IFS=.
+       set -- $1
+       IFS="$_old_ifs"
+
+       for _label; do
+         case "$_label" in
+           ""|*[!a-zA-Z0-9-]*) return 1 ;;
+           -*|*-) return 1 ;;
+           *) [ ${#_label} -gt 63 ] && return 1 ;;
+         esac
+       done
+       _tld=""
+       for _label; do
+         _tld="$_label"
+       done
+
+       # TLD must start and end with an alphabet
+       case "$_tld" in
+         [a-zA-Z]*[a-zA-Z]|[a-zA-Z]) ;;
+         *) return 1 ;;
+       esac
+
+       [ ${#1} -le 253 ] && return 0 || return 1
+       ;;
+     *) return 1 ;;
+  esac
+}
+export IsDomain
+readonly IsDomain
 
 # Compare two versions. Supports up to 5 version segments (e.g., 1.2.3.4.5)
 # Print 0 if ver1 == ver2, 1 if ver1 > ver2, -1 if ver1 < ver2
@@ -1188,6 +1304,15 @@ Install(){
 }
 export Install
 readonly Install
+
+InstallOrPanic(){
+  Usage $# -ge 1 'InstallOrPanic <app> [app]...'
+  if ! Install "$@"; then
+    PanicD "Install $* failed" "安装 $* 失败"
+  fi
+}
+export InstallOrPanic
+readonly InstallOrPanic
 
 CleanPkgManager(){
   _cleanpkgmanager="$(DetectPkgManager)"
@@ -1905,7 +2030,14 @@ StrIn() {
   _strin_sub="$1"
   shift
   _strin_s="$*"
-  if [ "${_strin_s#*"$_strin_sub"}" = "$_strin_s" ]; then
+
+  if [ -z "$_strin_sub" ] || [ -z "$_strin_s" ]; then
+    return 1
+  fi
+
+  _strin_tmp="${_strin_s#*"$_strin_sub"}"
+
+  if [ "${_strin_tmp}" = "$_strin_s" ]; then
     return 1
   fi
 }
@@ -1916,11 +2048,13 @@ SliceIn(){
   Usage $# -ge 1 'if SliceIn <sub_string> {string}; then ... fi'
   _slicein_sub="$1"
   shift
-  _slicein_s="$*"
-  # append and prepend spaces
-  if ! StrIn " $_slicein_sub " " $_slicein_s "; then
-    return 1
-  fi
+
+  for _slicein_s in "$@"; do
+      if StrIn " $_slicein_sub " " $_slicein_s "; then
+        return 0
+      fi
+  done
+  return 1
 }
 export SliceIn
 readonly SliceIn
@@ -2682,7 +2816,11 @@ AbsDir() {
   # shellcheck disable=SC2016
   Usage $# -eq 1 'AbsDir <path> => bash: AbsDir "${BASH_SOURCE[0]}"; posix: AbsDir "$0"'
   _fulldir_file="${1:-.}"
-  printf '%s' "$(cd "$(dirname "$_fulldir_file")" && pwd)"
+  if [ -d "$_fulldir_file" ]; then
+    printf '%s' "$(cd "$_fulldir_file" && pwd)"
+  else
+    printf '%s' "$(cd "$(dirname "$_fulldir_file")" && pwd)"
+  fi
 }
 export AbsDir
 readonly AbsDir
@@ -3460,14 +3598,13 @@ readonly _generateRSAKey_
 # openssl genrsa 生成的是 PKCS8 格式。如果想生成 PKCS1，加 -traditional
 # Required: Split, ChownR
 GenerateRSAKeys() {
-  if ! Install openssl; then
-    Panic "failed install openssl"
-  fi
   Usage $# -eq 5 'GenerateRSAKeys <stream|full> <user|user:group> <dir> <prefix> <key_size[,key_size...]>'
   _generatersakeys_full="$1"
   _generatersakeys_owner="$2"
   _generatersakeys_dir="$3"
   _generatersakeys_prefix="$4"
+
+  Install openssl
 
   # 创建临时文件，当接收到信号后，自动删除
   _generatersakeys_tempdir=$(mktemp -d)
@@ -3499,18 +3636,18 @@ readonly GenerateRSAKeys
 #   sudo openssl req -new -x509 -key myCA.key -out myCA.cert -days 36500   # 创建CA证书 --> 一直留空按Enter即可，Common Name 必要要填要签名的域名
 # E.g., SignCertByCA "$ca_key" "$ca_cert" 'x.x' 'DNS:x.x' ./
 SignCertByCA(){
-  Usage $# 3 11 'SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [csr_filename=server.csr] [out_filename=fullchain.pem] [days=365]'
+  Usage $# 3 11 "SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=$CertKeyFileName] [cert_filename=$CertFileName] [csr_filename=$CertCsrFileName] [out_filename=$CertFullchainFileName] [days=$CertExpireDays]"
   _signcertbyca_ca_key_file="$1"
   _signcertbyca_ca_cert_file="$2"
   _signcertbyca_domain="$3"
   _signcertbyca_cert_dir="${4:-"/etc/cert/$_signcertbyca_domain"}"
   _signcertbyca_san="${5:-"DNS:$_signcertbyca_domain"}"
   _signcertbyca_subj="${6:-"/CN=$_signcertbyca_domain"}"
-  _signcertbyca_cert_key_filename=${7:-"privkey.pem"}
-  _signcertbyca_cert_filename=${8:-"cert.pem"}
-  _signcertbyca_server_csr_filename="${9:-"server.csr"}"
-  _signcertbyca_out_filename="${10:-"fullchain.pem"}"
-  _signcertbyca_expire_days="${11:-365}"
+  _signcertbyca_cert_key_filename=${7:-"$CertKeyFileName"}
+  _signcertbyca_cert_filename=${8:-"$CertFileName"}
+  _signcertbyca_server_csr_filename="${9:-"$CertCsrFileName"}"
+  _signcertbyca_out_filename="${10:-"$CertFullchainFileName"}"
+  _signcertbyca_expire_days="${11:-$CertExpireDays}"
 
   _signcertbyca_addext="subjectAltName=$_signcertbyca_san"
   _signcertbyca_ckf="$_signcertbyca_cert_dir/$_signcertbyca_cert_key_filename"
@@ -3594,9 +3731,9 @@ export SignCertByCA
 readonly SignCertByCA
 
 # 基于指定私钥，创建自签名证书（支持 IP 和域名）
-# E.g., SignLeafCert 'x.x' ''
+# E.g., SignLeafCert 'x.x' '/etc/cert/x.x' 'DNS:x.x,DNS:*.x.x,IP:127.0.0.1,IP:192.168.0.100' '/CN=x.x'
 SignLeafCert(){
-  Usage $# 1 7 'SignLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  Usage $# 1 7 'SignLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,DNS:<*.domain>,IP:<ip>...] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
   _signleafcert_domain="$1"
   _signleafcert_cert_dir="${2:-"/etc/cert/$_signleafcert_domain"}"
   _signleafcert_san="${3:-"DNS:$_signleafcert_domain"}"

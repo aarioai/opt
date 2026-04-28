@@ -1,15 +1,21 @@
 #!/bin/sh
 set -eu
 
-# https://github.com/aarioai/opt
-if [ -x "../lib/aa-posix-lib.sh" ]; then . ../lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+HERE=$(cd "$(dirname "$0")" && pwd)
+readonly HERE
 
-lib="../lib/aa-posix-lib.sh"
-if [ ! -f "$lib" ]; then lib="/opt/aa/lib/aa-posix-lib.sh"; fi
+PARENT=$(cd "$HERE/.." && pwd)
+readonly PARENT
+
+lib='/opt/aa/lib/aa-posix-lib.sh'
+if [ -f "$PARENT/lib/aa-posix-lib.sh" ]; then
+  lib="$PARENT/lib/aa-posix-lib.sh"
+fi
+
+# shellcheck source=../lib/aa-posix-lib.sh
+. "$lib"
 
 export IN_CHINESE=1
-HERE="$(AbsDir "$0")"
-readonly HERE
 dictTesting="$(Dict "testing" "测试")"
 readonly dictTesting
 
@@ -196,6 +202,133 @@ testUlimitN(){
   if [ "$ulimitn" -eq 0 ]; then
     Panic "UlimitN is not available"
   fi
+}
+
+testIsIP(){
+  testing 'IsIP IsIPv4 IsIPv6'
+  for ip in "192.168.1.1" \
+            "192.168.1.255" \
+            "192.168.0.0" \
+            "10.0.0.1" \
+            "10.255.255.255" \
+            "172.16.0.1" \
+            "172.31.255.255" \
+            "8.8.8.8" \
+            "8.8.4.4" \
+            "1.1.1.1" \
+            "0.0.0.0" \
+            "255.255.255.255" \
+            "127.0.0.1" \
+            "127.0.0.255" \
+            "169.254.1.1" \
+            "169.254.169.254" \
+            "224.0.0.1" \
+            "239.255.255.255" \
+            "255.255.255.0" \
+            "255.0.0.0" \
+            "192.0.2.1" \
+            "198.51.100.1" \
+            "203.0.113.1"; do
+    if ! IsIPv4 "$ip"; then
+      Panic "IsIPv4 $ip should be an ipv4 IP"
+    fi
+
+    if IsIPv6 "$ip"; then
+      Panic "IsIPv6 $ip should be not an ipv6 IP"
+    fi
+
+    if ! IsIP "$ip"; then
+      Panic "IsIP $ip should be an ipv4 IP"
+    fi
+
+    if IsDomain "$ip"; then
+      Panic "IsDomain $ip should not be a domain"
+    fi
+  done
+
+  for ip in "2001:db8::1" \
+            "2001:0db8:0000:0000:0000:0000:0000:0001" \
+            "2001:db8:0:0:0:0:2:1" \
+            "2001:db8::ff00:42:8329" \
+            "2001:db8:85a3::8a2e:370:7334" \
+            "::1" \
+            "::" \
+            "fe80::1" \
+            "fe80::a00:27ff:fe4e:66a1" \
+            "ff00::" \
+            "ff02::1" \
+            "ff02::2" \
+            "ff02::fb"; do
+    if IsIPv4 "$ip"; then
+      Panic "IsIPv4 $ip should not be an ipv4 IP"
+    fi
+
+    if ! IsIPv6 "$ip"; then
+      Panic "IsIPv6 $ip should be an ipv6 IP"
+    fi
+
+    if ! IsIP "$ip"; then
+      Panic "IsIP $ip should be an ipv6 IP"
+    fi
+
+    if IsDomain "$ip"; then
+      Panic "IsDomain $ip should not be a domain"
+    fi
+  done
+}
+
+testIsDomain(){
+  testing 'IsDomain'
+  for domain in "x.x" \
+                "luexu.com" \
+                "0.0.0.0.com" \
+                "127.0.0.1.luexu.com" \
+                "yiye.cc" \
+                "google.cn" \
+                "sub.example.org" \
+                "my-site.com" \
+                "sub-domain.luexu.com" \
+                "a.io" \
+                "example.co.uk" \
+                "123abc.net" \
+                "my-site123.org" \
+                "very-long-domain-name-that-is-still-valid-example.com" \
+                "xn--80ak6aa92e.com" \
+                "xn--ls8h.example" \
+                "mail.example.com" \
+                "api.server.dev" \
+                "test.hello.world.example.org"; do
+    if IsIPv4 "$domain"; then
+      Panic "IsIPv4 $domain should not be an ipv4 IP"
+    fi
+
+    if IsIPv6 "$domain"; then
+      Panic "IsIPv6 $domain should not be an ipv6 IP"
+    fi
+
+    if IsIP "$domain"; then
+      Panic "IsIP $domain should be not an IP"
+    fi
+
+    if ! IsDomain "$domain"; then
+      Panic "IsDomain $domain should be a domain"
+    fi
+  done
+
+  for domain in "localhost" \
+                "192.168.0.255" \
+                "127.0.0.1" \
+                "lue_xu.com" \
+                "-google.cn" \
+                "123.456" \
+                "localhost" \
+                "luexu..com" \
+                ".luexu.com" \
+                "luexu."; do
+    if IsDomain "$domain"; then
+      Panic "IsDomain $domain should not be a domain"
+    fi
+  done
 }
 
 testLanIP(){
@@ -538,19 +671,19 @@ testStrIn() {
   testing 'StrIn'
   s="Aario"
   sub="ri"
-  if ! StrIn "$sub" "$s"; then fail "StrIn" true false; fi
+  if ! StrIn "$sub" "$s"; then fail "StrIn $s" true false; fi
 
   # 测试换行符
   s="Hello${LF}Aario"
   sub="$LF"
-  if ! StrIn "$sub" "$s"; then fail "StrIn" true false; fi
+  if ! StrIn "$sub" "$s"; then fail "StrIn $s" true false; fi
 }
 
 testSliceIn(){
   testing 'SliceIn'
   sub="Aario"
-  if SliceIn "$sub" "HAario" "Aarios" "aario"; then fail "SliceIn" false true; fi
-  if ! SliceIn "$sub" "HAario" "Aario" "aario"; then fail "SliceIn" false true; fi
+  if SliceIn "$sub" "HAario" "Aarios" "aario"; then fail "SliceIn 1" false true; fi
+  if ! SliceIn "$sub" "HAario" "Aario" "aario"; then fail "SliceIn 2" false true; fi
 }
 
 testContainsLF(){
@@ -1196,6 +1329,9 @@ main() {
   testCpuArch
   testCpuCores
   testUlimitN
+
+  testIsIP
+  testIsDomain
   testLanIP
 
   testCompareVersion

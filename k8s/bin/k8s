@@ -2,27 +2,375 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+. /opt/k8s/lib/k3s-lib.sh
 
-help(){
-  cat <<-EOF
-k8s
+g_workdir=$(pwd)
+readonly g_workdir
+readonly g_up_yaml="$g_workdir/$K8S_UP_YAML"
 
-EOF
+g_fn=$(basename "$0")
+
+readonly help="
+[.]=[options] <repo>=<repository:[tag]>  <image>=<image id>  <container>=<container id>
+
+$g_fn <command> [.]
+  -h|h            Show tidy help
+  --help|help     Show detailed help
+
+  attach, commit, compose, container prune, cp, diff, export, exec, healthcheck, history,
+  image inspect, image prune, images, kill, login, logout, logs, network, pause, pull, push,
+  rename, restart, rm, rmi, save, start, stats, stop, system prune, tag, top, unpause, update, volume, wait
+
+
+  curl
+  down          down current (delete)
+  logs [container|pod]
+  ns|nsenter
+  up
+  upd|update    update current (down then up)
+  purge
+  restart
+  run
+  status
+"
+
+readonly help_detail="
+$help
+  attach <container>  Attach stdin, stdout, and stderr to a running container.
+  commit [.] <container> [repo]     Create a new image from a container's changes
+  compose
+  container prune [-f=--force]
+  cp [.] <path> <container:path>          Copy files/folders between a running container and the local filesystem.
+  cp [.] <container:path> <path>
+  diff <container>    Inspect changes to files or directories on a container's filesystem
+  export <container>  Export a containers filesystem as a tar archive
+  exec [.] <container> <command>  Run a command in a running container
+  healthcheck  Execute the health check command in a container
+  history <image>
+  image inspect [.] <image>    Display detailed information on one or more images.
+  image prune [.]     Remove unused images.
+      -a=--all: Remove all unused images, not just dangling ones
+      -f=--force: Do not prompt for confirmation
+  images [repo]           List images
+  kill [.] <container>    Kill one or more running containers.
+  login -u <username> -p <password> <server>
+  logout <server>
+  network create|inspect|rm [.] <network>
+  network ls|prune [.]
+  pause <container> Pause all processes within one or more containers.
+  pull <repo>    Pull an image from a registry. Optionally specify \"ipfs://\" or \"ipns://\" scheme to pull image from IPFS.
+  push <repo>    Push an image or a repository to a registry. Optionally specify \"ipfs://\" or \"ipns://\" scheme to push image to IPFS.
+  rename <old> <new>      rename a container
+  restart [.] <container>      Restart one or more running containers
+  rm [.] <container>  Remove one or more containers
+  rmi [.] <image>     Remove one or more images
+  run [.] <image> <command> Run a command in a new container. Optionally specify \"ipfs://\" or \"ipns://\" scheme to pull image from IPFS.
+  save [.] <image>        Save one or more images to a tar archive (streamed to STDOUT by default)
+  start [.] <container>   Start one or more running containers
+  stats [.]     Display a live stream of container(s) resource usage statistics.
+  stop [.] <container>    Stop one or more running containers
+  system prune [.]  Remove unused containers, images, networks, cache and optional volumes
+        -a=--all: Remove all unused images, not just dangling ones
+        -f=--force: Do not prompt for confirmation
+        --volumes: Prune volumes
+  tag <src repo> <target repo>    Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE
+  top          Display the running processes of a container
+  unpause <container>     Unpause all processes within one or more containers
+  update [.] <container>       Update one or more running containers
+  volume create|inspect|rm [.] <volume>
+  volume ls|prune [.]
+  wait <container>    Block until one or more containers stop, then print their exit codes.
+  "
+
+declare g_namespace=''
+declare g_set_name=''
+declare g_selector=''
+declare g_container_name=''
+declare g_ns_cmd=''
+
+init(){
+  InstallOrPanic yq nerdctl > /dev/null
+
 }
 
+valueOf(){
+  Usage $# -eq 1 'valueOf <key>'
+  local key="$1"
+  local value
+  value=$(yq -r "$key" "$g_up_yaml")
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    Panic "missing config: $key"
+  fi
+  printf '%s' "$value"
+}
+
+valueOfWithDefault(){
+  Usage $# -eq 2 'valueOfWithDefault <key> <default_value>'
+  local key="$1"
+  local default="$2"
+  local value
+  value=$(yq -r "$key" "$g_up_yaml")
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    value="$default"
+  fi
+  printf '%s' "$value"
+}
+
+decodeYq(){
+  Usage $# -eq 2 'decodeYq <str> <key>'
+  local str="$1"
+  local key="$2"
+  local value
+  value=$(echo "$str" | yq -r "$key")
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    Panic "missing config: $key in $str"
+  fi
+  printf '%s' "$value"
+}
+
+decodeYqWithDefault(){
+  Usage $# -eq 3 'decodeYqWithDefault <decoded> <key> <default_value>'
+  local decoded="$1"
+  local key="$2"
+  local default="$3"
+  local value
+  value=$(echo "$decoded" | yq -r "$key")
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    value="$default"
+  fi
+  printf '%s' "$value"
+}
+
+setupDefault(){
+  if ! k8sIsWorkdir "$g_workdir"; then
+    return 1
+  fi
+  g_namespace="$(k3sDetectNamespace "$g_workdir" WITH_PANIC)"
+  local name
+  name=$(basename "$g_workdir")
+  g_set_name="deployment/${name}-set"
+  g_selector="app=${name}"
+  g_container_name="aa-${name}"
+  g_ns_cmd="sh"
+  Notice "setup default: namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
+  return 0
+}
+
+parseSetYaml(){
+  local set_yaml="$g_workdir/$K8S_SET_YAML"
+  if [ ! -f "$set_yaml" ]; then
+    return 1
+  fi
+
+  # find mount dir and create it
+  yq -r '.spec.template.spec.volumes[] | select(.hostPath != null) | @base64' "$set_yaml" | while read -r volume_base64; do
+    local volume
+    volume=$(echo "$volume_base64" | base64 -d)
+    volume_type=$(decodeYqWithDefault "$volume" '.hostPath.type' '')
+    if [ "$volume_type" = 'DirectoryOrCreate' ]; then
+      volume_name=$(decodeYq "$volume" '.name')
+      volume_path=$(decodeYq "$volume" '.hostPath.path')
+      Info "mkdir and chmod 777 $volume_name => $volume_path"
+      ChmodOrMkdir 777 "$volume_path"
+    fi
+  done
+  local kind
+  kind=$(yq -r '.kind' "$set_yaml" | tr '[:upper:]' '[:lower:]')
+  if [ -z "$kind" ] || [ "$kind" = "null" ]; then
+    Panic "$set_yaml missing config: .kind"
+  fi
+
+  local name
+  name=$(yq -r '.metadata.name' "$set_yaml")
+  if [ -z "$name" ] || [ "$name" = "null" ]; then
+    Panic "$set_yaml missing config: .metadata.name"
+  fi
+
+  g_set_name="${kind}/${name}"
+}
+
+parseUpYaml(){
+  Usage $# -le 1 'parseUpYaml [-optional]'
+  local optional=${1:-}
+
+  parseSetYaml
+
+  if [ ! -f "$g_up_yaml" ]; then
+    if setupDefault ; then
+      return
+    fi
+
+    if [ "$optional" = '-optional' ]; then
+      return
+    fi
+    Panic "missing $g_up_yaml or it's not a valid workdir"
+  fi
+  g_namespace="$(k3sDetectNamespace "$g_workdir" WITH_PANIC)"
+  name=$(valueOfWithDefault '.name' "$(basename "$g_workdir")")
+  g_set_name=$(valueOfWithDefault '.setName' "$g_set_name")
+  g_selector=$(valueOfWithDefault '.selector' "app=${name}")
+  g_container_name=$(valueOfWithDefault '.containerName' "aa-${name}")
+  g_ns_cmd=$(valueOfWithDefault '.nsenterCommand' "sh")
+
+  Notice "namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
+}
+
+execCurl(){
+  Usage $# -ge 1 "$g_fn curl [flag] <url>"
+  parseUpYaml -optional
+  k3sCurl "$@" "$g_namespace"
+}
+
+down(){
+  parseUpYaml
+
+  # tls[].down=true
+  if yq -e '.tls[] | select(.down == true)' "$g_up_yaml" >/dev/null 2>&1; then
+    yq -r '.tls[] | select(.down == true) | .secretName' "$g_up_yaml" | while read -r secret; do
+      k3sDeleteSecret "$g_namespace" "$secret"
+    done
+  fi
+
+  k3sDelete "$g_workdir"
+}
+
+# nerdctl logs 功能还不全，暂时不用支持
+logs(){
+  Usage $# -le 1 "$g_fn logs [container|pod]"
+
+  parseUpYaml
+  if [ "$#" -eq 1 ]; then
+    k3sLogs "$g_namespace" "$g_selector" "$g_container_name" "$1"
+  else
+    k3sLogs "$g_namespace" "$g_selector" "$g_container_name"
+  fi
+}
+
+nsenter(){
+  parseUpYaml
+  k3sNsenter "$g_namespace" "$g_selector" "$g_container_name" "$@"
+}
+
+upTlsSecrets(){
+  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
+  yq -r '.tls[] | @base64' "$g_up_yaml" | while read -r tls_b64; do
+    tls=$(echo "$tls_b64" | base64 -d)
+    secret=$(decodeYq "$tls" '.secretName')
+    declare first_host=''
+    declare default_san=''
+    # host=xx.xx.xx 不存在特殊字符和换行符，不需要base64
+    while IFS= read -r host; do
+      if [ -z "$first_host" ]; then first_host="$host"; fi
+      if [ -n "$default_san" ]; then default_san="${default_san},"; fi
+
+      if IsDomain "$host"; then
+        default_san="${default_san}DNS:${host}"
+      elif IsIP "$host"; then
+        default_san="${default_san}IP:${host}"
+      else
+        Panic "Invalid host: $host"
+      fi
+    done <<< "$(echo "$tls" | yq -r '.hosts[]')"
+
+    if [ -z "$first_host" ]; then
+      Panic "Missing config tls[].hosts"
+    fi
+    local domain
+    local cert_dir
+    local san
+    local subj
+    local privkey_name
+    local cert_name
+    local expire_days
+    domain=$(decodeYqWithDefault "$tls" '.domain' "$first_host")
+    cert_dir=$(decodeYqWithDefault "$tls" '.certDir' "")
+    san=$(decodeYqWithDefault "$tls" '.subjectAltName' "$default_san")
+    subj=$(decodeYqWithDefault "$tls" '.subj' "/CN=${domain}")
+    privkey_name=$(decodeYqWithDefault "$tls" '.privkeyFile' "$CERT_KEY_FILE")
+    cert_name=$(decodeYqWithDefault "$tls" '.certFile' "$CERT_FILE")
+    expire_days=$(decodeYqWithDefault "$tls" '.expireDays' "$CERT_EXPIRE_DAYS")
+
+    if [ -z "$cert_dir" ]; then
+      cert_dir=$(AbsDir "${g_workdir}/../../aa/cert")
+      if [ ! -d "$cert_dir" ]; then
+        cert_dir="/etc/cert"
+      fi
+      cert_dir="$cert_dir/$domain"
+      mkdir -p "$cert_dir"
+      Info "cert dir:${cert_dir}"
+    fi
+
+    k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$domain" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days"
+
+    Notice "$san"
+  done
+}
+
+up(){
+  parseUpYaml
+  tls=$(valueOfWithDefault '.tls' '')
+
+  if [ -n "$tls" ]; then
+    upTlsSecrets
+  fi
+
+  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
+}
+
+restart(){
+  if [ $# -gt 0 ]; then
+    nerdctl restart "$@"
+    return
+  fi
+  parseUpYaml
+  k3sRestart "$g_namespace" "$g_set_name"
+}
+
+status(){
+  if [ $# -gt 0 ]; then
+    nerdctl status "$@"
+    return
+  fi
+
+  parseUpYaml
+  k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
+
+}
+
+testRun(){
+  Usage $# -eq 2 "$g_fn test <image> <interact>"
+  local image="$1"
+  local interact="$2"
+
+  parseUpYaml -optional
+  k3sTestRun "$image" "$interact" "$g_namespace" "$g_ns_cmd"
+}
 
 main(){
   if CanSudo; then
-    exec sudo "${BASH_SOURCE[0]}" "$@"
-    return 0
+    exec sudo "${BASH_SOURCE[0]}" "$@"       # exec 会替换当前shell进程，后续命令不再执行
   fi
 
-  Usage $# ge 1 "k8s <cmd> [options]"
+  Usage $# -ge 1 "$help"
   local cmd="$1"
   shift
+
+  init
+
   case "$cmd" in
-    *) help ;;
+    -h|h) Lowlight "$help" ;;
+    --help|help) Lowlight "$help_detail" ;;
+    curl) execCurl "$@"; return ;;
+    down) down; return ;;
+    logs) logs "$@"; return ;;
+    ns|nsenter) nsenter "$@"; return ;;
+    up) up ;;
+    upd|update) down && up ;;
+    restart) restart "$@" ;;
+    status) status "$@"; return ;;
+    test) testRun "$@"; return ;;
+
+    *) nerdctl "$cmd" "$@" ;;
   esac
 }
 
