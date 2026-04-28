@@ -160,10 +160,10 @@ _install_(){
   case "$_install_manager" in
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
@@ -171,34 +171,34 @@ _install_(){
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
       echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager update -y $_install_quite
       echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
       echo ">>> $_install_sudo opkg update $_install_quite"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo opkg update $_install_quite
       echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
@@ -1011,11 +1011,16 @@ export LanIP
 readonly LanIP
 
 IsIPv4(){
-  case "$1" in
+  Usage $# -eq 1 'IsIpv4 <ip>'
+  _isipv4="$1"
+  case "$_isipv4" in
     ''|*[!0-9.]*) return 1 ;;
     *)
+      _isipv4_old_ifs="$IFS"
       IFS=.
-      set -- $1
+      # shellcheck disable=SC2086    # set -- no need quotes
+      set -- $_isipv4
+      IFS="$_isipv4_old_ifs"
       [ $# -eq 4 ] || return 1
       for octet; do
         case "$octet" in
@@ -1034,16 +1039,19 @@ export IsIPv4
 readonly IsIPv4
 
 IsIPv6(){
-  case "$1" in
+  Usage $# -eq 1 'IsIPv6 <ip>'
+  _isipv6="$1"
+
+  case "$_isipv6" in
     *:*)
-      case "$1" in
+      case "$_isipv6" in
         *[!0-9a-fA-F:]*)
           return 1
           ;;
         *)
-          colon_count=$(echo "$1" | tr -cd ':' | wc -c)
+          colon_count=$(echo "$_isipv6" | tr -cd ':' | wc -c)
           [ "$colon_count" -ge 2 ] && [ "$colon_count" -le 7 ] && return 0
-          case "$1" in
+          case "$_isipv6" in
             *::*) return 0 ;;
             *) return 1 ;;
           esac
@@ -1063,40 +1071,43 @@ export IsIP
 readonly IsIP
 
 IsDomain() {
-  IsIP "$1" && return 1
+  Usage $# -eq 1 'IsDomain <domain>'
+  _isdomain="$1"
+  IsIP "$_isdomain" && return 1
 
-  case "$1" in
+  case "$_isdomain" in
     ""|*[!a-zA-Z0-9.-]*) return 1 ;;  # 包含非法字符
     *..*) return 1 ;;                  # repeat 2 dots
     .*) return 1 ;;                    # start with a dot
     *.) return 1 ;;                    # end with a dot
     -*|*-) return 1 ;;                 # start or end with a -
     *.*)
- _old_ifs="$IFS"
-       IFS=.
-       set -- $1
-       IFS="$_old_ifs"
+      _isdomain_old_ifs="$IFS"
+      IFS=.
+      # shellcheck disable=SC2086    # set -- no need quotes
+      set -- $_isdomain
+      IFS="$_isdomain_old_ifs"
 
-       for _label; do
-         case "$_label" in
-           ""|*[!a-zA-Z0-9-]*) return 1 ;;
-           -*|*-) return 1 ;;
-           *) [ ${#_label} -gt 63 ] && return 1 ;;
-         esac
-       done
-       _tld=""
-       for _label; do
-         _tld="$_label"
-       done
-
-       # TLD must start and end with an alphabet
-       case "$_tld" in
-         [a-zA-Z]*[a-zA-Z]|[a-zA-Z]) ;;
-         *) return 1 ;;
+      for _label; do
+       case "$_label" in
+         ""|*[!a-zA-Z0-9-]*) return 1 ;;
+         -*|*-) return 1 ;;
+         *) [ ${#_label} -gt 63 ] && return 1 ;;
        esac
+      done
+      _tld=""
+      for _label; do
+       _tld="$_label"
+      done
 
-       [ ${#1} -le 253 ] && return 0 || return 1
-       ;;
+      # TLD must start and end with an alphabet
+      case "$_tld" in
+       [a-zA-Z]*[a-zA-Z]|[a-zA-Z]) ;;
+       *) return 1 ;;
+      esac
+
+      [ ${#1} -le 253 ] && return 0 || return 1
+      ;;
      *) return 1 ;;
   esac
 }
@@ -1120,25 +1131,30 @@ CompareVersion(){
       printf '%d' 0
       return
     fi
-    # Split by dot
+
     _compareversion_old_ifs="$IFS"
     IFS='.'
     # shellcheck disable=SC2086    # set -- no need quotes
     set -- $_compareversion_ver1
+    IFS="$_compareversion_old_ifs"
     _compareversion_p1_1="$1"
     _compareversion_p1_2="${2:-0}"
     _compareversion_p1_3="${3:-0}"
     _compareversion_p1_4="${4:-0}"
     _compareversion_p1_5="${5:-0}"
 
+    _compareversion_old_ifs="$IFS"
+    IFS='.'
     # shellcheck disable=SC2086    # set -- no need quotes
     set -- $_compareversion_ver2
+    IFS="$_compareversion_old_ifs"
     _compareversion_p2_1="$1"
     _compareversion_p2_2="${2:-0}"
     _compareversion_p2_3="${3:-0}"
     _compareversion_p2_4="${4:-0}"
     _compareversion_p2_5="${5:-0}"
-    IFS="$_compareversion_old_ifs"
+
+
 
     # Compare each part
     if [ "$_compareversion_p1_1" -gt "$_compareversion_p2_1" ]; then
@@ -1334,12 +1350,12 @@ CleanPkgManager(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
       ;;
     'opkg')
@@ -1380,19 +1396,19 @@ _uninstall_(){
       ;;
     'apt-get'|'dnf'|'yum')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
-      # shellcheck disable=SC2086    # set -- no need quotes
+      # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
       CleanPkgManager
       ;;
@@ -2497,19 +2513,13 @@ WordsBetween(){
     return 0
   fi
 
-  # 保存原来的 IFS
-  _wordsbetween_old_IFS="$IFS"
-
-  # 设置 IFS 为空格进行分词
+  _wordsbetween_old_ifs="$IFS"
   IFS=' '
-
-  # 将字符串拆分为位置参数
   # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsbetween_str
+  IFS="$_wordsbetween_old_ifs"
   _wordsbetween_total_words=$#
 
-  # 恢复原来的 IFS
-  IFS="$_wordsbetween_old_IFS"
 
   # 处理起始索引（从0开始）
   if [ "$_wordsbetween_start" -lt 0 ]; then
@@ -2549,10 +2559,11 @@ WordsBetween(){
     return 1
   fi
 
-  # 重新设置 IFS 进行分词
+  _wordsbetween_old_ifs="$IFS"
   IFS=' '
   # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsbetween_str
+  IFS="$_wordsbetween_old_ifs"
 
   # 移动到起始位置
   shift "$_wordsbetween_start"
@@ -2597,11 +2608,12 @@ WordsRange(){
     WordsBetween "$_wordsrange_start" "$_wordsrange_end" "$_wordsrange_str"
     return 0
   fi
-
+  _wordsrange_old_ifs="$IFS"
   # 将字符串拆分为单词数组
   IFS=' '
   # shellcheck disable=SC2086    # set -- no need quotes
   set -- $_wordsrange_str
+  IFS="$_wordsrange_old_ifs"
   _wordsrange_total_words=$#
 
   # 处理起始索引
@@ -3636,18 +3648,18 @@ readonly GenerateRSAKeys
 #   sudo openssl req -new -x509 -key myCA.key -out myCA.cert -days 36500   # 创建CA证书 --> 一直留空按Enter即可，Common Name 必要要填要签名的域名
 # E.g., SignCertByCA "$ca_key" "$ca_cert" 'x.x' 'DNS:x.x' ./
 SignCertByCA(){
-  Usage $# 3 11 "SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=$CertKeyFileName] [cert_filename=$CertFileName] [csr_filename=$CertCsrFileName] [out_filename=$CertFullchainFileName] [days=$CertExpireDays]"
+  Usage $# 3 11 "SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=$CERT_KEY_FILE] [cert_filename=$CERT_FILE] [csr_filename=$CERT_CSR_FILE] [out_filename=$CERT_FULLCHAIN_FILE] [days=$CERT_EXPIRE_DAYS]"
   _signcertbyca_ca_key_file="$1"
   _signcertbyca_ca_cert_file="$2"
   _signcertbyca_domain="$3"
   _signcertbyca_cert_dir="${4:-"/etc/cert/$_signcertbyca_domain"}"
   _signcertbyca_san="${5:-"DNS:$_signcertbyca_domain"}"
   _signcertbyca_subj="${6:-"/CN=$_signcertbyca_domain"}"
-  _signcertbyca_cert_key_filename=${7:-"$CertKeyFileName"}
-  _signcertbyca_cert_filename=${8:-"$CertFileName"}
-  _signcertbyca_server_csr_filename="${9:-"$CertCsrFileName"}"
-  _signcertbyca_out_filename="${10:-"$CertFullchainFileName"}"
-  _signcertbyca_expire_days="${11:-$CertExpireDays}"
+  _signcertbyca_cert_key_filename=${7:-"$CERT_KEY_FILE"}
+  _signcertbyca_cert_filename=${8:-"$CERT_FILE"}
+  _signcertbyca_server_csr_filename="${9:-"$CERT_CSR_FILE"}"
+  _signcertbyca_out_filename="${10:-"$CERT_FULLCHAIN_FILE"}"
+  _signcertbyca_expire_days="${11:-$CERT_EXPIRE_DAYS}"
 
   _signcertbyca_addext="subjectAltName=$_signcertbyca_san"
   _signcertbyca_ckf="$_signcertbyca_cert_dir/$_signcertbyca_cert_key_filename"

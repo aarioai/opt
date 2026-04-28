@@ -1304,10 +1304,8 @@ main() {
     HighlightD "Testing a single function, you can use: $0 [func_name]" "测试单个函数，可以使用：$0 [函数名]"
   fi
 
-
   # 测试单个函数
   if [ $# -eq 1 ]; then
-    solo=1
     func="$1"
     case "$func" in
       test*) "$func"; return $? ;;
