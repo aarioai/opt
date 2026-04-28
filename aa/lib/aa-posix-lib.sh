@@ -103,6 +103,8 @@ Yes(){
 export Yes
 readonly Yes
 
+
+
 DetectPkgManager(){
   if command -v apk >/dev/null 2>&1; then
     printf '%s' 'apk'       # alpine
@@ -161,7 +163,7 @@ _install_(){
     'apk')
       echo ">>> $_install_sudo apk update --no-cache $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo apk update --no-cache $_install_quite
+      SUDO apk update --no-cache $_install_quite
       echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
       $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
@@ -611,12 +613,12 @@ _saveToLogFile(){
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
       mkdir -p "$_savetologfile_dir"
-      chmod 777 "$_savetologfile_dir" || sudo chmod 777 "$_savetologfile_dir"
+      SUDO chmod 777 "$_savetologfile_dir"
     fi
 
     _log_ "" "$_BLUE_" "creating lib log file: $_savetologfile"
     touch "$_savetologfile"
-    chmod 777 "$_savetologfile" || sudo chmod 777 "$_savetologfile"
+    SUDO chmod 777 "$_savetologfile"
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
@@ -839,6 +841,25 @@ CanSudo(){
 }
 export CanSudo
 readonly CanSudo
+
+SUDO(){
+  if CanSudo; then
+    sudo "$@"
+  else
+    "$@"
+  fi
+}
+export SUDO
+readonly SUDO
+
+TrySUDO(){
+  if "$@" 2>/dev/null; then
+    return 0
+  fi
+  SUDO "$@"
+}
+export TrySUDO
+readonly TrySUDO
 
 # 获取CPU类型：amd 或 arm 架构
 CpuArch() {
@@ -3024,21 +3045,18 @@ AddUserNx(){
 export AddUserNx
 readonly AddUserNx
 
-# Require: IAmRoot
+# Require: TrySUDO
 MkdirP(){
+  Usage $# 1 2 'MkdirP <dir> [mod=666]'
   _mkdir="$1"
+  _mkdir_mod="${2:-"666"}"
   if [ -d "$_mkdir" ]; then return 0; fi
 
-
-  if mkdir -p "$_mkdir" 2>/dev/null; then
-    return 0
-  fi
-
-  if ! CanSudo ; then
+  if ! TrySUDO mkdir -p "$_mkdir"; then
     return 1
   fi
 
-  sudo mkdir -p "$_mkdir"
+  chmod -R "$_mkdir_mod" "$_mkdir"
 }
 export MkdirP
 readonly MkdirP
@@ -3057,14 +3075,7 @@ ChownR() {
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
       continue
     fi
-    if chown -R "$_chownr_user" "$_chownr_dir" 2>/dev/null; then
-      continue
-    fi
-    if ! CanSudo; then
-      Warn "failed to ChownR $_chownr_user $_chownr_dir"
-      continue
-    fi
-    sudo chown -R "$_chownr_user" "$_chownr_dir"
+    SUDO chown -R "$_chownr_user" "$_chownr_dir"
   done
 }
 export ChownR
@@ -3082,14 +3093,7 @@ ChgrpR() {
     if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
       continue
     fi
-    if chgrp -R "$_chgrpr_group" "$_chgrpr_dir" 2>/dev/null; then
-      continue
-    fi
-    if ! CanSudo; then
-      Warn "failed to ChgrpR $_chgrpr_group $_chgrpr_dir"
-      continue
-    fi
-    sudo chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
+    SUDO chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
   done
 }
 export ChgrpR
@@ -3103,15 +3107,7 @@ ChmodOrMkdir(){
   ReplaceSpaceToLF "$@" | while IFS= read -r _chmodormkdir_dir; do
     if [ -z "$_chmodormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chmodormkdir_dir" ]; then MkdirP "$_chmodormkdir_dir"; fi
-
-    if chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir" 2>/dev/null; then
-      continue
-    fi
-    if ! CanSudo; then
-      Warn "failed to ChmodOrMkdir $_chmodormkdir_mod $_chmodormkdir_dir"
-      continue
-    fi
-    sudo chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir"
+    TrySUDO chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir"
   done
 }
 export ChmodOrMkdir
@@ -3125,15 +3121,7 @@ ChmodOrCreate(){
   ReplaceSpaceToLF "$@" | while IFS= read -r _chmodorcreate_file; do
     if [ -z "$_chmodorcreate_file" ]; then continue; fi
     if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
-
-    if chmod "$_chmodorcreate_mod" "$_chmodorcreate_file" 2>/dev/null; then
-      continue
-    fi
-    if ! CanSudo; then
-      Warn "failed to ChmodOrCreate $_chmodorcreate_mod $_chmodorcreate_file"
-      continue
-    fi
-    sudo chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
+    TrySUDO chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
   done
 }
 export ChmodOrCreate
@@ -3160,14 +3148,7 @@ ChownOrMkdir(){
     if [ -z "$_chownormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chownormkdir_dir" ]; then MkdirP "$_chownormkdir_dir"; fi
     if [ -n "$_chownormkdir_group" ]; then
-      if chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir" 2>/dev/null; then
-        continue
-      fi
-      if ! CanSudo; then
-        Warn "failed to ChownOrMkdir $_chownormkdir_group $_chownormkdir_dir"
-        continue
-      fi
-      sudo chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
+      SUDO chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
       continue
     fi
 
@@ -3687,12 +3668,12 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "sudo openssl genrsa -out $_signcertbyca_ckf 2048"
-      sudo openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
-      sudo chmod 600 "$_signcertbyca_ckf"
+      SUDO openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
+      TrySUDO chmod 600 "$_signcertbyca_ckf"
     fi
 
     Info "Generating CSR.."
-    if ! sudo openssl req -new            \
+    if ! SUDO openssl req -new            \
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
@@ -3707,7 +3688,7 @@ SignCertByCA(){
   # openssl x509 签发已有的证书（基于CA或private key）
   Info "Signing certificate with CA..."
 
-  if ! sudo openssl x509 -req             \
+  if ! SUDO openssl x509 -req             \
       -in "$_signcertbyca_server_csr"     \
       -CA "$_signcertbyca_ca_cert_file"   \
       -CAkey "$_signcertbyca_ca_key_file" \
@@ -3720,18 +3701,17 @@ SignCertByCA(){
     return 1
   fi
 
-
   ChmodOrCreate 666 "$_signcertbyca_out"
   cat "$_signcertbyca_ck" "$_signcertbyca_ca_cert_file" > "$_signcertbyca_out"
 
-  sudo chmod 600 "$_signcertbyca_ckf"
-  sudo chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
+  TrySUDO chmod 600 "$_signcertbyca_ckf"
+  TrySUDO chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
-  if ! sudo openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
+  if ! SUDO openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
     Debug "sudo openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
-    sudo rm -rf "$_signcertbyca_cert_dir"
+    SUDO rm -rf "$_signcertbyca_cert_dir"
     return 1
   fi
 
@@ -3767,7 +3747,7 @@ SignLeafCert(){
   fi
 
   Info "Sign leaf certificate..."
-  if ! sudo openssl req -x509 -new  \
+  if ! SUDO openssl req -x509 -new  \
       -key "$_signleafcert_ckf"   \
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
@@ -3778,12 +3758,12 @@ SignLeafCert(){
     return 1
   fi
 
-  sudo chmod 600 "$_signleafcert_ckf"
-  sudo chmod 644 "$_signleafcert_ck"
+  SUDO chmod 600 "$_signleafcert_ckf"
+  SUDO chmod 644 "$_signleafcert_ck"
 
   Info "Verifying leaf certificate..."
-  if ! sudo openssl x509 -in "$_signleafcert_ck" -text -noout; then
-    sudo rm -rf "$_signleafcert_cert_dir"
+  if ! SUDO openssl x509 -in "$_signleafcert_ck" -text -noout; then
+    SUDO rm -rf "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
     Debug "sudo openssl x509 -in $_signleafcert_ck -text -noout"
     return 1
@@ -3822,7 +3802,7 @@ GenerateLeafCert(){
   mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
-  if ! sudo openssl req -x509 -nodes -newkey rsa:2048 \
+  if ! SUDO openssl req -x509 -nodes -newkey rsa:2048 \
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
@@ -3832,13 +3812,13 @@ GenerateLeafCert(){
     return 1
   fi
 
-  sudo chmod 644 "$_generateleafcert_ckf"
-  sudo chmod 644 "$_generateleafcert_ck"
+  SUDO chmod 644 "$_generateleafcert_ckf"
+  SUDO chmod 644 "$_generateleafcert_ck"
   ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
   Info "Verifying leaf certificate..."
-  if ! sudo openssl x509 -in "$_generateleafcert_ck" -text -noout; then
-    sudo rm -rf "$_generateleafcert_cert_dir"
+  if ! SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+    SUDO rm -rf "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
     Debug "sudo openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1
