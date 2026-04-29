@@ -236,10 +236,9 @@ parseUpYaml(){
   Notice "namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
 }
 
-execCurl(){
-  Usage $# -ge 1 "$g_fn curl [flag] <url>"
-  parseUpYaml -optional
-  k3sCurl "$@" "$g_namespace"
+destroy(){
+  parseUpYaml
+  k3sDestroy "$g_namespace"
 }
 
 down(){
@@ -254,6 +253,13 @@ down(){
 
   k3sDown "$g_workdir"
 }
+
+execCurl(){
+  Usage $# -ge 1 "$g_fn curl [flag] <url>"
+  parseUpYaml -optional
+  k3sCurl "$@" "$g_namespace"
+}
+
 
 # nerdctl logs 功能还不全，暂时不用支持
 logs(){
@@ -280,7 +286,11 @@ pull(){
 
   k8sAutoPullImages "$g_workdir"
 }
-purge
+
+purge(){
+  parseUpYaml
+  k3sPurge "$g_workdir" "$g_namespace" "$g_set_name" "$g_selector"
+}
 
 upTlsSecrets(){
   # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
@@ -389,16 +399,18 @@ main(){
   case "$cmd" in
     -h|h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
-    curl) execCurl "$@"; return ;;
-    down) down; return ;;
-    logs) logs "$@"; return ;;
-    ns|nsenter) nsenter "$@"; return ;;
+    curl) execCurl "$@" ;;
+    destroy) destroy  ;;
+    down) down ;;
+    logs) logs "$@" ;;
+    ns|nsenter) nsenter "$@" ;;
     pull) pull "$@" ;;
+    purge) purge "$@" ;;
     up) up ;;
     upd|update) down && up ;;
     restart) restart "$@" ;;
-    status) status "$@"; return ;;
-    test) testRun "$@"; return ;;
+    status) status "$@" ;;
+    test) testRun "$@" ;;
 
     *) nerdctl "$cmd" "$@" ;;
   esac
