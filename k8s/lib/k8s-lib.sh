@@ -37,7 +37,7 @@ k8sAutoPullImages(){
     if [ -n "$_k8s_images" ]; then
       for _k8s_image in $_k8s_images; do
         if [ -n "$_k8s_image" ]; then
-          Info "Pulling image: $_k8s_image"
+          Debug "nerdctl pull $_k8s_image"
           SUDO nerdctl pull "$_k8s_image"
         fi
       done
@@ -55,13 +55,13 @@ k8sCreateTlsSecret(){
   local _k8s_cert="${4:-"$CERT_FILE"}"
 
   Info "Creating tls secret..."
-  Debug "sudo kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
+  Debug "kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
   if ! SUDO kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert" >/dev/null; then
     PanicD "create tls secret failed" "创建tls secret失败"
   fi
 
   Info "Verifying tls secret..."
-  Debug "sudo kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
+  Debug "kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
   if ! SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null; then
     PanicD "Verify kubectl secret failed" "验证 kubectl secret 失败"
   fi
@@ -72,7 +72,7 @@ readonly k8sCreateTlsSecret
 
 
 k8sRmiNoneImages(){
-  Info "sudo nerdctl image prune -f"
+  Info "nerdctl image prune -f"
   SUDO nerdctl image prune -f
 }
 export k8sRmiNoneImages

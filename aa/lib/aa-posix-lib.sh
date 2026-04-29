@@ -525,7 +525,6 @@ Lowlight(){
     printf "%s\n" "$*"
   else
     printf "${_GRAY_}%s${_NC_}\n" "$*"
-
   fi
 }
 export Lowlight
@@ -645,7 +644,7 @@ export LogD
 readonly LogD
 
 Debug() {
-  _log_ "[debug]" "$_CYAN_" "$*"
+  _log_ "[debug]" "$_GRAY_" "$*"
   _saveToLogFile "[debug]" "$*"
 }
 export Debug
@@ -3667,7 +3666,7 @@ SignCertByCA(){
   if [ ! -f "$_signcertbyca_server_csr" ]; then
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
-      Debug "sudo openssl genrsa -out $_signcertbyca_ckf 2048"
+      Debug "openssl genrsa -out $_signcertbyca_ckf 2048"
       SUDO openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
       TrySUDO chmod 600 "$_signcertbyca_ckf"
     fi
@@ -3679,7 +3678,7 @@ SignCertByCA(){
         -subj "$_signcertbyca_subj"       \
         -addext "$_signcertbyca_addext" >/dev/null; then
       ErrorD "Generate CSR failed for $_signcertbyca_domain" "生成CSR失败: $_signcertbyca_domain"
-      Debug "sudo openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
+      Debug "openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
       return 1
     fi
   fi
@@ -3697,7 +3696,7 @@ SignCertByCA(){
       -days "$_signcertbyca_expire_days"  \
       -copy_extensions copy >/dev/null; then
     ErrorD "CA signing failed for $_signcertbyca_domain" "CA签发失败: $_signcertbyca_domain"
-    Debug "sudo openssl x509 -req -in $_signcertbyca_server_csr -CA $_signcertbyca_ca_cert_file -CAkey $_signcertbyca_ca_key_file -CAcreateserial -out $_signcertbyca_ck -days $_signcertbyca_expire_days -copy_extensions copy"
+    Debug "openssl x509 -req -in $_signcertbyca_server_csr -CA $_signcertbyca_ca_cert_file -CAkey $_signcertbyca_ca_key_file -CAcreateserial -out $_signcertbyca_ck -days $_signcertbyca_expire_days -copy_extensions copy"
     return 1
   fi
 
@@ -3710,7 +3709,7 @@ SignCertByCA(){
   Info "Verifying certificate..."
   if ! SUDO openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
-    Debug "sudo openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
+    Debug "openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
     SUDO rm -rf "$_signcertbyca_cert_dir"
     return 1
   fi
@@ -3754,7 +3753,7 @@ SignLeafCert(){
       -addext "subjectAltName=$_signleafcert_san" \
       -days "$_signleafcert_expire_days" >/dev/null; then
     ErrorD "Create $_signleafcert_domain TLS certs failed (private key:$_signleafcert_ckf)" "创建 $_signleafcert_domain 的TLS证书失败（密钥：$_signleafcert_ckf)"
-    Debug "sudo openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
+    Debug "openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
     return 1
   fi
 
@@ -3765,7 +3764,7 @@ SignLeafCert(){
   if ! SUDO openssl x509 -in "$_signleafcert_ck" -text -noout; then
     SUDO rm -rf "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
-    Debug "sudo openssl x509 -in $_signleafcert_ck -text -noout"
+    Debug "openssl x509 -in $_signleafcert_ck -text -noout"
     return 1
   fi
 
@@ -3808,7 +3807,7 @@ GenerateLeafCert(){
       -subj "$_generateleafcert_subj" \
       -addext "subjectAltName=$_generateleafcert_san" >/dev/null; then
     ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
-    Debug "sudo openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
+    Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
     return 1
   fi
 
@@ -3820,7 +3819,7 @@ GenerateLeafCert(){
   if ! SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
     SUDO rm -rf "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
-    Debug "sudo openssl x509 -in $_generateleafcert_ck -text -noout"
+    Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1
   fi
 

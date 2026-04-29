@@ -28,6 +28,7 @@ $g_fn <command> [.]
   ns|nsenter
   up
   upd|update    update current (down then up)
+  pull
   purge
   restart
   run
@@ -251,7 +252,7 @@ down(){
     done
   fi
 
-  k3sDelete "$g_workdir"
+  k3sDown "$g_workdir"
 }
 
 # nerdctl logs 功能还不全，暂时不用支持
@@ -270,6 +271,16 @@ nsenter(){
   parseUpYaml
   k3sNsenter "$g_namespace" "$g_selector" "$g_container_name" "$@"
 }
+
+pull(){
+  if [ $# -gt 0 ]; then
+    nerdctl pull "$@"
+    return
+  fi
+
+  k8sAutoPullImages "$g_workdir"
+}
+purge
 
 upTlsSecrets(){
   # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
@@ -382,6 +393,7 @@ main(){
     down) down; return ;;
     logs) logs "$@"; return ;;
     ns|nsenter) nsenter "$@"; return ;;
+    pull) pull "$@" ;;
     up) up ;;
     upd|update) down && up ;;
     restart) restart "$@" ;;
