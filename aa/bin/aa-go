@@ -47,9 +47,10 @@ install(){
     *) Panic "invalid $arc"
   esac
 
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
-  cd "$temp"
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
+  cd "$g_temp"
 
   tgz="go${version}.linux-${arc}.tar.gz"
   url="https://go.dev/dl/$tgz"
@@ -61,6 +62,7 @@ install(){
   Install tar
   rm -rf /usr/local/go
   tar -C /usr/local -xzf "$tgz"
+  rm -rf "$g_temp"
 }
 
 main(){

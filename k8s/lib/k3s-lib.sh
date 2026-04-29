@@ -258,7 +258,9 @@ _k3sConvertTmpl(){
 
   # 下面 trap 需要用到全局变量，因此不能使用 local
   _k3s_global_tmpl_temp=$(mktemp)
-  trap 'rm -f "$_k3s_global_tmpl_temp"' EXIT # 临时文件，退出后自动删除
+  trap 'rm -f "$_k3s_global_tmpl_temp"' EXIT
+  trap 'rm -f "$_k3s_global_tmpl_temp"; exit 1' INT TERM
+
   cat "$_k3s_tmpl" > "$_k3s_global_tmpl_temp"
 
   local _k3s_tmpl_tag
@@ -421,8 +423,8 @@ k3sDestroy(){
   if ! ConfirmD "$_k3s_confirm_en" "$_k3s_confirm_cn"; then
     return 0
   fi
-  Notice "kubectl delete namespace $_k3s_namespace"
-  SUDO k3s kubectl delete namespace "$_k3s_namespace"
+  Warn "kubectl delete namespace $_k3s_namespace"
+  SUDO k3s kubectl delete namespace "$_k3s_namespace" -v=6
 }
 export k3sDestroy
 readonly k3sDestroy

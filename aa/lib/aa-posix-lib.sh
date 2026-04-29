@@ -3476,7 +3476,8 @@ ReplaceYamlConfig(){
   PanicIfNotFile "$_replaceyamlconfig_src" "$_replaceyamlconfig_rep"
 
   _replaceyamlconfig_temp=$(mktemp)
-  trap 'rm -f "$_replaceyamlconfig_temp"' INT TERM EXIT # 临时文件，退出后自动删除
+  trap 'rm -f "$_replaceyamlconfig_temp"' EXIT
+  trap 'rm -f "$_replaceyamlconfig_temp"; exit 1' INT TERM
 
   #  || [ -n "$_replaceyamlconfig_line" ]  防止尾部不是以换行符结尾
   while IFS= read -r _replaceyamlconfig_line || [ -n "$_replaceyamlconfig_line" ]; do
@@ -3497,7 +3498,7 @@ ReplaceYamlConfig(){
   done < "$_replaceyamlconfig_src"
 
   rm -f "$_replaceyamlconfig_dst"
-  cp "$_replaceyamlconfig_temp" "$_replaceyamlconfig_dst"
+  mv "$_replaceyamlconfig_temp" "$_replaceyamlconfig_dst"
 }
 export ReplaceYamlConfig
 readonly ReplaceYamlConfig
@@ -3641,7 +3642,8 @@ GenerateRSAKeys() {
 
   # 创建临时文件，当接收到信号后，自动删除
   _generatersakeys_tempdir=$(mktemp -d)
-  trap 'rm -rf "$_generatersakeys_tempdir"' INT TERM EXIT
+  trap 'rm -rf "$_generatersakeys_tempdir"' EXIT
+  trap 'rm -rf "$_generatersakeys_tempdir"; exit 1' INT TERM
 
   mkdir -p "$_generatersakeys_dir"
 
@@ -3658,6 +3660,7 @@ GenerateRSAKeys() {
   ChownR "$_generatersakeys_owner" "$_generatersakeys_dir" || Panic "GenerateRSAKeys: failed to ChownR ${_generatersakeys_owner} ${_generatersakeys_dir}"
   find "$_generatersakeys_dir" -type f -name "*.priv.der" -exec chmod 600 {} + || Panic "GenerateRSAKeys: failed to chmod 600 ${_generatersakeys_dir}/*.priv.der"
   find "$_generatersakeys_dir" -type f -name "*.pub.der.b64" -exec chmod 644 {} + || Panic "GenerateRSAKeys: failed to chmod 644 ${_generatersakeys_dir}/*.pub.der.b64"
+  rm -rf "$_generatersakeys_tempdir"
 }
 export GenerateRSAKeys
 readonly GenerateRSAKeys
@@ -3924,17 +3927,17 @@ IncrRemoteGitTag(){
   fi
 
   if [ "$_incrremotegittag_delete" = '-d' ]; then
-    Info "git tag -d $_incrremotegittag_latestTag"
+    Debug"git tag -d $_incrremotegittag_latestTag"
     git tag -d "$_incrremotegittag_latestTag"
 
-    Info "git push origin --delete tag $_incrremotegittag_latestTag"
+    Debug"git push origin --delete tag $_incrremotegittag_latestTag"
     git push origin --delete tag "$_incrremotegittag_latestTag"
   fi
 
-  Info "git tag $_incrremotegittag_new"
+  Debug"git tag $_incrremotegittag_new"
   git tag "$_incrremotegittag_new"
 
-  Info "git push origin $_incrremotegittag_new"
+  Debug"git push origin $_incrremotegittag_new"
   git push origin "$_incrremotegittag_new"
 }
 export IncrRemoteGitTag

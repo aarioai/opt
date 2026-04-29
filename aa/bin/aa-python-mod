@@ -14,10 +14,10 @@ pipInstall() {
   index_url="${4-}"
 
   if [ "$update" -eq 1 ]; then
-    Info "pip install --no-cache-dir ${pkg} --upgrade"
+    Debug "pip install --no-cache-dir ${pkg} --upgrade"
     pip install -q --no-cache-dir "$pkg"  --upgrade
   elif ! pip list | grep "$pkg" >/dev/null 2>&1; then
-    Info "pip install --no-cache-dir ${pkg}  --upgrade"
+    Debug "pip install --no-cache-dir ${pkg}  --upgrade"
     pip install -q --no-cache-dir "$pkg"  --upgrade
   fi
   installed=$(pip list | grep "^${pkg} ")

@@ -33,10 +33,10 @@ ownDir(){
   aa-chmod-or-mkdir "$mod_owner" "$dir"
 
   if [ -z "${XGROUP:-}" ]; then
-    Info "chown -R $XUSER $dir"
+    Debug "chown -R $XUSER $dir"
     chown -R "$XUSER" "$dir"
   else
-    Info "chown -R $XUSER:$XGROUP $dir"
+    Debug "chown -R $XUSER:$XGROUP $dir"
     chown -R "$XUSER":"$XGROUP" "$dir"
   fi
 }
@@ -103,18 +103,20 @@ preinstallPackages(){
 
       # ubi minimal: ~50MB, redhat 系列（ubi, centos, rockylinux）
       # ubi9/ubi-micro 没有 dnf/yum/microdnf 包管理器，安装需要通过其他镜像复制
-      tmpdir=$(mktemp -d)
-      trap 'rm -rf "$tmpdir"' INT TERM EXIT
+      g_temp=$(mktemp -d) || return 1
+      trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+      trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
 
       if [ ! -d '/usr/lib/locale/C.utf8' ] || [ ! -d '/usr/lib/locale/en_GB.utf8' ]; then
         Info "install glibc-langpack-en"
         Install glibc-langpack-en
       fi
 
-      cp -r /usr/lib/locale/C.* "${tmpdir}/"
-      cp -r /usr/lib/locale/en_GB* "${tmpdir}/"
+      cp -r /usr/lib/locale/C.* "${g_temp}/"
+      cp -r /usr/lib/locale/en_GB* "${g_temp}/"
       rm -rf /usr/lib/locale/*
-      mv "$tmpdir"/* /usr/lib/locale/
+      mv "$g_temp"/* /usr/lib/locale/
+      rm -rf "$g_temp"
 
       Info "localedef --list-archive | xargs localedef --delete-from-archive"
       localedef --list-archive | xargs localedef --delete-from-archive
@@ -139,10 +141,10 @@ showEnv(){
   if [ -f "/etc/os-release" ]; then Info "[cat /etc/os-release]"; cat /etc/os-release; fi
 
   if [ -n "${XUSER:-}" ]; then
-    Info "grep $XUSER /etc/passwd"
+    Debug "grep $XUSER /etc/passwd"
     grep "$XUSER" /etc/passwd
     if [ -n "${XGROUP:-}" ] && [ "$XGROUP" != "$XUSER" ]; then
-      Info "grep $XGROUP /etc/passwd"
+      Debug "grep $XGROUP /etc/passwd"
       grep "$XGROUP" /etc/passwd
     fi
   fi

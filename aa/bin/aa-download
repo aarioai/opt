@@ -61,7 +61,7 @@ unzipTgz(){
   fi
   mkdir -p "$save_to"
   Install tar
-  Info "tar $opt $file -C $save_to  --strip-components 1"
+  Debug "tar $opt $file -C $save_to  --strip-components 1"
   if ! tar "$opt" "$file" -C "$save_to" --strip-components 1; then
     return 1
   fi
@@ -150,15 +150,16 @@ download() {
   fi
 
   Info "downloading $url to $want"
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT  # 临时文件，退出后自动删除
-  cd "$temp"
+  g_temp=$(mktemp -d)
+  trap 'rm -rf "$g_temp"' EXIT
+  trap 'rm -rf "$g_temp"; exit 1' INT TERM
+  cd "$g_temp"
 
   if ! Download "$url";then
     Panic "failed to download $url"
   fi
   filename=$(basename "$url")
-  temp_file="${temp}/${filename}"
+  temp_file="${g_temp}/${filename}"
 
    if [ -n "$checksum" ] ;then
     if ! errmsg=$(! verifyChecksum "$checksum_type" "$checksum" "$temp_file"  2>&1 >/dev/null); then
@@ -175,6 +176,7 @@ download() {
   if [ $remove -eq 0 ] || [ -z "$unzip" ];then
     mv "$temp_file" "$dst"
   fi
+  rm -rf "$g_temp"
 }
 
 verifyChecksum(){

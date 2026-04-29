@@ -23,7 +23,8 @@ $g_fn <command> [.]
 
 
   curl
-  down          down current (delete)
+  down [-a]         down current (delete)
+    -a:            down with all tls secrets
   logs [container|pod]
   ns|nsenter
   up
@@ -33,6 +34,12 @@ $g_fn <command> [.]
   restart
   run
   status
+  tls [command]
+    all:        list all tls secrets
+    up:
+    down:       down all tls secrets with config .tls[].down=true
+    down -a:    down all tls secrets
+
 "
 
 readonly help_detail="
@@ -234,114 +241,49 @@ parseUpYaml(){
   Notice "namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
 }
 
-destroy(){
-  parseUpYaml
-  k3sDestroy "$g_namespace"
-}
-
-down(){
-  parseUpYaml
-
-  # tls[].down=true
-  if yq -e '.tls[] | select(.down == true)' "$g_up_yaml" >/dev/null 2>&1; then
-    yq -r '.tls[] | select(.down == true) | .secretName' "$g_up_yaml" | while read -r secret; do
-      k3sDeleteSecret "$g_namespace" "$secret"
-    done
+tlsConfigExists(){
+  local tls_value
+  tls_value=$(yq -e '.tls' "$g_up_yaml" >/dev/null 2>&1)
+  if [ -n "$tls_value" ] && [ "$tls_value" != 'null' ]; then
+    return 0
   fi
-
-  k3sDown "$g_workdir"
-}
-
-execCurl(){
-  Usage $# -ge 1 "$g_fn curl [flag] <url>"
-  parseUpYaml -optional
-  k3sCurl "$@" "$g_namespace"
-}
-
-
-# nerdctl logs 功能还不全，暂时不用支持
-logs(){
-  Usage $# -le 1 "$g_fn logs [container|pod]"
-
-  parseUpYaml
-  if [ "$#" -eq 1 ]; then
-    k3sLogs "$g_namespace" "$g_selector" "$g_container_name" "$1"
-  else
-    k3sLogs "$g_namespace" "$g_selector" "$g_container_name"
-  fi
-}
-
-nsenter(){
-  parseUpYaml
-  k3sNsenter "$g_namespace" "$g_selector" "$g_container_name" "$@"
-}
-
-pull(){
-  if [ $# -gt 0 ]; then
-    nerdctl pull "$@"
-    return
-  fi
-
-  k8sAutoPullImages "$g_workdir"
-}
-
-purge(){
-  parseUpYaml
-  k3sPurge "$g_workdir" "$g_namespace" "$g_set_name" "$g_selector"
-}
-
-
-up(){
-  parseUpYaml -init
-  tlsUp
-
-  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
-}
-
-restart(){
-  if [ $# -gt 0 ]; then
-    nerdctl restart "$@"
-    return
-  fi
-  parseUpYaml
-  k3sRestart "$g_namespace" "$g_set_name"
-}
-
-status(){
-  if [ $# -gt 0 ]; then
-    nerdctl status "$@"
-    return
-  fi
-
-  parseUpYaml
-  k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
-}
-
-
-testRun(){
-  Usage $# -eq 2 "$g_fn test <image> <interact>"
-  local image="$1"
-  local interact="$2"
-
-  parseUpYaml -optional
-  k3sTestRun "$image" "$interact" "$g_namespace" "$g_ns_cmd"
+  return 1
 }
 
 tlsDown(){
-  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
-  yq -r '.tls[] | @base64' "$g_up_yaml" 2>/dev/null | while read -r tls_b64; do
-    [ -z "$tls_b64" ] && continue
-    tls=$(echo "$tls_b64" | base64 -d)
-    secret=$(decodeYq "$tls" '.secretName')
-    k3sDeleteSecret "$g_namespace" "$secret"
-  done
+  local all="${1:-}"
+  if ! tlsConfigExists; then
+    Info "exists"
+    return
+  fi
+
+
+
+  g_temp_file=$(mktemp) || return 1
+  trap 'rm -f "$g_temp_file" 2>/dev/null' EXIT
+  trap 'rm -f "$g_temp_file" 2>/dev/null; return 1' INT TERM
+
+  if [ "$all" = '-a' ]; then
+    yq -r '.tls[] | .secretName' "$g_up_yaml" 2>/dev/null > "$g_temp_file"
+  else
+    yq -r '.tls[] | select(.down == true) | .secretName' "$g_up_yaml" 2>/dev/null > "$g_temp_file"
+  fi
+
+
+  while read -r secret; do
+    [ -n "$secret" ] && k3sDeleteSecret "$g_namespace" "$secret"
+  done < "$g_temp_file"
+
+  rm -f "$g_temp_file"
 }
 
 tlsUp(){
+  if ! tlsConfigExists; then
+    return
+  fi
   # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
-  yq -r '.tls[] | @base64' "$g_up_yaml"  2>/dev/null | while read -r tls_b64; do
+  yq -r '.tls[] | @base64' "$g_up_yaml" | while read -r tls_b64; do
     [ -z "$tls_b64" ] && continue
-
     tls=$(echo "$tls_b64" | base64 -d)
     secret=$(decodeYq "$tls" '.secretName')
     declare first_host=''
@@ -399,6 +341,9 @@ tlsUp(){
 }
 
 tlsList(){
+  if ! tlsConfigExists; then
+    return
+  fi
   # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
   yq -r '.tls[] | @base64' "$g_up_yaml" 2>/dev/null | while read -r tls_b64; do
     [ -z "$tls_b64" ] && continue
@@ -409,14 +354,104 @@ tlsList(){
   done
 }
 
+destroy(){
+  parseUpYaml
+  k3sDestroy "$g_namespace"
+}
+
+down(){
+  local all="${1:-}"
+  parseUpYaml
+  tlsDown "$all"
+    Notice "SX"
+  k3sDown "$g_workdir"
+}
+
+execCurl(){
+  Usage $# -ge 1 "$g_fn curl [flag] <url>"
+  parseUpYaml -optional
+  k3sCurl "$@" "$g_namespace"
+}
+
+
+# nerdctl logs 功能还不全，暂时不用支持
+logs(){
+  Usage $# -le 1 "$g_fn logs [container|pod]"
+
+  parseUpYaml
+  if [ "$#" -eq 1 ]; then
+    k3sLogs "$g_namespace" "$g_selector" "$g_container_name" "$1"
+  else
+    k3sLogs "$g_namespace" "$g_selector" "$g_container_name"
+  fi
+}
+
+nsenter(){
+  parseUpYaml
+  k3sNsenter "$g_namespace" "$g_selector" "$g_container_name" "$@"
+}
+
+pull(){
+  if [ $# -gt 0 ]; then
+    nerdctl pull "$@"
+    return
+  fi
+
+  k8sAutoPullImages "$g_workdir"
+}
+
+purge(){
+  parseUpYaml
+  k3sPurge "$g_workdir" "$g_namespace" "$g_set_name" "$g_selector"
+}
+
+
+up(){
+  parseUpYaml -init
+  tlsUp
+  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
+}
+
+restart(){
+  if [ $# -gt 0 ]; then
+    nerdctl restart "$@"
+    return
+  fi
+  parseUpYaml
+  k3sRestart "$g_namespace" "$g_set_name"
+}
+
+status(){
+  if [ $# -gt 0 ]; then
+    nerdctl status "$@"
+    return
+  fi
+
+  parseUpYaml
+  k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
+}
+
+
+testRun(){
+  Usage $# -eq 2 "$g_fn test <image> <interact>"
+  local image="$1"
+  local interact="$2"
+
+  parseUpYaml -optional
+  k3sTestRun "$image" "$interact" "$g_namespace" "$g_ns_cmd"
+}
+
+
+
 tls(){
   Usage $# -le 1 'secret [command]'
   local cmd="${1:-""}"
+  shift 1
 
   parseUpYaml
 
   case "$cmd" in
-    down) tlsDown ;;
+    down) tlsDown "$@";;
     up) tlsUp ;;
     *) tlsList ;;
   esac
@@ -438,7 +473,7 @@ main(){
     --help|help) Lowlight "$help_detail" ;;
     curl) execCurl "$@" ;;
     destroy) destroy  ;;
-    down) down ;;
+    down) down "$@" ;;
     logs) logs "$@" ;;
     ns|nsenter) nsenter "$@" ;;
     pull) pull "$@" ;;
@@ -446,9 +481,9 @@ main(){
     up) up ;;
     upd|update) down && up ;;
     restart) restart "$@" ;;
-    tls) tls "$@" ;;
     status) status "$@" ;;
     test) testRun "$@" ;;
+    tls) tls "$@" ;;
     *) nerdctl "$cmd" "$@" ;;
   esac
 }

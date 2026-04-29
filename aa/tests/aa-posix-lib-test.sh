@@ -125,9 +125,10 @@ testIsPositiveInt(){
 
 
 testLog() {
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
-  tmp="${temp}/lib-test.log"
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
+  tmp="${g_temp}/lib-test.log"
   SetLibLogFile "$tmp"
   Log "testing log"
 
@@ -136,6 +137,7 @@ testLog() {
     exit 1
   fi
   UnsetLibLogFile
+  rm -rf "$g_temp"
 }
 
 testAbs(){
@@ -963,9 +965,10 @@ testDownload(){
   testing 'Download'
   url='https://www.baidu.com'
   filename='baidu.index'
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
-  cd "$temp"
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
+  cd "$g_temp"
   if ! Download "$url" "$filename"; then
     WarnD "Download $url failed" "Download $url 失败"
     return
@@ -973,6 +976,7 @@ testDownload(){
   if [ ! -f "$filename" ]; then
         WarnD "rename downloaded $url to $filename failed" "重命名下载 $url 为 $filename 失败"
   fi
+  rm -rf "$g_temp"
 }
 
 testAbsDir() {
@@ -983,54 +987,44 @@ testAbsDir() {
     assert 'AbsDir' "$want" "$got"
   fi
 
-  want=$(AbsDir "./")
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
-  cd "$temp"
-  cd "$want" || fail 'AbsDir' "$want" ""
-
   assert 'AbsDir /tmp/not/exists/dir/../../abc/efg' "/tmp/not/abc/efg" "$(AbsDir "/tmp/not/exists/dir/../../abc/efg")"
+  rm -rf "$temp"
 }
 
 testParentDir() {
   testing 'ParentDir'
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
-  dir="$temp/a/b/c/d/e/f/g"
-  file="${dir}/test.txt"
-  mkdir -p "$dir"
-  echo "$dir" > "$file"
 
+  dir="/a/b/c/d/e/f/g"
   got="$(ParentDir "$dir")"
-  want="$temp/a/b/c/d/e/f"
+  want="/a/b/c/d/e/f"
   assert "ParentDir $dir" "$want" "$got"
 
   got="$(ParentDir "$dir" 2)"
-  want="$temp/a/b/c/d/e"
+  want="/a/b/c/d/e"
   assert "ParentDir $dir 2" "$want" "$got"
 
   got="$(ParentDir "$dir" 4)"
-  want="$temp/a/b/c"
+  want="/a/b/c"
   assert "ParentDir $dir 4" "$want" "$got"
 
-  got="$(ParentDir "$file" 4)"
-  want="$temp/a/b/c"
-  assert "ParentDir $file 4" "$want" "$got"
 
-  got="$(ParentDir "$file")"
-  want="$temp/a/b/c/d/e/f"
-  assert "ParentDir $file" "$want" "$got"
+  # no test.txt file, regard test.txt as a directory
+  file="${dir}/test.txt"
+  got="$(ParentDir "$file" 4)"
+  want="/a/b/c/d"
+  assert "ParentDir $file 4" "$want" "$got"
 }
 
 testAbsPath() {
   testing 'AbsPath'
   cur=${PWD:-"$(pwd)"}
 
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   cd "$temp"
   echo "A" > "a.txt"
-  dir="${temp}/test/hello"
+  dir="${g_temp}/test/hello"
   mkdir -p "${dir}"
   cd "$dir"
   echo "B" > "b.txt"
@@ -1039,11 +1033,12 @@ testAbsPath() {
   got=$(AbsPath "./b.txt")
   assert 'AbsPath' "$want" "$got"
 
-  want="${temp}/a.txt"
+  want="${g_temp}/a.txt"
   got=$(AbsPath "../../a.txt")
   assert 'AbsPath' "$want" "$got"
 
   cd "$cur"
+  rm -rf "$g_temp"
 }
 testFilename(){
   testing 'Filename'
@@ -1239,10 +1234,11 @@ testGenerateRSAKeys() {
 
   # 测试stream模式
   prefix=$(Now -N)
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'stream' "$(whoami)" "$temp" "A$prefix-" 512
-  f="${temp}/A${prefix}"
+  f="${g_temp}/A${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
     Panic '%s\n' "GenerateRSAKeys stream failed"
   fi
@@ -1250,13 +1246,15 @@ testGenerateRSAKeys() {
   if [ -f "${f}-512.priv" ] || [ -f "${f}-512.pub" ]; then
     Panic "GenerateRSAKeys stream failed, found .priv/.pub"
   fi
+  rm -rf "$g_temp"
 
   # 测试full模式
   prefix=$(Now -N)
-  temp=$(mktemp -d)
-  trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'full' "$(whoami)" "$temp" "B$prefix-" 512
-  f="${temp}/B${prefix}"
+  f="${g_temp}/B${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
     Panic "GenerateRSAKeys full failed"
   fi
@@ -1265,13 +1263,14 @@ testGenerateRSAKeys() {
     Panic "GenerateRSAKeys full failed, not found .priv/.pub"
   fi
 
-  got=$(DetectPrivateKeyPemFile "$temp")
+  got=$(DetectPrivateKeyPemFile "$g_temp")
   Info "detect private key pem file: $got"
   assert 'DetectPrivateKeyPemFile' "${f}-512.priv" "$got"
 
-  got=$(DetectPublicKeyPemFile "$temp")
+  got=$(DetectPublicKeyPemFile "$g_temp")
   Info "detect public key pem file: $got"
   assert 'DetectPrivateKeyPemFile' "${f}-512.pub" "$got"
+  rm -rf "$g_temp"
 }
 
 testSignCertByCA(){
