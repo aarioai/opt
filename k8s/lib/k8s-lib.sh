@@ -54,7 +54,7 @@ k8sCreateTlsSecret(){
   local _k8s_privkey="${3:-"$CERT_KEY_FILE"}"
   local _k8s_cert="${4:-"$CERT_FILE"}"
 
-  if SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null; then
+  if SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null 2>&1; then
     return 0
   fi
 
@@ -76,7 +76,7 @@ readonly k8sCreateTlsSecret
 
 
 k8sRmiNoneImages(){
-  Info "nerdctl image prune -f"
+  Debug "nerdctl image prune -f"
   SUDO nerdctl image prune -f
 }
 export k8sRmiNoneImages

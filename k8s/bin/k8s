@@ -90,7 +90,7 @@ declare g_container_name=''
 declare g_ns_cmd=''
 
 init(){
-  InstallOrPanic yq nerdctl > /dev/null
+  InstallOrPanic yq nerdctl >/dev/null
 
 }
 
@@ -167,7 +167,7 @@ initSetYaml(){
     if [ "$volume_type" = 'DirectoryOrCreate' ]; then
       volume_name=$(decodeYq "$volume" '.name')
       volume_path=$(decodeYq "$volume" '.hostPath.path')
-      Info "mkdir and chmod 777 $volume_name => $volume_path"
+      Debug "mkdir and chmod 777 $volume_name => $volume_path"
       ChmodOrMkdir 777 "$volume_path"
     fi
   done < <(yq -r '.spec.template.spec.volumes[] | select(.hostPath != null) | @base64' "$set_yaml" 2>/dev/null | grep -v '^$')
@@ -388,7 +388,6 @@ tlsUp(){
       fi
       cert_dir="$cert_dir/$common_name"
       mkdir -p "$cert_dir"
-      Info "cert dir:${cert_dir}"
     fi
 
     if Yes "$create_nx"; then
@@ -406,7 +405,7 @@ tlsList(){
     tls=$(echo "$tls_b64" | base64 -d)
     secret=$(decodeYq "$tls" '.secretName')
     Highlight "${_HORIZONTAL_LINE_}secret: $secret${_HORIZONTAL_LINE}"
-    SUDO kubectl get secret "$secret" -n "$g_namespace" -o yaml
+    SUDO kubectl get secret "$secret" -n "$g_namespace" -o json
   done
 }
 
@@ -437,7 +436,6 @@ main(){
   case "$cmd" in
     -h|h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
-
     curl) execCurl "$@" ;;
     destroy) destroy  ;;
     down) down ;;
@@ -451,7 +449,6 @@ main(){
     tls) tls "$@" ;;
     status) status "$@" ;;
     test) testRun "$@" ;;
-
     *) nerdctl "$cmd" "$@" ;;
   esac
 }

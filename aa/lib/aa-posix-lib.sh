@@ -91,8 +91,8 @@ readonly HORIZONTAL_LINE_="${HORIZONTAL_LINE}${LF}"
 export _HORIZONTAL_LINE_
 readonly _HORIZONTAL_LINE_="${LF}${HORIZONTAL_LINE}${LF}"
 
-export CERT_KEY_FILE='privkey.pem'
-export CERT_FILE='cert.pem'
+export CERT_KEY_FILE='tls.key'  # k8s use this
+export CERT_FILE='tls.crt'     # k8s use this
 export CERT_CSR_FILE='server.csr'
 export CERT_FULLCHAIN_FILE='fullchain.pem'
 export CERT_EXPIRE_DAYS=365
@@ -1385,7 +1385,7 @@ CleanPkgManager(){
     'microdnf')
       echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all > /dev/null
+      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all >/dev/null
       ;;
     'opkg')
       ;;
@@ -1435,10 +1435,10 @@ _uninstall_(){
     'microdnf')
       echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" > /dev/null
+      $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" >/dev/null
       echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager autoremove -y > /dev/null
+      $_uninstall_sudo $_uninstall_manager autoremove -y >/dev/null
       CleanPkgManager
       ;;
     'opkg')
@@ -2856,12 +2856,47 @@ readonly ExportProfile
 AbsDir() {
   # shellcheck disable=SC2016
   Usage $# -eq 1 'AbsDir <path> => bash: AbsDir "${BASH_SOURCE[0]}"; posix: AbsDir "$0"'
-  _fulldir_file="${1:-.}"
-  if [ -d "$_fulldir_file" ]; then
-    printf '%s' "$(cd "$_fulldir_file" && pwd)"
-  else
-    printf '%s' "$(cd "$(dirname "$_fulldir_file")" && pwd)"
+  _absdir="$1"
+  if [ -f "$_absdir" ]; then
+    _absdir=$(dirname "$_absdir")
   fi
+  if [ -d "$_absdir" ]; then
+    printf '%s' "$(cd "$_absdir" && pwd)"
+    return
+  fi
+
+  case "$_absdir" in
+      /*)
+        _absdir_new=""
+        _absdir_remaining="$_absdir"
+        ;;
+      *)
+        _absdir_new="$PWD/"
+        _absdir_remaining="$_absdir"
+        ;;
+    esac
+
+    _absdir_old_ifs="$IFS"
+    IFS='/'
+    # shellcheck disable=SC2086    # set -- no need quotes
+    set -- $_absdir_remaining
+    IFS="$_absdir_old_ifs"
+
+    for _absdir_part; do
+      case "$_absdir_part" in
+        ''|'.') continue ;;
+        '..')
+          _absdir_new="${_absdir_new%/*}"
+          ;;
+        *)
+          _absdir_new="${_absdir_new%/}/$_absdir_part"
+          ;;
+      esac
+    done
+
+    [ -z "$_absdir_new" ] && _absdir_new="/"
+
+    printf '%s' "$_absdir_new"
 }
 export AbsDir
 readonly AbsDir
@@ -2870,16 +2905,14 @@ ParentDir(){
   Usage $# 1 2 'ParentDir <path> [depth=1]'
   _parentdir_path="$1"
   _parentdir_depth="${2:-1}"
-  if [ -f "$_parentdir_path" ]; then
-    _parentdir_path="$(AbsDir "$_parentdir_path")"
-  else
-    _parentdir_path="$(cd "$_parentdir_path" && pwd)"
-  fi
+
+  _parentdir_path="$(AbsDir "$_parentdir_path")"
+
   while [ "$_parentdir_depth" -gt 0 ]; do
     _parentdir_path="${_parentdir_path}/.."
     _parentdir_depth=$((_parentdir_depth - 1))
   done
-  printf '%s' "$(cd "$_parentdir_path" && pwd)"
+  printf '%s' "$(AbsDir "$_parentdir_path")"
 }
 export ParentDir
 readonly ParentDir
@@ -3193,15 +3226,14 @@ ClearTMPDIR(){
 export ClearTMPDIR
 readonly ClearTMPDIR
 
-
-
 CdOrPanic(){
   Usage $# -eq 1 'CdOrPanic <path>'
-  if [ -z "$1" ] || [ "$1" = ' ' ] || [ "$1" = '*' ]; then
-    Panic "illegal directory name: '$1'"
+  _cdorpanic_dir="$1"
+  if [ -z "$_cdorpanic_dir" ] || [ "$_cdorpanic_dir" = ' ' ] || [ "$_cdorpanic_dir" = '*' ]; then
+    Panic "illegal directory name: '$_cdorpanic_dir'"
   fi
-  PanicIfNotDir "$1"
-  cd "$1" || Panic "failed to ${_NC_}cd $1"
+  PanicIfNotDir "$_cdorpanic_dir"
+  cd "$1" || Panic "failed to ${_NC_}cd $_cdorpanic_dir"
 }
 export CdOrPanic
 readonly CdOrPanic
@@ -3733,14 +3765,14 @@ readonly SignCertByCA
 # 基于指定私钥，创建自签名证书（支持 IP 和域名）
 # E.g., SignLeafCert 'x.x' '/etc/cert/x.x' 'DNS:x.x,DNS:*.x.x,IP:127.0.0.1,IP:192.168.0.100' '/CN=x.x'
 SignLeafCert(){
-  Usage $# 1 7 'SignLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,DNS:<*.domain>,IP:<ip>...] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  Usage $# 1 7 "SignLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,DNS:<*.domain>,IP:<ip>...] [subj=/CN=<domain>] [key_filename=$CERT_KEY_FILE] [cert_filename=$CERT_FILE] [days=$CERT_EXPIRE_DAYS]"
   _signleafcert_domain="$1"
   _signleafcert_cert_dir="${2:-"/etc/cert/$_signleafcert_domain"}"
   _signleafcert_san="${3:-"DNS:$_signleafcert_domain"}"
   _signleafcert_subj="${4:-"/CN=$_signleafcert_domain"}"
-  _signleafcert_cert_key_filename=${5:-"privkey.pem"}
-  _signleafcert_cert_filename=${6:-"cert.pem"}
-  _signleafcert_expire_days="${7:-365}"
+  _signleafcert_cert_key_filename=${5:-"$CERT_KEY_FILE"}
+  _signleafcert_cert_filename=${6:-"$CERT_FILE"}
+  _signleafcert_expire_days="${7:-"$CERT_EXPIRE_DAYS"}"
 
   _signleafcert_ckf="$_signleafcert_cert_dir/$_signleafcert_cert_key_filename"
   _signleafcert_ck="$_signleafcert_cert_dir/$_signleafcert_cert_filename"
@@ -3786,14 +3818,14 @@ readonly SignLeafCert
 
 # 生成自签名证书（支持 IP 和域名）
 GenerateLeafCert(){
-  Usage $# 1 7 'GenerateLeafCert <common_name> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  Usage $# 1 7 "GenerateLeafCert <common_name> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=$CERT_KEY_FILE] [cert_filename=$CERT_FILE] [days=$CERT_EXPIRE_DAYS]"
   _generateleafcert_cn="$1"
   _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_cn"}"
   _generateleafcert_san="${3:-"DNS:$_generateleafcert_cn"}"
   _generateleafcert_subj="${4:-"/CN=$_generateleafcert_cn"}"
-  _generateleafcert_cert_key_filename=${5:-"privkey.pem"}
-  _generateleafcert_cert_filename=${6:-"cert.pem"}
-  _generateleafcert_expire_days="${7:-365}"
+  _generateleafcert_cert_key_filename=${5:-"$CERT_KEY_FILE"}
+  _generateleafcert_cert_filename=${6:-"$CERT_FILE"}
+  _generateleafcert_expire_days="${7:-"$CERT_EXPIRE_DAYS"}"
 
   _generateleafcert_ckf="$_generateleafcert_cert_dir/$_generateleafcert_cert_key_filename"
   _generateleafcert_ck="$_generateleafcert_cert_dir/$_generateleafcert_cert_filename"

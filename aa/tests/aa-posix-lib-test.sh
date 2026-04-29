@@ -988,6 +988,8 @@ testAbsDir() {
   trap 'rm -rf "$temp"' EXIT # 临时文件，退出后自动删除
   cd "$temp"
   cd "$want" || fail 'AbsDir' "$want" ""
+
+  assert 'AbsDir /tmp/not/exists/dir/../../abc/efg' "/tmp/not/abc/efg" "$(AbsDir "/tmp/not/exists/dir/../../abc/efg")"
 }
 
 testParentDir() {
