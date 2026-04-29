@@ -54,6 +54,10 @@ k8sCreateTlsSecret(){
   local _k8s_privkey="${3:-"$CERT_KEY_FILE"}"
   local _k8s_cert="${4:-"$CERT_FILE"}"
 
+  if SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null; then
+    return 0
+  fi
+
   Info "Creating tls secret..."
   Debug "kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
   if ! SUDO kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert" >/dev/null; then

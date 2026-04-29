@@ -82,6 +82,15 @@ readonly _LIGHT_CYAN_='\033[1;96m'
 export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
 
+export HORIZONTAL_LINE
+readonly HORIZONTAL_LINE='-------------------------------------------------------------------------------------------'
+export _HORIZONTAL_LINE
+readonly _HORIZONTAL_LINE="${LF}${HORIZONTAL_LINE}"
+export HORIZONTAL_LINE_
+readonly HORIZONTAL_LINE_="${HORIZONTAL_LINE}${LF}"
+export _HORIZONTAL_LINE_
+readonly _HORIZONTAL_LINE_="${LF}${HORIZONTAL_LINE}${LF}"
+
 export CERT_KEY_FILE='privkey.pem'
 export CERT_FILE='cert.pem'
 export CERT_CSR_FILE='server.csr'
@@ -3777,11 +3786,11 @@ readonly SignLeafCert
 
 # 生成自签名证书（支持 IP 和域名）
 GenerateLeafCert(){
-  Usage $# 1 7 'GenerateLeafCert <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
-  _generateleafcert_domain="$1"
-  _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_domain"}"
-  _generateleafcert_san="${3:-"DNS:$_generateleafcert_domain"}"
-  _generateleafcert_subj="${4:-"/CN=$_generateleafcert_domain"}"
+  Usage $# 1 7 'GenerateLeafCert <common_name> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>,IP:<lan_ip>] [subj=/CN=<domain>] [key_filename=privkey.pem] [cert_filename=cert.pem] [days=365]'
+  _generateleafcert_cn="$1"
+  _generateleafcert_cert_dir="${2:-"/etc/cert/$_generateleafcert_cn"}"
+  _generateleafcert_san="${3:-"DNS:$_generateleafcert_cn"}"
+  _generateleafcert_subj="${4:-"/CN=$_generateleafcert_cn"}"
   _generateleafcert_cert_key_filename=${5:-"privkey.pem"}
   _generateleafcert_cert_filename=${6:-"cert.pem"}
   _generateleafcert_expire_days="${7:-365}"
@@ -3790,7 +3799,7 @@ GenerateLeafCert(){
   _generateleafcert_ck="$_generateleafcert_cert_dir/$_generateleafcert_cert_filename"
 
   if [ -f "$_generateleafcert_ckf" ]; then
-    SignLeafCert "$_generateleafcert_domain" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
+    SignLeafCert "$_generateleafcert_cn" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
     return $?
   fi
 
@@ -3806,7 +3815,7 @@ GenerateLeafCert(){
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
       -addext "subjectAltName=$_generateleafcert_san" >/dev/null; then
-    ErrorD "Generate $_generateleafcert_domain TLS certs failed" "生成 $_generateleafcert_domain 的TLS证书失败"
+    ErrorD "Generate $_generateleafcert_cn TLS certs failed" "生成 $_generateleafcert_cn 的TLS证书失败"
     Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
     return 1
   fi
@@ -3818,12 +3827,12 @@ GenerateLeafCert(){
   Info "Verifying leaf certificate..."
   if ! SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
     SUDO rm -rf "$_generateleafcert_cert_dir"
-    ErrorD "Verify $_generateleafcert_domain TLS certs failed" "验证 $_generateleafcert_domain 的TLS证书失败"
+    ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
     Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1
   fi
 
-  echo "$(Now)${TAB4}${_generateleafcert_domain}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
+  echo "$(Now)${TAB4}${_generateleafcert_cn}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
 }
 export GenerateLeafCert
 readonly GenerateLeafCert

@@ -723,11 +723,11 @@ readonly k3sCurl
 
 
 k3sCreateTlsSecret(){
-  Usage $# 9 10 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <domain> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE]"
+  Usage $# 9 10 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <common_name> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE]"
   _k3s_namespace="$1"
   _k3s_workdir="$2"
   _k3s_secret="$3"
-  _k3s_domain="$4"
+  _k3s_common_name="$4"
   _k3s_cert_dir="$5"
   _k3s_tls_san="$6"
   _k3s_tls_sub="$7"
@@ -738,8 +738,8 @@ k3sCreateTlsSecret(){
   k3sTryApplyGlobal "$_k3s_workdir"
   Info "cert dir: $_k3s_cert_dir"
   if [ ! -f "$_k3s_cert_dir/$_k3s_cert_filename" ]; then
-    Info "GenerateLeafCert $_k3s_domain $_k3s_cert_dir $_k3s_tls_san $_k3s_tls_sub $_k3s_privkey_filename $_k3s_cert_filename $_k3s_cert_days"
-    if ! GenerateLeafCert "$_k3s_domain" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days" >/dev/null 2>&1; then
+    Info "GenerateLeafCert $_k3s_common_name $_k3s_cert_dir $_k3s_tls_san $_k3s_tls_sub $_k3s_privkey_filename $_k3s_cert_filename $_k3s_cert_days"
+    if ! GenerateLeafCert "$_k3s_common_name" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days" >/dev/null 2>&1; then
       ErrorD "create leaf certificate failed" "创建自签名证书失败"
       return 1
     fi
@@ -755,9 +755,9 @@ k3sDeleteSecret(){
   Usage $# -eq 2 'k3sDeleteSecret <namespace> <service>'
   _k3s_ns="$1"
   _k3s_service="$2"
-  if k3s kubectl get secret "$_k3s_service" -n "$_k3s_ns" >/dev/null 2>&1; then
+  if SUDO k3s kubectl get secret "$_k3s_service" -n "$_k3s_ns" >/dev/null 2>&1; then
     Info "k3s kubectl delete secret $_k3s_service -n $_k3s_ns --ignore-not-found=true"
-    k3s kubectl delete secret "$_k3s_service" -n "$_k3s_ns" --ignore-not-found=true
+    SUDO k3s kubectl delete secret "$_k3s_service" -n "$_k3s_ns" --ignore-not-found=true
   fi
 }
 export k3sDeleteSecret

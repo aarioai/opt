@@ -23,7 +23,7 @@ chgOwner(){
 }
 
 main(){
-  if CanSudo; then
+  if  [ "$(id -u)" != '0' ] &&  command -v sudo >/dev/null 2>&1 ; then
     exec sudo "$0" "$@"       # exec 会替换当前shell进程，后续命令不再执行
   fi
 

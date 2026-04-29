@@ -200,8 +200,6 @@ parseSetYaml(){
   g_set_name="${kind}/${name}"
 }
 
-
-
 parseUpYaml(){
   Usage $# -le 2 'parseUpYaml [-optional] [-init]'
   local optional=''
@@ -292,67 +290,10 @@ purge(){
   k3sPurge "$g_workdir" "$g_namespace" "$g_set_name" "$g_selector"
 }
 
-upTlsSecrets(){
-  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
-  yq -r '.tls[] | @base64' "$g_up_yaml" | while read -r tls_b64; do
-    tls=$(echo "$tls_b64" | base64 -d)
-    secret=$(decodeYq "$tls" '.secretName')
-    declare first_host=''
-    declare default_san=''
-    # host=xx.xx.xx 不存在特殊字符和换行符，不需要base64
-    while IFS= read -r host; do
-      if [ -z "$first_host" ]; then first_host="$host"; fi
-      if [ -n "$default_san" ]; then default_san="${default_san},"; fi
-
-      if IsDomain "$host"; then
-        default_san="${default_san}DNS:${host}"
-      elif IsIP "$host"; then
-        default_san="${default_san}IP:${host}"
-      else
-        Panic "Invalid host: $host"
-      fi
-    done <<< "$(echo "$tls" | yq -r '.hosts[]')"
-
-    if [ -z "$first_host" ]; then
-      Panic "Missing config tls[].hosts"
-    fi
-    local domain
-    local cert_dir
-    local san
-    local subj
-    local privkey_name
-    local cert_name
-    local expire_days
-    domain=$(decodeYqWithDefault "$tls" '.domain' "$first_host")
-    cert_dir=$(decodeYqWithDefault "$tls" '.certDir' "")
-    san=$(decodeYqWithDefault "$tls" '.subjectAltName' "$default_san")
-    subj=$(decodeYqWithDefault "$tls" '.subj' "/CN=${domain}")
-    privkey_name=$(decodeYqWithDefault "$tls" '.privkeyFile' "$CERT_KEY_FILE")
-    cert_name=$(decodeYqWithDefault "$tls" '.certFile' "$CERT_FILE")
-    expire_days=$(decodeYqWithDefault "$tls" '.expireDays' "$CERT_EXPIRE_DAYS")
-
-    if [ -z "$cert_dir" ]; then
-      cert_dir=$(AbsDir "${g_workdir}/../../aa/cert")
-      if [ ! -d "$cert_dir" ]; then
-        cert_dir="/etc/cert"
-      fi
-      cert_dir="$cert_dir/$domain"
-      mkdir -p "$cert_dir"
-      Info "cert dir:${cert_dir}"
-    fi
-
-    k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$domain" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days"
-
-    Notice "$san"
-  done
-}
 
 up(){
   parseUpYaml -init
-  tls=$(valueOfWithDefault '.tls' '')
-  if [ -n "$tls" ]; then
-    upTlsSecrets
-  fi
+  tlsUp
 
   k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
 }
@@ -376,6 +317,7 @@ status(){
   k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
 }
 
+
 testRun(){
   Usage $# -eq 2 "$g_fn test <image> <interact>"
   local image="$1"
@@ -383,6 +325,102 @@ testRun(){
 
   parseUpYaml -optional
   k3sTestRun "$image" "$interact" "$g_namespace" "$g_ns_cmd"
+}
+
+tlsDown(){
+  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
+  yq -r '.tls[] | @base64' "$g_up_yaml" 2>/dev/null | while read -r tls_b64; do
+    [ -z "$tls_b64" ] && continue
+    tls=$(echo "$tls_b64" | base64 -d)
+    secret=$(decodeYq "$tls" '.secretName')
+    k3sDeleteSecret "$g_namespace" "$secret"
+  done
+}
+
+tlsUp(){
+  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
+  yq -r '.tls[] | @base64' "$g_up_yaml"  2>/dev/null | while read -r tls_b64; do
+    [ -z "$tls_b64" ] && continue
+
+    tls=$(echo "$tls_b64" | base64 -d)
+    secret=$(decodeYq "$tls" '.secretName')
+    declare first_host=''
+    declare default_san=''
+    # host=xx.xx.xx 不存在特殊字符和换行符，不需要base64
+    while IFS= read -r host; do
+      if [ -z "$first_host" ]; then first_host="$host"; fi
+      if [ -n "$default_san" ]; then default_san="${default_san},"; fi
+
+      if IsDomain "$host"; then
+        default_san="${default_san}DNS:${host}"
+      elif IsIP "$host"; then
+        default_san="${default_san}IP:${host}"
+      else
+        Panic "Invalid host: $host"
+      fi
+    done <<< "$(echo "$tls" | yq -r '.hosts[]')"
+
+    if [ -z "$first_host" ]; then
+      Panic "Missing config tls[].hosts"
+    fi
+
+    local create_nx
+    local common_name
+    local cert_dir
+    local san
+    local subj
+    local privkey_name
+    local cert_name
+    local expire_days
+    create_nx=$(decodeYqWithDefault "$tls" '.createIfNotExists' 'false')
+    common_name=$(decodeYqWithDefault "$tls" '.commonName' "$first_host")
+    cert_dir=$(decodeYqWithDefault "$tls" '.certDir' "")
+    san=$(decodeYqWithDefault "$tls" '.subjectAltName' "$default_san")
+    subj=$(decodeYqWithDefault "$tls" '.subj' "/CN=${common_name}")
+    privkey_name=$(decodeYqWithDefault "$tls" '.privkeyFile' "$CERT_KEY_FILE")
+    cert_name=$(decodeYqWithDefault "$tls" '.certFile' "$CERT_FILE")
+    expire_days=$(decodeYqWithDefault "$tls" '.expireDays' "$CERT_EXPIRE_DAYS")
+
+    if [ -z "$cert_dir" ]; then
+      cert_dir=$(AbsDir "${g_workdir}/../../aa/cert")
+      if [ ! -d "$cert_dir" ]; then
+        cert_dir="/etc/cert"
+      fi
+      cert_dir="$cert_dir/$common_name"
+      mkdir -p "$cert_dir"
+      Info "cert dir:${cert_dir}"
+    fi
+
+    if Yes "$create_nx"; then
+        k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$common_name" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days"
+    fi
+
+    Notice "$common_name => $san"
+  done
+}
+
+tlsList(){
+  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
+  yq -r '.tls[] | @base64' "$g_up_yaml" 2>/dev/null | while read -r tls_b64; do
+    [ -z "$tls_b64" ] && continue
+    tls=$(echo "$tls_b64" | base64 -d)
+    secret=$(decodeYq "$tls" '.secretName')
+    Highlight "${_HORIZONTAL_LINE_}secret: $secret${_HORIZONTAL_LINE}"
+    SUDO kubectl get secret "$secret" -n "$g_namespace" -o yaml
+  done
+}
+
+tls(){
+  Usage $# -le 1 'secret [command]'
+  local cmd="${1:-""}"
+
+  parseUpYaml
+
+  case "$cmd" in
+    down) tlsDown ;;
+    up) tlsUp ;;
+    *) tlsList ;;
+  esac
 }
 
 main(){
@@ -399,6 +437,7 @@ main(){
   case "$cmd" in
     -h|h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
+
     curl) execCurl "$@" ;;
     destroy) destroy  ;;
     down) down ;;
@@ -409,6 +448,7 @@ main(){
     up) up ;;
     upd|update) down && up ;;
     restart) restart "$@" ;;
+    tls) tls "$@" ;;
     status) status "$@" ;;
     test) testRun "$@" ;;
 
