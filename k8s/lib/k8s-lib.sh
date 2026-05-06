@@ -15,8 +15,7 @@ readonly K8S_SET_YAML='set.yaml'
 
 k8sIsWorkdir(){
   local workdir="$1"
-  # 是正确的 workdir
-  if [ -f "$workdir/service.yaml" ] || [ -f "$workdir/service.yml" ]; then
+  if [ -f "$workdir/$K8S_SET_YAML" ]; then
     return 0
   fi
   return 1
