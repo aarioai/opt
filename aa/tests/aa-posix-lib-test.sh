@@ -988,7 +988,6 @@ testAbsDir() {
   fi
 
   assert 'AbsDir /tmp/not/exists/dir/../../abc/efg' "/tmp/not/abc/efg" "$(AbsDir "/tmp/not/exists/dir/../../abc/efg")"
-  rm -rf "$temp"
 }
 
 testParentDir() {
@@ -1022,7 +1021,7 @@ testAbsPath() {
   g_temp=$(mktemp -d) || return 1
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
-  cd "$temp"
+  cd "$g_temp"
   echo "A" > "a.txt"
   dir="${g_temp}/test/hello"
   mkdir -p "${dir}"
@@ -1237,7 +1236,7 @@ testGenerateRSAKeys() {
   g_temp=$(mktemp -d) || return 1
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
-  GenerateRSAKeys 'stream' "$(whoami)" "$temp" "A$prefix-" 512
+  GenerateRSAKeys 'stream' "$(whoami)" "$g_temp" "A$prefix-" 512
   f="${g_temp}/A${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
     Panic '%s\n' "GenerateRSAKeys stream failed"
@@ -1253,7 +1252,7 @@ testGenerateRSAKeys() {
   g_temp=$(mktemp -d) || return 1
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
-  GenerateRSAKeys 'full' "$(whoami)" "$temp" "B$prefix-" 512
+  GenerateRSAKeys 'full' "$(whoami)" "$g_temp" "B$prefix-" 512
   f="${g_temp}/B${prefix}"
   if [ ! -s "${f}-512.priv.der" ] || [ ! -s "${f}-512.pub.der.b64" ]; then
     Panic "GenerateRSAKeys full failed"

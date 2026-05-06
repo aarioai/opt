@@ -1108,7 +1108,7 @@ IsDomain() {
   IsIP "$_isdomain" && return 1
 
   case "$_isdomain" in
-    ""|*[!a-zA-Z0-9.-]*) return 1 ;;  # 包含非法字符
+    ""|*[!a-zA-Z0-9.-]*) return 1 ;;   # include invalid character
     *..*) return 1 ;;                  # repeat 2 dots
     .*) return 1 ;;                    # start with a dot
     *.) return 1 ;;                    # end with a dot
