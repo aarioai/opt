@@ -21,8 +21,6 @@ readonly dictTesting
 
 Lowlight "${dictTesting} <${lib}>"
 
-solo=0
-
 testsFile(){
   name="$1"
   if [ -f "./$name" ]; then
@@ -37,7 +35,13 @@ testsFile(){
 }
 
 testing(){
-  if [ "$QUITE_LOGS" -eq 0 ]; then printf "${_LIGHT_CYAN_}>> ${dictTesting} %s${_NC_}\n" "$*"; fi
+  if [ "$QUITE_LOGS" -eq 0 ]; then
+    if InContainer; then
+      printf ">> ${dictTesting} %s\n" "$*"
+    else
+      printf "${_LIGHT_CYAN_}>> ${dictTesting} %s${_NC_}\n" "$*"
+    fi
+  fi
   _saveToLogFile "" "$*"
 }
 
