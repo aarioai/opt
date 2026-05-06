@@ -18,6 +18,7 @@ set -eu
 #   本身shell脚本就很小，因此不要过度优化通用包，这里只保留少量全局变量
 
 # mktemp 依赖 $TMPDIR 文件夹
+export INTERACTABLE="${INTERACTABLE:-1}"
 export TMPDIR="${TMPDIR:-/tmp}"
 export QUITE_LOGS="${QUITE_LOGS:-0}"
 export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
@@ -102,6 +103,8 @@ readonly _SHORT_SENTINEL_TOKEN_="  [>)@}<[(:{  "   # 必须没有出现在 _SENT
 export _SENTINEL_TOKEN_         # see DynamicSentinelToken()
 readonly _SENTINEL_TOKEN_="${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}"  # 正常内容永远不会存在的安全字符串，为了不影响sed，不要存在 / 和 #
 
+
+
 Yes(){
   _yes="${1:-}"
   case $_yes in
@@ -111,8 +114,6 @@ Yes(){
 }
 export Yes
 readonly Yes
-
-
 
 DetectPkgManager(){
   if command -v apk >/dev/null 2>&1; then
@@ -138,11 +139,69 @@ DetectPkgManager(){
 export DetectPkgManager
 readonly DetectPkgManager
 
+InContainer(){
+  # kubernetes pod
+  if [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+    return 0
+  fi
+
+  # docker container
+  if [ -f /.dockerenv ]; then
+    return 0
+  fi
+
+  if [ -f /proc/1/cgroup ]; then
+    cgroup_content=$(cat /proc/1/cgroup 2>/dev/null)
+    case "$cgroup_content" in
+      *docker*|*kubepods*|*containerd*)
+        return 0
+        ;;
+    esac
+  fi
+
+  return 1
+}
+export InContainer
+readonly InContainer
+
+# Check current user is root
+# Example: if ! IAmRoot; then ...
+IAmRoot() {
+  # https://github.com/koalaman/shellcheck/wiki/SC2015
+  if [ "$(id -u)" != '0' ]; then
+    return 1
+  fi
+}
+export IAmRoot
+readonly IAmRoot
+
+# 不要封装 SUDO/TrySUDO 函数，因为执行 "$@" 方式会进入子shell，导致父shell丢失
+CanSudo(){
+  if ! Yes "$INTERACTABLE" || InContainer || IAmRoot || ! command -v sudo >/dev/null 2>&1; then
+    return 1
+  fi
+  return 0
+}
+export CanSudo
+readonly CanSudo
+
+export SUDO=''
+
+UpdateSUDO(){
+  if CanSudo; then
+    SUDO='sudo'
+  fi
+}
+export UpdateSUDO
+readonly UpdateSUDO
+
+
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
 _install_(){
   _install_pkg="$1"
-  _install_sudo="${2:-}"
-  _install_quite="${3:-}"
+  _install_quite="${2:-}"
+
+  UpdateSUDO
 
   # handle Install <sudo> -q <app>
   if [ "$_install_pkg" = '-q' ]; then
@@ -170,59 +229,59 @@ _install_(){
 
   case "$_install_manager" in
     'apk')
-      echo ">>> $_install_sudo apk update --no-cache $_install_quite"
+      echo ">>> $SUDO apk update --no-cache $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      SUDO apk update --no-cache $_install_quite
-      echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
+      $SUDO apk update --no-cache $_install_quite
+      echo ">>> $SUDO apk add --no-cache $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
+      $SUDO apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
       # -y auto confirm
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
-      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      echo ">>> $SUDO $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager update -y $_install_quite
-      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      $SUDO $_install_manager update -y $_install_quite
+      echo ">>> $SUDO $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
+      $SUDO $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
-      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      echo ">>> $SUDO $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager update -y $_install_quite
-      echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
+      $SUDO $_install_manager update -y $_install_quite
+      echo ">>> $SUDO $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
+      $SUDO $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
-      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
+      echo ">>> $SUDO $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager update -y $_install_quite
-      echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
+      $SUDO $_install_manager update -y $_install_quite
+      echo ">>> $SUDO $_install_manager install -y $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
+      $SUDO $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
-      echo ">>> $_install_sudo opkg update $_install_quite"
+      echo ">>> $SUDO opkg update $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo opkg update $_install_quite
-      echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
+      $SUDO opkg update $_install_quite
+      echo ">>> $SUDO opkg install $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_install_sudo opkg install $_install_quite "$_install_pkg"
+      $SUDO opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
-      echo ">>> $_install_sudo pacman -Syu --noconfirm --needed"
-      $_install_sudo pacman -Syu --noconfirm --needed
-      echo ">>> $_install_sudo pacman -S --noconfirm --needed $_install_pkg"
-      $_install_sudo pacman -S --noconfirm --needed "$_install_pkg"
+      echo ">>> $SUDO pacman -Syu --noconfirm --needed"
+      $SUDO pacman -Syu --noconfirm --needed
+      echo ">>> $SUDO pacman -S --noconfirm --needed $_install_pkg"
+      $SUDO pacman -S --noconfirm --needed "$_install_pkg"
       ;;
     'zypper')
-      echo ">>> $_install_sudo zypper --non-interactive refresh"
-      $_install_sudo zypper --non-interactive refresh
-      echo ">>> $_install_sudo zypper --non-interactive install $_install_pkg"
-      $_install_sudo zypper --non-interactive install "$_install_pkg"
+      echo ">>> $SUDO zypper --non-interactive refresh"
+      $SUDO zypper --non-interactive refresh
+      echo ">>> $SUDO zypper --non-interactive install $_install_pkg"
+      $SUDO zypper --non-interactive install "$_install_pkg"
       ;;
     *)
       echo "install $_install_pkg failed. unsupported package manager: $_install_manager ($(uname -a))"
@@ -237,11 +296,7 @@ readonly _install_
 # grep 是基础函数，必须要提前安装。安装尽可能不依赖任何其他函数
 InstallGrep(){
   if ! command -v grep >/dev/null 2>&1; then
-    _install_sudo=''
-    if CanSudo; then
-      _install_sudo='sudo'
-    fi
-    _install_ grep "$_install_sudo"
+    _install_ grep
   fi
 }
 export InstallGrep
@@ -590,7 +645,17 @@ SetLibLogFile(){
 export SetLibLogFile
 readonly SetLibLogFile
 
+SetNxLibLogFile(){
+  if [ -z "$LIB_LOG_FILE" ]; then
+    export LIB_LOG_FILE="$1"
+  fi
+}
+export SetLibLogFile
+readonly SetLibLogFile
+
+
 UnsetLibLogFile(){
+  unset LIB_LOG_FILE
   export LIB_LOG_FILE=''
 }
 export UnsetLibLogFile
@@ -609,12 +674,12 @@ _saveToLogFile(){
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
       mkdir -p "$_savetologfile_dir"
-      SUDO chmod 777 "$_savetologfile_dir"
+      $SUDO chmod 777 "$_savetologfile_dir"
     fi
 
     _log_ "" "$_BLUE_" "creating lib log file: $_savetologfile"
     touch "$_savetologfile"
-    SUDO chmod 777 "$_savetologfile"
+    $SUDO chmod 777 "$_savetologfile"
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
@@ -831,43 +896,7 @@ ConfirmD(){
 export ConfirmD
 readonly ConfirmD
 
-# Check current user is root
-# Example: if ! IAmRoot; then ...
-IAmRoot() {
-  # https://github.com/koalaman/shellcheck/wiki/SC2015
-  if [ "$(id -u)" != '0' ]; then
-    return 1
-  fi
-}
-export IAmRoot
-readonly IAmRoot
 
-CanSudo(){
-  if IAmRoot || ! command -v sudo >/dev/null 2>&1; then
-    return 1
-  fi
-}
-export CanSudo
-readonly CanSudo
-
-SUDO(){
-  if CanSudo; then
-    sudo "$@"
-  else
-    "$@"
-  fi
-}
-export SUDO
-readonly SUDO
-
-TrySUDO(){
-  if "$@" 2>/dev/null; then
-    return 0
-  fi
-  SUDO "$@"
-}
-export TrySUDO
-readonly TrySUDO
 
 # 获取CPU类型：amd 或 arm 架构
 CpuArch() {
@@ -1335,14 +1364,9 @@ readonly IncrVersion
 Install(){
   Usage $# -ge 1 'Install <app> [app]...'
 
-  _install_sudo=''
-  if CanSudo; then
-    _install_sudo='sudo'
-  fi
-
   for _install_pkg in "$@"; do
     if [ -n "$_install_pkg" ]; then
-      if ! _install_ "$_install_pkg" "$_install_sudo"; then
+      if ! _install_ "$_install_pkg"; then
         Error "install $_install_pkg failed"
         return 1
       fi
@@ -1369,36 +1393,33 @@ CleanPkgManager(){
     return 0
   fi
 
-  Info "clean package manager: $_cleanpkgmanager"
-  _cleanpkgmanager_sudo=''
-  if CanSudo; then
-    _cleanpkgmanager_sudo='sudo'
-  fi
+  UpdateSUDO
 
+  Info "clean package manager: $_cleanpkgmanager"
   case "$_cleanpkgmanager" in
     'apk')
-      echo ">>> $_cleanpkgmanager_sudo apk cache clean"
-      $_cleanpkgmanager_sudo apk cache clean
+      echo ">>> $SUDO apk cache clean"
+      $SUDO apk cache clean
       ;;
     'apt-get'|'dnf'|'yum')
-      echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
+      echo ">>> $SUDO $_cleanpkgmanager clean all -q"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
+      $SUDO $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
-      echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
+      echo ">>> $SUDO $_cleanpkgmanager clean all"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all >/dev/null
+      $SUDO $_cleanpkgmanager clean all >/dev/null
       ;;
     'opkg')
       ;;
     'pacman')
-      echo ">>> $_cleanpkgmanager_sudo pacman -Scc --noconfirm"
-      $_cleanpkgmanager_sudo pacman -Scc --noconfirm
+      echo ">>> $SUDO pacman -Scc --noconfirm"
+      $SUDO pacman -Scc --noconfirm
       ;;
     'zypper')
-      echo ">>> $_cleanpkgmanager_sudo zypper --non-interactive clean"
-      $_cleanpkgmanager_sudo zypper --non-interactive clean
+      echo ">>> $SUDO zypper --non-interactive clean"
+      $SUDO zypper --non-interactive clean
       ;;
     *)
       ErrorD "clean package manager failed. unsupported package manager: $_cleanpkgmanager" "清理包管理失败。暂不支持包管理：$_cleanpkgmanager"
@@ -1413,50 +1434,47 @@ _uninstall_(){
   Usage $# -eq 1 '_uninstall_ <app>'
   _uninstall_pkg="$1"
 
-  _uninstall_sudo=''
-  if CanSudo; then
-    _uninstall_sudo='sudo'
-  fi
+  UpdateSUDO
 
   _uninstall_manager="$(DetectPkgManager)"
 
   case "$_uninstall_manager" in
     'apk')
-      echo ">>> $_uninstall_sudo apk del --no-cache --quiet $_uninstall_pkg"
-      $_uninstall_sudo apk del --no-cache --quiet "$_uninstall_pkg"
+      echo ">>> $SUDO apk del --no-cache --quiet $_uninstall_pkg"
+      $SUDO apk del --no-cache --quiet "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'apt-get'|'dnf'|'yum')
-      echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
+      echo ">>> $SUDO $_uninstall_manager remove -y -q $_uninstall_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
-      echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
+      $SUDO $_uninstall_manager remove -y -q "$_uninstall_pkg"
+      echo ">>> $SUDO $_uninstall_manager autoremove -y -q"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager autoremove -y -q
+      $SUDO $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
-      echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
+      echo ">>> $SUDO $_uninstall_manager remove -y $_uninstall_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" >/dev/null
-      echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
+      $SUDO $_uninstall_manager remove -y "$_uninstall_pkg" >/dev/null
+      echo ">>> $SUDO $_uninstall_manager autoremove -y"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $_uninstall_sudo $_uninstall_manager autoremove -y >/dev/null
+      $SUDO $_uninstall_manager autoremove -y >/dev/null
       CleanPkgManager
       ;;
     'opkg')
-      echo ">>> $_uninstall_sudo opkg remove $_uninstall_pkg"
-      $_uninstall_sudo opkg remove "$_uninstall_pkg"
+      echo ">>> $SUDO opkg remove $_uninstall_pkg"
+      $SUDO opkg remove "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'pacman')
-      echo ">>> $_uninstall_sudo pacman -R --noconfirm --nosave $_uninstall_pkg"
-      $_uninstall_sudo pacman -R --noconfirm --nosave "$_uninstall_pkg"
+      echo ">>> $SUDO pacman -R --noconfirm --nosave $_uninstall_pkg"
+      $SUDO pacman -R --noconfirm --nosave "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'zypper')
-      echo ">>> $_uninstall_sudo zypper --non-interactive remove $_uninstall_pkg"
-      $_uninstall_sudo zypper --non-interactive remove "$_uninstall_pkg"
+      echo ">>> $SUDO zypper --non-interactive remove $_uninstall_pkg"
+      $SUDO zypper --non-interactive remove "$_uninstall_pkg"
       CleanPkgManager
       ;;
     *)
@@ -2390,7 +2408,8 @@ Slice() {
     _slice_index=$(( 0 - _slice_index ))
   fi
 
-  ReplaceSpaceToLF "$@" | while IFS= read -r _slice_seg; do
+  _slice_slices=$(ReplaceSpaceToLF "$@")
+   while IFS= read -r _slice_seg; do
     # 排除连续多个空格
     if [ -z "$_slice_seg" ]; then
       continue
@@ -2402,7 +2421,9 @@ Slice() {
       printf ' %s' "$_slice_seg"  # append a space
     fi
     _slice_i=$((_slice_i + 1)) # 内部可以使用一次外部传进来的值，并且通道内复用。但是不能再传出去了
-  done
+  done <<EOF
+$_slice_slices
+EOF
 }
 export Slice
 readonly Slice
@@ -2459,7 +2480,8 @@ Join() {
   shift
   _join_first=1
 
-  ReplaceSpaceToLF "$@" | while IFS= read -r _join_seg; do
+  _join_slice=$(ReplaceSpaceToLF "$@")
+   while IFS= read -r _join_seg; do
     # 通道可以将外界值传进来，并且期间可以改变。但是传不出去。
     # 因此 first 修改之后，通道内可以重复使用，但是通道外值不会变
     if [ "$_join_first" -eq 1 ]; then
@@ -2468,7 +2490,9 @@ Join() {
     else
       printf '%s' "${_join_delimiter}${_join_seg}"
     fi
-  done
+  done <<EOF
+$_join_slice
+EOF
 }
 export Join
 readonly Join
@@ -3089,18 +3113,26 @@ AddUserNx(){
 export AddUserNx
 readonly AddUserNx
 
-# Require: TrySUDO
 MkdirP(){
-  Usage $# 1 2 'MkdirP <dir> [mod=666]'
+  Usage $# 1 2 'MkdirP <dir> [mod=755]'
   _mkdir="$1"
-  _mkdir_mod="${2:-"666"}"
-  if [ -d "$_mkdir" ]; then return 0; fi
+  _mkdir_mod="${2:-"755"}"
+  if [ -d "$_mkdir" ]; then
+    return 0
+  fi
 
-  if ! TrySUDO mkdir -p "$_mkdir"; then
+  if mkdir -p "$_mkdir" >/dev/null 2>&1; then
+    chmod "$_mkdir_mod" "$_mkdir" 2>/dev/null && return 0
+  fi
+
+  if ! CanSudo; then
     return 1
   fi
 
-  chmod -R "$_mkdir_mod" "$_mkdir"
+  sudo mkdir -p "$_mkdir" || return 1
+  sudo chmod "$_mkdir_mod" "$_mkdir" || return 1
+
+  return 0
 }
 export MkdirP
 readonly MkdirP
@@ -3112,15 +3144,17 @@ ChownR() {
   Usage $# -ge 2 'ChownR <user> <dir> [dir...]'
   _chownr_user="$1"
   shift
-
-  ReplaceSpaceToLF "$@" | while IFS= read -r _chownr_dir; do
+  _chownr_dirs=$(ReplaceSpaceToLF "$@")
+  while IFS= read -r _chownr_dir; do
     if [ -z "$_chownr_dir" ]; then continue; fi
     # 这样修改权限比 `chown -R` 性能更好
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
       continue
     fi
-    SUDO chown -R "$_chownr_user" "$_chownr_dir"
-  done
+    $SUDO chown -R "$_chownr_user" "$_chownr_dir"
+  done <<EOF
+$_chownr_dirs
+EOF
 }
 export ChownR
 readonly ChownR
@@ -3132,13 +3166,16 @@ ChgrpR() {
   _chgrpr_group="$1"
   shift
 
-  ReplaceSpaceToLF "$@" | while IFS= read -r _chgrpr_dir; do
+  _chgrpr_dirs=$(ReplaceSpaceToLF "$@")
+   while IFS= read -r _chgrpr_dir; do
     if [ -z "$_chgrpr_dir" ]; then continue; fi
     if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
       continue
     fi
-    SUDO chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
-  done
+    $SUDO chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
+  done <<EOF
+$_chgrpr_dirs
+EOF
 }
 export ChgrpR
 readonly ChgrpR
@@ -3148,11 +3185,14 @@ ChmodOrMkdir(){
   Usage $# -ge 2 'ChmodOrMkdir <mod> <dir> [dir]...'
   _chmodormkdir_mod="$1"
   shift
-  ReplaceSpaceToLF "$@" | while IFS= read -r _chmodormkdir_dir; do
+  _chmodormkdir_dirs=$(ReplaceSpaceToLF "$@")
+  while IFS= read -r _chmodormkdir_dir; do
     if [ -z "$_chmodormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chmodormkdir_dir" ]; then MkdirP "$_chmodormkdir_dir"; fi
-    TrySUDO chmod -R "$_chmodormkdir_mod" "$_chmodormkdir_dir"
-  done
+    $SUDO chmod "$_chmodormkdir_mod" "$_chmodormkdir_dir"
+  done <<EOF
+$_chmodormkdir_dirs
+EOF
 }
 export ChmodOrMkdir
 readonly ChmodOrMkdir
@@ -3162,11 +3202,14 @@ ChmodOrCreate(){
   Usage $# -ge 2 'ChmodOrCreate <mod> <file> [file]... => ChmodOrCreate a+rw file1 file 2; ChmodOrCreate 1777 file'
   _chmodorcreate_mod="$1"
   shift
-  ReplaceSpaceToLF "$@" | while IFS= read -r _chmodorcreate_file; do
+  _chmodorcreate_dirs=$(ReplaceSpaceToLF "$@")
+  while IFS= read -r _chmodorcreate_file; do
     if [ -z "$_chmodorcreate_file" ]; then continue; fi
     if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
-    TrySUDO chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
-  done
+    $SUDO chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
+  done <<EOF
+$_chmodorcreate_dirs
+EOF
 }
 export ChmodOrCreate
 readonly ChmodOrCreate
@@ -3188,16 +3231,18 @@ ChownOrMkdir(){
 
   if [ -z "$_chownormkdir_user" ]; then PanicUsage 'ChownOrMkdir <user|user:group> <dir> [dir...]'; fi
 
-  ReplaceSpaceToLF "$@" | while IFS= read -r _chownormkdir_dir; do
+  _chownormkdir_dirs=$(ReplaceSpaceToLF "$@")
+  while IFS= read -r _chownormkdir_dir; do
     if [ -z "$_chownormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chownormkdir_dir" ]; then MkdirP "$_chownormkdir_dir"; fi
     if [ -n "$_chownormkdir_group" ]; then
-      SUDO chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
+      $SUDO chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
       continue
     fi
-
     ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
-  done
+  done <<EOF
+$_chownormkdir_dirs
+EOF
 }
 export ChownOrMkdir
 readonly ChownOrMkdir
@@ -3258,7 +3303,8 @@ CheckDirs(){
   Usage $# -ge 2 'CheckDirs <ignore_empty_dir 1|0> <dir>[<dir>...]'
   _checkdirs_ignore="$1"
   shift
-  ReplaceSpaceToLF "$@"  | while IFS= read -r _checkdirs_dir; do
+  _checkdirs=$(ReplaceSpaceToLF "$@")
+  while IFS= read -r _checkdirs_dir; do
     if [ -z "$_checkdirs_dir" ]; then
       if [ "$_checkdirs_ignore" -eq 1 ]; then
         continue
@@ -3266,7 +3312,9 @@ CheckDirs(){
       Panic "directory ${_checkdirs_dir} is not exists"
     fi
     CdOrPanic "$_checkdirs_dir"
-  done
+  done <<EOF
+$_checkdirs
+EOF
 }
 export CheckDirs
 readonly CheckDirs
@@ -3714,12 +3762,12 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "openssl genrsa -out $_signcertbyca_ckf 2048"
-      SUDO openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
-      TrySUDO chmod 600 "$_signcertbyca_ckf"
+      $SUDO openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
+      $SUDO chmod 600 "$_signcertbyca_ckf"
     fi
 
     Info "Generating CSR.."
-    if ! SUDO openssl req -new            \
+    if ! $SUDO openssl req -new            \
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
@@ -3734,7 +3782,7 @@ SignCertByCA(){
   # openssl x509 签发已有的证书（基于CA或private key）
   Info "Signing certificate with CA..."
 
-  if ! SUDO openssl x509 -req             \
+  if ! $SUDO openssl x509 -req             \
       -in "$_signcertbyca_server_csr"     \
       -CA "$_signcertbyca_ca_cert_file"   \
       -CAkey "$_signcertbyca_ca_key_file" \
@@ -3750,14 +3798,14 @@ SignCertByCA(){
   ChmodOrCreate 666 "$_signcertbyca_out"
   cat "$_signcertbyca_ck" "$_signcertbyca_ca_cert_file" > "$_signcertbyca_out"
 
-  TrySUDO chmod 600 "$_signcertbyca_ckf"
-  TrySUDO chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
+  $SUDO chmod 600 "$_signcertbyca_ckf"
+  $SUDO chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
-  if ! SUDO openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
+  if ! $SUDO openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
     Debug "openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
-    SUDO rm -rf "$_signcertbyca_cert_dir"
+    $SUDO rm -rf "$_signcertbyca_cert_dir"
     return 1
   fi
 
@@ -3793,7 +3841,7 @@ SignLeafCert(){
   fi
 
   Info "Sign leaf certificate..."
-  if ! SUDO openssl req -x509 -new  \
+  if ! $SUDO openssl req -x509 -new  \
       -key "$_signleafcert_ckf"   \
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
@@ -3804,12 +3852,12 @@ SignLeafCert(){
     return 1
   fi
 
-  SUDO chmod 600 "$_signleafcert_ckf"
-  SUDO chmod 644 "$_signleafcert_ck"
+  $SUDO chmod 600 "$_signleafcert_ckf"
+  $SUDO chmod 644 "$_signleafcert_ck"
 
   Info "Verifying leaf certificate..."
-  if ! SUDO openssl x509 -in "$_signleafcert_ck" -text -noout; then
-    SUDO rm -rf "$_signleafcert_cert_dir"
+  if ! $SUDO openssl x509 -in "$_signleafcert_ck" -text -noout; then
+    $SUDO rm -rf "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
     Debug "openssl x509 -in $_signleafcert_ck -text -noout"
     return 1
@@ -3848,7 +3896,7 @@ GenerateLeafCert(){
   mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
-  if ! SUDO openssl req -x509 -nodes -newkey rsa:2048 \
+  if ! $SUDO openssl req -x509 -nodes -newkey rsa:2048 \
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
@@ -3858,13 +3906,13 @@ GenerateLeafCert(){
     return 1
   fi
 
-  SUDO chmod 644 "$_generateleafcert_ckf"
-  SUDO chmod 644 "$_generateleafcert_ck"
+  $SUDO chmod 644 "$_generateleafcert_ckf"
+  $SUDO chmod 644 "$_generateleafcert_ck"
   ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
   Info "Verifying leaf certificate..."
-  if ! SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
-    SUDO rm -rf "$_generateleafcert_cert_dir"
+  if ! $SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+    $SUDO rm -rf "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
     Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1

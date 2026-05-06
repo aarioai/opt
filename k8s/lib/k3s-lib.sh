@@ -46,8 +46,8 @@ k3sRenewKubeconfig(){
   _k3s_user_token=$(k3s kubectl get secret "$_k3s_secret" -n "$_k3s_namespace" -o jsonpath='{.data.token}' | base64 --decode)
 
   if [ -f "$_k3s_file" ]; then
-    TrySUDO cp -f "$_k3s_file" "${_k3s_file}.bak"
-    TrySUDO rm -f "$_k3s_file"
+    $SUDO cp -f "$_k3s_file" "${_k3s_file}.bak"
+    $SUDO rm -f "$_k3s_file"
   fi
 
   cat > "$_k3s_file" << EOF
@@ -71,7 +71,7 @@ users:
   user:
     token: $_k3s_user_token
 EOF
-  TrySUDO chmod 644 "$_k3s_file"
+  $SUDO chmod 644 "$_k3s_file"
   Info "kubeconfig $_k3s_file generated"
 }
 export k8sGenerateKubeconfig
@@ -101,7 +101,8 @@ k3sPvcStatus(){
   done
 
   if [ "$ok" -eq 0 ]; then
-    SUDO k3s kubectl describe pvc "$_k3s_name" -n "$_k3s_namespace"
+    sudo k3s kubectl describe pvc "$_k3s_name" -n "$_k3s_namespace"
+    fi
     Panic "bind PVC (${_k3s_name} @${_k3s_namespace}) failed"
   fi
 }
@@ -115,13 +116,13 @@ k3sStatus(){
   local _k3s_container="$3"
 
   Heading "[SERVICE] kubectl get service -n $_k3s_namespace -l $_k3s_selector -o wide"
-  SUDO k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
+  sudo k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
 
   Heading "[POD] kubectl get pods -n $_k3s_namespace -l $_k3s_selector"
-  SUDO k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
+  sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
 
   Heading "[CONTAINER] crictl ps -a --name $_k3s_container"
-  SUDO k3s crictl ps -a --name "$_k3s_container"
+  sudo k3s crictl ps -a --name "$_k3s_container"
 }
 export k3sStatus
 readonly k3sStatus
@@ -135,26 +136,26 @@ k3sWaitReady(){
 
 #  if [ -n "$_k3s_ingress" ]; then
 #    Heading "[INGRESS] kubectl get ingressroute -A -n $_k3s_namespace"
-#    SUDO k3s kubectl get ingressroute -A -n "$_k3s_namespace"
+#    $SUDO k3s kubectl get ingressroute -A -n "$_k3s_namespace"
 #  fi
 
   Heading "[SERVICE] kubectl get service -n $_k3s_namespace -l $_k3s_selector -o wide"
-  SUDO k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
+  $SUDO k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
 
   Heading "kubectl wait --for=condition=Ready pod -n $_k3s_namespace -l $_k3s_selector --timeout=180s"
-  if ! SUDO k3s kubectl wait --for=condition=Ready pod -n "$_k3s_namespace" -l "$_k3s_selector" --timeout=180s 2>/dev/null; then
+  if ! $SUDO k3s kubectl wait --for=condition=Ready pod -n "$_k3s_namespace" -l "$_k3s_selector" --timeout=180s 2>/dev/null; then
     k3sLogs "$_k3s_namespace" "$_k3s_selector" "$_k3s_container"
     return 1
   fi
 
   Heading "[POD] kubectl get pods -n $_k3s_namespace -l $_k3s_selector"
-  SUDO k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
+  $SUDO k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
 
   Heading "[CONTAINER] crictl ps -a --name $_k3s_container"
-  SUDO k3s crictl ps -a --name "$_k3s_container"
+  $SUDO k3s crictl ps -a --name "$_k3s_container"
 
 #  Heading "[IMAGE] crictl images | grep $_k3s_image"
-#  SUDO crictl images | grep "$_k3s_image"
+#  $SUDO crictl images | grep "$_k3s_image"
 }
 export k3sWaitReady
 readonly k3sWaitReady
@@ -210,7 +211,7 @@ k3sTryApply(){
   fi
 
   Debug "kubectl apply -f $(LastN 3 '/' "$_k3s_yaml")"
-  SUDO k3s kubectl apply -f "$_k3s_yaml"
+  $SUDO k3s kubectl apply -f "$_k3s_yaml"
 }
 export k3sTryApply
 readonly k3sTryApply
@@ -237,7 +238,7 @@ k3sTryDelete(){
   fi
 
   Debug "kubectl delete -n $_k3s_namespace -f $(LastN 3 '/' "$_k3s_yaml")"
-  SUDO k3s kubectl delete -n "$_k3s_namespace" -f "$_k3s_yaml" --ignore-not-found=true
+  $SUDO k3s kubectl delete -n "$_k3s_namespace" -f "$_k3s_yaml" --ignore-not-found=true
 }
 export k3sTryDelete
 readonly k3sTryDelete
@@ -424,7 +425,7 @@ k3sDestroy(){
     return 0
   fi
   Warn "kubectl delete namespace $_k3s_namespace"
-  SUDO k3s kubectl delete namespace "$_k3s_namespace" -v=6
+  $SUDO k3s kubectl delete namespace "$_k3s_namespace" -v=6
 }
 export k3sDestroy
 readonly k3sDestroy
@@ -571,7 +572,7 @@ _k3s_rebuild(){
 
 k3sErrorLog(){
   Debug 'sudo journalctl -u k3s | grep error | tail -10'
-  SUDO journalctl -u k3s | grep error | tail -10
+  $SUDO journalctl -u k3s | grep error | tail -10
 }
 export k3sErrorLog
 readonly k3sErrorLog
@@ -585,9 +586,9 @@ k3sLogs(){
 
   if [ -z "$_k3s_id" ]; then
     Debug "kubectl logs -n $_k3s_namespace -l $_k3s_selector -f"
-    if SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector"; then
+    if $SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector"; then
       local _k3s_err
-      _k3s_err=$(SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector" 2>&1)
+      _k3s_err=$($SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector" 2>&1)
       Notice "$_k3s_err"
       if [ "$_k3s_err" != "No resources found in $_k3s_namespace namespace." ]; then
         return 0
@@ -595,10 +596,10 @@ k3sLogs(){
       k3sErrorLog
     fi
 
-    _k3s_id=$(SUDO k3s crictl ps -a --name "$_k3s_container_name" --quiet)
+    _k3s_id=$($SUDO k3s crictl ps -a --name "$_k3s_container_name" --quiet)
     if [ -n "$_k3s_id" ]; then
       Debug "crictl logs $_k3s_id (container name: $_k3s_container_name)"
-      if SUDO k3s crictl logs "$_k3s_id" 2>/dev/null; then
+      if $SUDO k3s crictl logs "$_k3s_id" 2>/dev/null; then
         return 0
       fi
     fi
@@ -611,17 +612,17 @@ k3sLogs(){
       return 1
     fi
     Debug "kubectl describe pod $_k3s_pod -n $_k3s_namespace"
-    SUDO k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace"
+    $SUDO k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace"
     local _k3s_error
-    _k3s_error="$(SUDO k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace" | grep -Ei "Error|Failed|Warning" )"
+    _k3s_error="$($SUDO k3s kubectl describe pod "$_k3s_pod" -n "$_k3s_namespace" | grep -Ei "Error|Failed|Warning" )"
     if [ -n "$_k3s_error" ]; then echo ''; Panic "${_k3s_error}"; fi
 
   elif [ "$_k3s_id" = 'pod' ]; then
     Debug "k3s kubectl describe pod -n $_k3s_namespace -l $_k3s_selector"
-    SUDO k3s kubectl describe pod -n "$_k3s_namespace" -l "$_k3s_selector"
+    $SUDO k3s kubectl describe pod -n "$_k3s_namespace" -l "$_k3s_selector"
   else
     Debug "crictl logs $_k3s_id"
-    SUDO k3s crictl logs "$_k3s_id"   # 失败容器重启，名称会变
+    $SUDO k3s crictl logs "$_k3s_id"   # 失败容器重启，名称会变
   fi
 }
 export k3sLogs
@@ -632,7 +633,7 @@ k3sRestart(){
   local _k3s_namespace="$1"
   local _k3s_serv="$2"
   Debug "kubectl rollout restart $_k3s_serv -n $_k3s_namespace"
-  SUDO k3s kubectl rollout restart "$_k3s_serv" -n "$_k3s_namespace"
+  $SUDO k3s kubectl rollout restart "$_k3s_serv" -n "$_k3s_namespace"
 }
 export k3sRestart
 readonly k3sRestart
@@ -642,15 +643,15 @@ k3sDeleteTestPod(){
   local _k3s_namespace="${1:-}"
 
   if [ -n "$_k3s_namespace" ]; then
-    if [ -n "$(SUDO k3s kubectl get pod "$K8S_TEST_POD" -n "$_k3s_namespace" --ignore-not-found -o name)" ]; then
+    if [ -n "$($SUDO k3s kubectl get pod "$K8S_TEST_POD" -n "$_k3s_namespace" --ignore-not-found -o name)" ]; then
       Debug "kubectl delete pod $K8S_TEST_POD -n $_k3s_namespace --ignore-not-found"
-      SUDO k3s kubectl delete pod "$K8S_TEST_POD" -n "$_k3s_namespace" --ignore-not-found
+      $SUDO k3s kubectl delete pod "$K8S_TEST_POD" -n "$_k3s_namespace" --ignore-not-found
     fi
   fi
 
-  if [ -n "$(SUDO k3s kubectl get pod "$K8S_TEST_POD" --ignore-not-found -o name)" ]; then
+  if [ -n "$($SUDO k3s kubectl get pod "$K8S_TEST_POD" --ignore-not-found -o name)" ]; then
     Debug "kubectl delete pod $K8S_TEST_POD --ignore-not-found"
-    SUDO k3s kubectl delete pod "$K8S_TEST_POD" --ignore-not-found
+    $SUDO k3s kubectl delete pod "$K8S_TEST_POD" --ignore-not-found
   fi
 }
 export k3sDeleteTestPod
@@ -755,9 +756,9 @@ k3sDeleteSecret(){
   Usage $# -eq 2 'k3sDeleteSecret <namespace> <service>'
   _k3s_ns="$1"
   _k3s_service="$2"
-  if SUDO k3s kubectl get secret "$_k3s_service" -n "$_k3s_ns" >/dev/null 2>&1; then
+  if $SUDO k3s kubectl get secret "$_k3s_service" -n "$_k3s_ns" >/dev/null 2>&1; then
     Debug "k3s kubectl delete secret $_k3s_service -n $_k3s_ns --ignore-not-found=true"
-    SUDO k3s kubectl delete secret "$_k3s_service" -n "$_k3s_ns" --ignore-not-found=true
+    $SUDO k3s kubectl delete secret "$_k3s_service" -n "$_k3s_ns" --ignore-not-found=true
   fi
 }
 export k3sDeleteSecret

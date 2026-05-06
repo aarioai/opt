@@ -346,6 +346,29 @@ testChgrpR() {
   return 0
 }
 
+testChownOrMkdir(){
+  testing 'ChownOrMkdir'
+  g_temp=$(mktemp -d) || return 1
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
+
+  me=$(whoami)
+  if id nobody >/dev/null 2>&1; then
+    me='nobody'
+  fi
+
+  ChownOrMkdir "$me" "$g_temp/dir1" "$g_temp/dir2"
+
+  if [ ! -d "$g_temp/dir1" ]; then
+    Panic "ChownOrMkdir $me $g_temp/dir1 $g_temp/dir2 failed: missing $g_temp/dir1"
+  fi
+
+  if [ ! -d "$g_temp/dir2" ]; then
+    Panic "ChownOrMkdir $me $g_temp/nobody $g_temp/dir2 failed: missing $g_temp/dir2"
+  fi
+  rm -rf "$g_temp"
+}
+
 testCompareVersion(){
   testing "CompareVersion"
   assert "CompareVersion 1.2.3 1.2.4" "-1" "$(CompareVersion "1.2.3" "1.2.4")"
@@ -1299,10 +1322,26 @@ testGenerateLeafCert(){
   SignLeafCert 'x.x' "$output"
 }
 
+showEnv(){
+  if InContainer; then
+    Debug "InContainer: True"
+  else
+    Debug "InContainer: False"
+  fi
+
+  if CanSudo; then
+    Debug "CanSudo: True"
+  else
+    Debug "CanSudo: False"
+  fi
+}
+
 main() {
   if [ $# -ne 1 ]; then
     HighlightD "Testing a single function, you can use: $0 [func_name]" "测试单个函数，可以使用：$0 [函数名]"
   fi
+
+  showEnv
 
   # 测试单个函数
   if [ $# -eq 1 ]; then
@@ -1312,6 +1351,7 @@ main() {
       *) "test$func"; return $? ;;
     esac
   fi
+
 
   testIsInt
   testIsPositiveInt
@@ -1338,6 +1378,8 @@ main() {
 
   testChwonR
   testChgrpR
+  testChownOrMkdir
+
   testStrRepeat
   testStrpad
   testStrpadLeft
