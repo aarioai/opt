@@ -23,12 +23,12 @@ $g_fn <command> [.]
 
 
   curl
-  down [-a]         down current (delete)
-    -a:            down with all tls secrets
+  down [-a]     down current (delete)
+    -a:         down with all tls secrets
   logs [container|pod]
   ns|nsenter
   up
-  upd|update    update current (down then up)
+  upd|update    update current (down and up)
   pull
   purge
   restart
@@ -257,8 +257,6 @@ tlsDown(){
     return
   fi
 
-
-
   g_temp_file=$(mktemp) || return 1
   trap 'rm -f "$g_temp_file" 2>/dev/null' EXIT
   trap 'rm -f "$g_temp_file" 2>/dev/null; return 1' INT TERM
@@ -268,7 +266,6 @@ tlsDown(){
   else
     yq -r '.tls[] | select(.down == true) | .secretName' "$g_up_yaml" 2>/dev/null > "$g_temp_file"
   fi
-
 
   while read -r secret; do
     [ -n "$secret" ] && k3sDeleteSecret "$g_namespace" "$secret"
