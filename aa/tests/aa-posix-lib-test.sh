@@ -36,7 +36,7 @@ testsFile(){
 
 testing(){
   if [ "$QUITE_LOGS" -eq 0 ]; then
-    if InContainer; then
+    if Yes "$AA_LOG_NO_COLOR"; then
       printf ">> ${dictTesting} %s\n" "$*"
     else
       printf "${_LIGHT_CYAN_}>> ${dictTesting} %s${_NC_}\n" "$*"
@@ -55,7 +55,11 @@ init(){
 
 
 fail() {
-  printf "${_LIGHT_RED_}[error] %s\n  want: (%s)    len:%d\n  got: (%s)    len:%d${_NC_}\n" "$1" "$2" "${#2}" "$3" "${#3}"
+  if Yes "$AA_LOG_NO_COLOR"; then
+    printf "[error] %s\n  want: (%s)    len:%d\n  got: (%s)    len:%d\n" "$1" "$2" "${#2}" "$3" "${#3}"
+  else
+    printf "${_LIGHT_RED_}[error] %s\n  want: (%s)    len:%d\n  got: (%s)    len:%d${_NC_}\n" "$1" "$2" "${#2}" "$3" "${#3}"
+  fi
   exit 1
 }
 
