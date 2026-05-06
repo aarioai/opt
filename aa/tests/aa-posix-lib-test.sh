@@ -53,7 +53,6 @@ init(){
   fi
 }
 
-
 fail() {
   if Yes "$AA_LOG_NO_COLOR"; then
     printf "[error] %s\n  want: (%s)    len:%d\n  got: (%s)    len:%d\n" "$1" "$2" "${#2}" "$3" "${#3}"
