@@ -3031,20 +3031,20 @@ AddGroupNx(){
   if command -v addgroup >/dev/null 2>&1; then
     if [ -z "$_addgroupnx_gid" ]; then
       # @warn do not quote $_addgroupnx_r
-      addgroup $_addgroupnx_r "$_addgroupnx_group"
+      $SUDO addgroup $_addgroupnx_r "$_addgroupnx_group"
     else
       # @warn do not quote $_addgroupnx_r
-      addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+      $SUDO addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
     fi
     return
   fi
 
   if [ -z "$_addgroupnx_gid" ]; then
     # @warn do not quote $_addgroupnx_r
-    groupadd $_addgroupnx_r "$_addgroupnx_group"
+    $SUDO groupadd $_addgroupnx_r "$_addgroupnx_group"
   else
     # @warn do not quote $_addgroupnx_r
-    groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+    $SUDO groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
   fi
 }
 export addGroupx
@@ -3072,20 +3072,20 @@ AddUserNx(){
     if command -v adduser >/dev/null 2>&1; then
       if [ -n "$_addusernx_group" ];then
         # @warn do not quote $_addusernx_r
-        adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+        $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
       else
         # @warn do not quote $_addusernx_r
-        adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+        $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
       fi
       return
     fi
 
     if [ -n "$_addusernx_group" ]; then
       # @warn do not quote $_addusernx_r
-      useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
+      $SUDO useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
     else
       # @warn do not quote $_addusernx_r
-      useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+      $SUDO useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
     fi
 
     return
@@ -3099,20 +3099,20 @@ AddUserNx(){
   if command -v adduser >/dev/null 2>&1; then
     if [ -n "$_addusernx_group" ];then
       # @warn do not quote $_addusernx_r
-      adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+      $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
     else
       # @warn do not quote $_addusernx_r
-      adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+      $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
     fi
     return
   fi
 
   if [ -n "$_addusernx_group" ]; then
     # @warn do not quote $_addusernx_r
-    useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
+    $SUDO useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
   else
     # @warn do not quote $_addusernx_r
-    useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+    $SUDO useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
   fi
 }
 export AddUserNx
