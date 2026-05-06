@@ -176,6 +176,14 @@ testCrossServiceSignal() {
   return 0
 }
 
+testExistsUser(){
+  testing 'ExistsUser'
+  me=$(whoami)
+  if [ -n "$me" ] && ! ExistsUser "$me"; then
+    Panic "ExistsUser failed"
+  fi
+}
+
 testIAmRoot() {
   testing 'IAmRoot'
   is_root=0
@@ -1334,6 +1342,12 @@ showEnv(){
   else
     Debug "CanSudo: False"
   fi
+
+  if ExistsUser nobdy; then
+    Debug "ExistsUser nobdy: True"
+  else
+    Debug "ExistsUser nobdy: False"
+  fi
 }
 
 main() {
@@ -1362,6 +1376,8 @@ main() {
   testMax
   testIsLF
   testCrossServiceSignal
+
+  testExistsUser
   testIAmRoot
 
   testCpuArch

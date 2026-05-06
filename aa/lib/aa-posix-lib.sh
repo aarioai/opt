@@ -164,6 +164,33 @@ InContainer(){
 export InContainer
 readonly InContainer
 
+ExistsUser(){
+  _existsuser_user="$1"
+  if [ -z "$_existsuser_user" ]; then
+    return 1
+  fi
+
+  if id "$_existsuser_user" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v getent >/dev/null 2>&1; then
+    if getent passwd "$_existsuser_user" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  if [ -f '/etc/passwd' ]; then
+    if grep -q "^${_existsuser_user}:" /etc/passwd 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+export ExistsUser
+readonly ExistsUser
+
 # Check current user is root
 # Example: if ! IAmRoot; then ...
 IAmRoot() {
@@ -534,7 +561,6 @@ _nowUsage_(){
 EOF
 }
 readonly _nowUsage_
-
 
 Now(){
   Usage $# -le 1 "$(_nowUsage_)"
@@ -2983,27 +3009,6 @@ ExistGroup(){
 export ExistGroup
 readonly ExistGroup
 
-ExistUser(){
-  Usage $# -eq 1 'ExistUser <user>'
-  _existuser_u="$1"
-  if [ -f "/etc/passwd" ]; then
-    InstallGrep
-    if ! grep -q "^${_existuser_u}:" /etc/passwd; then
-      return 1
-    fi
-    return
-  fi
-
-  if command -v getent >/dev/null 2>&1; then
-    if ! getent passwd "$_existuser_u" >/dev/null 2>&1; then
-      return 1
-    fi
-    return
-  fi
-  Panic "missing command getent or file /etc/passwd"
-}
-export ExistUser
-readonly ExistUser
 
 # Add a group if not exists
 AddGroupNx(){
@@ -3058,7 +3063,7 @@ AddUserNx(){
   _addusernx_user="$1"
   _addusernx_group="${2-}"
 
-  if ExistUser "$_addusernx_user"; then
+  if ExistsUser "$_addusernx_user"; then
     return
   fi
 
@@ -3144,6 +3149,11 @@ ChownR() {
   Usage $# -ge 2 'ChownR <user> <dir> [dir...]'
   _chownr_user="$1"
   shift
+
+  if ! ExistsUser "$_chownr_user"; then
+    PanicD "$_chownr_user is not a valid user" "$_chownr_user 不是已存在的用户"
+  fi
+
   _chownr_dirs=$(ReplaceSpaceToLF "$@")
   while IFS= read -r _chownr_dir; do
     if [ -z "$_chownr_dir" ]; then continue; fi
@@ -3230,6 +3240,9 @@ ChownOrMkdir(){
   esac
 
   if [ -z "$_chownormkdir_user" ]; then PanicUsage 'ChownOrMkdir <user|user:group> <dir> [dir...]'; fi
+  if ! ExistsUser "$_chownormkdir_user"; then
+    PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
+  fi
 
   _chownormkdir_dirs=$(ReplaceSpaceToLF "$@")
   while IFS= read -r _chownormkdir_dir; do
@@ -3259,7 +3272,7 @@ CleanOrMkdir(){
   if [ -z "$(ls -A "$_cleanormkdir" 2>/dev/null)" ]; then
     return 0
   fi
-  rm -rf "${_cleanormkdir:?}/"*
+  $SUDO rm -rf "$_cleanormkdir/"*
 }
 export CleanOrMkdir
 readonly CleanOrMkdir
