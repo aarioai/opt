@@ -101,8 +101,7 @@ k3sPvcStatus(){
   done
 
   if [ "$ok" -eq 0 ]; then
-    sudo k3s kubectl describe pvc "$_k3s_name" -n "$_k3s_namespace"
-    fi
+    $SUDO k3s kubectl describe pvc "$_k3s_name" -n "$_k3s_namespace"
     Panic "bind PVC (${_k3s_name} @${_k3s_namespace}) failed"
   fi
 }
@@ -116,13 +115,13 @@ k3sStatus(){
   local _k3s_container="$3"
 
   Heading "[SERVICE] kubectl get service -n $_k3s_namespace -l $_k3s_selector -o wide"
-  sudo k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
+  $SUDO k3s kubectl get service -n "$_k3s_namespace" -l "$_k3s_selector" -o wide
 
   Heading "[POD] kubectl get pods -n $_k3s_namespace -l $_k3s_selector"
-  sudo k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
+  $SUDO k3s kubectl get pods -n "$_k3s_namespace" -l "$_k3s_selector"
 
   Heading "[CONTAINER] crictl ps -a --name $_k3s_container"
-  sudo k3s crictl ps -a --name "$_k3s_container"
+  $SUDO k3s crictl ps -a --name "$_k3s_container"
 }
 export k3sStatus
 readonly k3sStatus
@@ -571,7 +570,7 @@ _k3s_rebuild(){
 }
 
 k3sErrorLog(){
-  Debug 'sudo journalctl -u k3s | grep error | tail -10'
+  Debug "$SUDO journalctl -u k3s | grep error | tail -10"
   $SUDO journalctl -u k3s | grep error | tail -10
 }
 export k3sErrorLog
@@ -669,7 +668,7 @@ k3sTestRun(){
     _k3s_interact=''
   fi
 
-  k3sDeleteTestPod "$$_k3s_namespace"
+  k3sDeleteTestPod "$_k3s_namespace"
 
   local _k3s_ns=''
   if [ -n "$_k3s_namespace" ]; then
