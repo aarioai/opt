@@ -1009,29 +1009,32 @@ IsOsMingw(){
 export IsOsMingw
 readonly IsOsMingw
 
-# 通过默认路由获取本机IP
 LanIP(){
   _lanip=''
-  if command -v ip >/dev/null 2>&1; then
-    # 通过默认路由获取本机 IP
-    _lanip_route=$(ip route | grep default | head -1)
-    _lanip_iface=$(echo "$_lanip_route" | grep -oP '(?<=dev\s)\S+')
-    _lanip=$(ip -4 addr show "$_lanip_iface" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
 
+  # Prefer ip command (modern OS)
+  if command -v ip >/dev/null 2>&1; then
+    # Get interface name from default route
+    _lanip_iface=$(ip route | grep 'default' | head -1 | sed -n 's/.*dev \([^ ]*\).*/\1/p')
+    if [ -n "$_lanip_iface" ]; then
+      # Get IPv4 address from interface
+      _lanip=$(ip -4 addr show "$_lanip_iface" | grep 'inet ' | head -1 | sed 's/.*inet \([0-9.]*\).*/\1/')
+    fi
+
+    # Fallback: get source IP via route lookup
     if [ -z "$_lanip" ]; then
-      # 使用默认路由获取本机IP
-      _lanip=$(ip -4 route get 1 2>/dev/null | grep -oE 'src ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | sed 's/src //')
+      _lanip=$(ip -4 route get 1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p')
     fi
   fi
 
-  # old OS
+  # Fallback to ifconfig (legacy systems)
   if [ -z "$_lanip" ] && command -v ifconfig >/dev/null 2>&1; then
-    _lanip=$(ifconfig | grep -oE 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -oE '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -1)
+    _lanip=$(ifconfig | grep 'inet ' | grep -v '127.0.0.1' | head -1 | sed 's/.*inet \([0-9.]*\).*/\1/')
   fi
 
-  # mingw64
+  # mingw64 / Windows
   if [ -z "$_lanip" ] && command -v route >/dev/null 2>&1; then
-    _lanip=$(route print | grep -m1 '0.0.0.0' | awk '{print $4}' | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}')
+    _lanip=$(route print 2>/dev/null | grep '0.0.0.0' | head -1 | awk '{print $4}' | grep -E '([0-9]{1,3}\.){3}[0-9]{1,3}')
   fi
 
   printf '%s' "$_lanip"
