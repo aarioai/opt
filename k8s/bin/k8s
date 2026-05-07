@@ -35,10 +35,12 @@ $g_fn <command> [.]
   run
   status
   tls [command]
-    all:        list all tls secrets
-    up:
+    list:       simple list all tls secrets
+    json:       list all tls secrets in json format
+    up:         up all tls secrets
     down:       down all tls secrets with config .tls[].down=true
     down -a:    down all tls secrets
+    <tls_name>: show this secret
 
 "
 
@@ -330,15 +332,14 @@ tlsUp(){
       mkdir -p "$cert_dir"
     fi
 
-    if Yes "$create_nx"; then
-        k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$common_name" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days"
-    fi
+    k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$common_name" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days" "$create_nx"
 
     Notice "$common_name => $san"
   done
 }
 
 tlsList(){
+  local format="${1:-}"
   if ! tlsConfigExists; then
     return
   fi
@@ -348,7 +349,13 @@ tlsList(){
     tls=$(echo "$tls_b64" | base64 -d)
     secret=$(decodeYq "$tls" '.secretName')
     Highlight "${_HORIZONTAL_LINE_}secret: $secret${_HORIZONTAL_LINE}"
-    $SUDO kubectl get secret "$secret" -n "$g_namespace" -o json
+
+    if [ -n "$format" ]; then
+      $SUDO kubectl get secret "$secret" -n "$g_namespace" -o "$format"
+    else
+      $SUDO kubectl get secret "$secret" -n "$g_namespace"
+    fi
+
   done
 }
 
@@ -448,9 +455,11 @@ tls(){
   parseUpYaml
 
   case "$cmd" in
+    list) tlsList ;;
+    json) tlsList "json";;
     down) tlsDown "$@";;
     up) tlsUp ;;
-    *) tlsList ;;
+    *) $SUDO kubectl get secret "$cmd" -n "$g_namespace" -o "$format" ;;
   esac
 }
 

@@ -722,7 +722,7 @@ readonly k3sCurl
 
 
 k3sCreateTlsSecret(){
-  Usage $# 9 10 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <common_name> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE]"
+  Usage $# 9 10 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <common_name> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE] [generate_leaf_cert_if_nx=0]"
   _k3s_namespace="$1"
   _k3s_workdir="$2"
   _k3s_secret="$3"
@@ -733,10 +733,16 @@ k3sCreateTlsSecret(){
   _k3s_privkey_filename="${8:-"$CERT_KEY_FILE"}"
   _k3s_cert_filename="${9:-"$CERT_FILE"}"
   _k3s_cert_days=${10:-"$CERT_CSR_FILE"}
+  _k3s_generate_leaf_cert_if_nx=${11:-0}
 
   k3sTryApplyGlobal "$_k3s_workdir"
   Info "cert dir: $_k3s_cert_dir"
   if [ ! -f "$_k3s_cert_dir/$_k3s_cert_filename" ]; then
+    if ! Yes "$_k3s_generate_leaf_cert_if_nx"; then
+      ErrorD "missing cert files in $_k3s_cert_dir" "$_k3s_cert_dir 文件夹下缺少证书文件"
+      return 1
+    fi
+
     Info "GenerateLeafCert $_k3s_common_name $_k3s_cert_dir $_k3s_tls_san $_k3s_tls_sub $_k3s_privkey_filename $_k3s_cert_filename $_k3s_cert_days"
     if ! GenerateLeafCert "$_k3s_common_name" "$_k3s_cert_dir" "$_k3s_tls_san" "$_k3s_tls_sub" "$_k3s_privkey_filename" "$_k3s_cert_filename" "$_k3s_cert_days" >/dev/null 2>&1; then
       ErrorD "create leaf certificate failed" "创建自签名证书失败"
