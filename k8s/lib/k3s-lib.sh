@@ -739,7 +739,7 @@ k3sCreateTlsSecret(){
   Info "cert dir: $_k3s_cert_dir"
   if [ ! -f "$_k3s_cert_dir/$_k3s_cert_filename" ]; then
     if ! Yes "$_k3s_generate_leaf_cert_if_nx"; then
-      ErrorD "missing cert files in $_k3s_cert_dir" "$_k3s_cert_dir 文件夹下缺少证书文件"
+      ErrorD "missing cert file $_k3s_cert_dir/$_k3s_cert_filename" "缺少证书文件 $_k3s_cert_dir/$_k3s_cert_filename"
       return 1
     fi
 

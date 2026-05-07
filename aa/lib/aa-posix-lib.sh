@@ -92,10 +92,11 @@ readonly HORIZONTAL_LINE_="${HORIZONTAL_LINE}${LF}"
 export _HORIZONTAL_LINE_
 readonly _HORIZONTAL_LINE_="${LF}${HORIZONTAL_LINE}${LF}"
 
-export CERT_KEY_FILE='tls.key'  # k8s use this
-export CERT_FILE='tls.crt'     # k8s use this
+export CERT_KEY_FILE='tls.key'        # k8s use this
+export CERT_FILE='tls.crt'            # k8s use this
+
 export CERT_CSR_FILE='server.csr'
-export CERT_FULLCHAIN_FILE='fullchain.pem'
+export CERT_FULLCHAIN_FILE='fullchain.pem'  # letsencrypt use this
 export CERT_EXPIRE_DAYS=365
 
 export _SHORT_SENTINEL_TOKEN_
