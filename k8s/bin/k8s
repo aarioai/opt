@@ -243,7 +243,8 @@ parseUpYaml(){
 
 tlsConfigExists(){
   local tls_value
-  tls_value=$(yq -e '.tls' "$g_up_yaml" >/dev/null 2>&1)
+  tls_value=$(yq -e '.tls' "$g_up_yaml" 2>/dev/null)
+  Info "$g_up_yaml"
   if [ -n "$tls_value" ] && [ "$tls_value" != 'null' ]; then
     return 0
   fi
@@ -360,7 +361,6 @@ down(){
   local all="${1:-}"
   parseUpYaml
   tlsDown "$all"
-    Notice "SX"
   k3sDown "$g_workdir"
 }
 

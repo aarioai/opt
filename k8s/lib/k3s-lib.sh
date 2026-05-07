@@ -588,7 +588,6 @@ k3sLogs(){
     if $SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector"; then
       local _k3s_err
       _k3s_err=$($SUDO k3s kubectl logs -n "$_k3s_namespace" -l "$_k3s_selector" 2>&1)
-      Notice "$_k3s_err"
       if [ "$_k3s_err" != "No resources found in $_k3s_namespace namespace." ]; then
         return 0
       fi
