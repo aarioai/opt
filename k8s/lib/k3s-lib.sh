@@ -722,7 +722,7 @@ readonly k3sCurl
 
 
 k3sCreateTlsSecret(){
-  Usage $# 9 10 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <common_name> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE] [generate_leaf_cert_if_nx=0]"
+  Usage $# 9 11 "k3sCreateTlsSecret <namespace> <dir> <secret_name> <common_name> <cert_dir> <tls_san> <tls_sub> <privkey_filename=$CERT_KEY_FILE> <cert_filename=$CERT_FILE> [cert_days=$CERT_CSR_FILE] [generate_leaf_cert_if_nx=0]"
   _k3s_namespace="$1"
   _k3s_workdir="$2"
   _k3s_secret="$3"
