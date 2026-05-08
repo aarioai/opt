@@ -2,49 +2,19 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
-
-export K8S_TEST_POD
-readonly K8S_TEST_POD='run-test'
-
-export K8S_UP_YAML
-readonly K8S_UP_YAML='up.yaml'
+if [ -x "./k8s-probe.sh" ]; then . ./k8s-probe.sh; else . /opt/k8s/lib/k8s-probe.sh; fi
 
 export K8S_SET_YAML
 readonly K8S_SET_YAML='set.yaml'
 
-k8sIsWorkdir(){
-  local workdir="$1"
-  if [ -f "$workdir/$K8S_SET_YAML" ]; then
-    return 0
-  fi
-  return 1
+export K8S_UP_YAML
+readonly K8S_UP_YAML='k8s.yaml'
+
+k8sPullImages(){
+  echo ""
 }
-export k8sIsWorkdir
-readonly k8sIsWorkdir
-
-k8sAutoPullImages(){
-  local _k8s_workdir="$1"
-  local _k8s_yaml
-
-  PanicIfNotDir "$_k8s_workdir"
-
-  while IFS= read -r -d '' _k8s_yaml; do
-    # 提取所有镜像（空格分隔）
-    _k8s_images="$(kubectl apply -f "$_k8s_yaml" --dry-run=client -o jsonpath="{..containers[*].image}" 2>/dev/null || true)"
-
-    if [ -n "$_k8s_images" ]; then
-      for _k8s_image in $_k8s_images; do
-        if [ -n "$_k8s_image" ]; then
-          Debug "nerdctl pull $_k8s_image"
-          $SUDO nerdctl pull "$_k8s_image"
-        fi
-      done
-    fi
-  done < <(find "$_k8s_workdir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "$K8S_UP_YAML" -print0 2>/dev/null)
-}
-export k8sAutoPullImages
-readonly k8sAutoPullImages
+export k8sPullImages
+readonly k8sPullImages
 
 k8sCreateTlsSecret(){
   Usage $# -eq 4 "k8sCreateTlsSecret <namespace> <name> <privkey_file=$CERT_KEY_FILE> <cert_file=$CERT_FILE>"
@@ -73,10 +43,10 @@ export k8sCreateTlsSecret
 readonly k8sCreateTlsSecret
 
 
+k8sUp(){
+  k8sProbeConfigMap
+  k8sPullImages
 
-k8sRmiNoneImages(){
-  Debug "nerdctl image prune -f"
-  $SUDO nerdctl image prune -f
 }
-export k8sRmiNoneImages
-readonly k8sRmiNoneImages
+export k8sUp
+readonly k8sUp

@@ -29,6 +29,7 @@ $g_fn <command> [.]
   ns|nsenter
   up
   upd|update    update current (down and up)
+  probe <what>
   pull
   purge
   restart
@@ -152,7 +153,7 @@ decodeYqWithDefault(){
 }
 
 setupDefault(){
-  if ! k8sIsWorkdir "$g_workdir"; then
+  if ! k8sIsChartDir "$g_workdir"; then
     return 1
   fi
   g_namespace="$(k3sDetectNamespace "$g_workdir" WITH_PANIC)"
@@ -411,9 +412,11 @@ purge(){
 
 
 up(){
-  parseUpYaml -init
-  tlsUp
-  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
+  k8sUp
+
+#  parseUpYaml -init
+#  tlsUp
+#  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
 }
 
 restart(){
@@ -482,6 +485,7 @@ main(){
     down) down "$@" ;;
     logs) logs "$@" ;;
     ns|nsenter) nsenter "$@" ;;
+    probe) k8sProbe "$@" ;;
     pull) pull "$@" ;;
     purge) purge "$@" ;;
     up) up ;;

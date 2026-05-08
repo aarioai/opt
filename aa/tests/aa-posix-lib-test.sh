@@ -106,6 +106,26 @@ testYes(){
   if ! Yes 'ENABLED'; then Panic 'ENABLED is yes'; fi
 }
 
+testUnquote(){
+  testing 'Unquote'
+  str='Hi!'
+  assert "Unquote $str" "Hi!" "$(Unquote "$str")"
+
+  str='"Hi!"'
+  assert "Unquote $str" "Hi!" "$(Unquote "$str")"
+
+  str="'Hi!'"
+  assert "Unquote $str" "Hi!" "$(Unquote "$str")"
+
+  str="\"'Hi!'"
+  assert "Unquote $str" "Hi!" "$(Unquote "$str")"
+
+  str="\"'Hi!'\""
+  assert "Unquote $str" "Hi!" "$(Unquote "$str")"
+
+  str="\"'Hi!\"'"
+  assert "Unquote $str" "Hi!\"" "$(Unquote "$str")"
+}
 
 testIsInt(){
   testing 'IsInt'
@@ -1373,7 +1393,7 @@ main() {
     esac
   fi
 
-
+  testUnquote
   testIsInt
   testIsPositiveInt
 

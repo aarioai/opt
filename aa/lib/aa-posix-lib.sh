@@ -25,22 +25,6 @@ export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
 export IN_CHINESE=0         # 如果将此设置为 -1，则强制输出英文；设为 1，强制输出中文；否则自动判断系统是否是中文
 AA_LOG_NO_COLOR="${AA_LOG_NO_COLOR:-0}"  # 是否不输出颜色， {Yes}
 
-export TRUE=1
-readonly TRUE
-
-export FALSE=0
-readonly FALSE
-
-export OPTIONAL='OPTIONAL'
-readonly OPTIONAL
-
-export REQUIRED='REQUIRED'
-readonly REQUIRED
-
-export WITH_PANIC='WITH_PANIC'
-readonly WITH_PANIC
-
-
 # 换行符
 # printf/echo 都会移除掉尾部的空行。试了很多办法，只有这样写才可以
 export LF
@@ -103,8 +87,6 @@ export _SHORT_SENTINEL_TOKEN_
 readonly _SHORT_SENTINEL_TOKEN_="  [>)@}<[(:{  "   # 必须没有出现在 _SENTINEL_TOKEN_ 里，且不易出现在正常文本中，且不存在 # 和 / 以及 \（避免替换异常）
 export _SENTINEL_TOKEN_         # see DynamicSentinelToken()
 readonly _SENTINEL_TOKEN_="${TAB}\x00~^S.e_N.t\x03I.n-E.l~\x00${TAB}"  # 正常内容永远不会存在的安全字符串，为了不影响sed，不要存在 / 和 #
-
-
 
 Yes(){
   _yes="${1:-}"
@@ -222,7 +204,6 @@ UpdateSUDO(){
 }
 export UpdateSUDO
 readonly UpdateSUDO
-
 
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
 _install_(){
@@ -530,6 +511,7 @@ EOF
 export Usage
 readonly Usage
 
+
 # Require: IsInChinese
 Dict(){
   Usage $# -eq 2 'Dict <english> <chinese>'
@@ -828,6 +810,50 @@ PanicD(){
 export PanicD
 readonly PanicD
 
+PanicIfEmpty(){
+  Usage $# 1 2 'PanicIfEmpty <value> [parameter]'
+  _panicifempty="$1"
+  _panicifempty_param="${2:-}"
+
+  if [ -n "$_panicifempty" ]; then
+    return 0
+  fi
+
+  if [ -z "$_panicifempty_param" ]; then
+      PanicD "value cannot be empty" "值不可以为空"
+  fi
+
+  PanicD "value of param $_panicifempty_param can not be empty" "参数${_panicifempty_param}的值不能为空"
+}
+export PanicIfEmpty
+readonly PanicIfEmpty
+
+PanicArg(){
+  Usage $# 2 3 'PanicArg <n> <value> [options]'
+  _panicarg_n="$1"
+  _panicarg_value="$2"
+  _panicarg_options="${3:-}"
+
+  case "$_panicarg_n" in
+    1) _panicarg_nth='1st' ;;
+    2) _panicarg_nth='2nd' ;;
+    3) _panicarg_nth='3rd' ;;
+    *) _panicarg_nth="${_panicarg_n}th"
+  esac
+
+  _panicarg_en="the ${_panicarg_nth} argument (value: ${_panicarg_value}) is wrong"
+  _panicarg_cn="第${_panicarg_n}个参数（值为：${_panicarg_value}）错误"
+
+  if [ -n "$_panicarg_options" ]; then
+    _panicarg_en="${_panicarg_en}. should be: ${_panicarg_options}"
+    _panicarg_cn="${_panicarg_cn}。应该为：${_panicarg_options}"
+  fi
+
+  PanicD "$_panicarg_en" "$_panicarg_cn"
+}
+export PanicArg
+readonly PanicArg
+
 Verbose(){
   Usage $# -eq 2 'Verbose <-v or --verbose or ""> <info>'
   _verbose="$1"
@@ -839,6 +865,30 @@ Verbose(){
 }
 export Verbose
 readonly Verbose
+
+Unquote(){
+  Usage $# 1 2 'Unquote <string> [quote='\''"]'
+  _unquote="$1"
+  _unquote_quote="${2:-"'\""}"
+  _unquote_single=1
+  _unquote_double=1
+  case "$_unquote_quote" in
+    \') _unquote_double=0 ;;
+    \") _unquote_single=0 ;;
+  esac
+  if [ "$_unquote_double" -eq 1 ]; then
+    _unquote="${_unquote#\"}"
+    _unquote="${_unquote%\"}"
+  fi
+  if [ "$_unquote_single" -eq 1 ]; then
+    _unquote="${_unquote#\'}"
+    _unquote="${_unquote%\'}"
+  fi
+  printf '%s' "$_unquote"
+}
+export Unquote
+readonly Unquote
+
 
 IsInt(){
   Usage $# 1 2 'if ! IsInt <string> [enable_negative={Yes}]; then ... fi'
@@ -2911,6 +2961,8 @@ AbsDir() {
   # shellcheck disable=SC2016
   Usage $# -eq 1 'AbsDir <path> => bash: AbsDir "${BASH_SOURCE[0]}"; posix: AbsDir "$0"'
   _absdir="$1"
+  PanicIfEmpty "$_absdir" 'AbsDir <path>'
+
   if [ -f "$_absdir" ]; then
     _absdir=$(dirname "$_absdir")
   fi
@@ -2973,15 +3025,20 @@ readonly ParentDir
 
 # Require: FirstChar, AbsDir
 AbsPath(){
-  # shellcheck disable=SC2016
-  Usage $# -le 1 'AbsPath [path=$0]'
-  _fullpath_file=${1:-"$0"}
+  Usage $# -eq 1 'AbsPath <path>'
+  _fullpath_file="$1"
+  PanicIfEmpty "$_fullpath_file" "AbsPath <path>"
   if [ "$(FirstChar "$_fullpath_file")" = '/' ]; then
     printf '%s' "$_fullpath_file"
-    return
+    return 0
   fi
   _fullpath_dir=$(AbsDir "$_fullpath_file")
   _fullpath_filename=$(basename "$_fullpath_file")
+  if [ -z "$_fullpath_filename" ] || [ "$_fullpath_filename" = '.' ]; then
+    printf '%s' "$_fullpath_dir"
+    return 0
+  fi
+
   printf '%s/%s' "$_fullpath_dir" "$_fullpath_filename"
 }
 export AbsPath

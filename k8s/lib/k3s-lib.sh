@@ -7,6 +7,28 @@ if [ -x "./k8s-lib.sh" ]; then . ./k8s-lib.sh; else . /opt/k8s/lib/k8s-lib.sh; f
 export REGISTRIES_YAML
 readonly REGISTRIES_YAML='/etc/rancher/k3s/registries.yaml'
 
+k8sAutoPullImages(){
+  local _k8s_workdir="$1"
+  local _k8s_yaml
+
+  PanicIfNotDir "$_k8s_workdir"
+
+  while IFS= read -r -d '' _k8s_yaml; do
+    local _k8s_images
+    _k8s_images="$(kubectl apply -f "$_k8s_yaml" --dry-run=client -o jsonpath="{..containers[*].image}" 2>/dev/null || true)"
+
+    if [ -n "$_k8s_images" ]; then
+      for _k8s_image in $_k8s_images; do
+        if [ -n "$_k8s_image" ]; then
+          Debug "nerdctl pull $_k8s_image"
+          $SUDO nerdctl pull "$_k8s_image"
+        fi
+      done
+    fi
+  done < <(find "$_k8s_workdir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "$K8S_UP_YAML" -print0 2>/dev/null)
+}
+
+
 # 获取本机服务，如 https://127.0.0.1:6443
 k3sClusterServe(){
   k3s kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
@@ -496,7 +518,7 @@ k3sDetectNamespace(){
     fi
   done
 
-  if [ "$_k3s_with_panic" = "WITH_PANIC" ] || [ "$_k3s_with_panic" = "$WITH_PANIC" ]; then
+  if [ "$_k3s_with_panic" = WITH_PANIC ]; then
     PanicD "No namespace detected. No namespace.yaml or global.yaml found in nearby $_k3s_workdir."   \
             "没有检测到 namespace。没有检测到${_k3s_workdir}相近目录的namespace.yaml 或 global.yaml"
   fi
