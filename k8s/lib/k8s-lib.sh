@@ -10,43 +10,301 @@ readonly K8S_SET_YAML='set.yaml'
 export K8S_UP_YAML
 readonly K8S_UP_YAML='k8s.yaml'
 
-k8sPullImages(){
-  echo ""
+k8sPullProbedImages(){
+  Usage $# -eq 1 'k8sPullProbedImages <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_values
+  _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
+
+  local _k8s_image
+  while IFS= read -r _k8s_image; do
+    [ -n "$_k8s_image" ] || continue
+    Debug "nerdctl pull $_k8s_image"
+    $SUDO nerdctl pull "$_k8s_image"
+  done <<< "$(k8sProbeImages "$_k8s_values")${LF}"
 }
-export k8sPullImages
-readonly k8sPullImages
-
-k8sCreateTlsSecret(){
-  Usage $# -eq 4 "k8sCreateTlsSecret <namespace> <name> <privkey_file=$CERT_KEY_FILE> <cert_file=$CERT_FILE>"
-  local _k8s_namespace="$1"
-  local _k8s_service="$2"
-  local _k8s_privkey="${3:-"$CERT_KEY_FILE"}"
-  local _k8s_cert="${4:-"$CERT_FILE"}"
-
-  if $SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null 2>&1; then
-    return 0
-  fi
-
-  Info "Creating tls secret..."
-  Debug "kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
-  if ! $SUDO kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert" >/dev/null; then
-    PanicD "create tls secret failed" "创建tls secret失败"
-  fi
-
-  Info "Verifying tls secret..."
-  Debug "kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
-  if ! $SUDO kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null; then
-    PanicD "Verify kubectl secret failed" "验证 kubectl secret 失败"
-  fi
-}
-export k8sCreateTlsSecret
-readonly k8sCreateTlsSecret
-
+export k8sPullProbedImages
+readonly k8sPullProbedImages
 
 k8sUp(){
-  k8sProbeConfigMap
-  k8sPullImages
+  Usage $# -ge 1 'k8sUp <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
 
+  local _k8s_prefix
+  _k8s_prefix=$(k8sProbeNamespacePrefix "$_k8s_workdir" WITH_CACHE)
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+
+  k8sProbeConfigMap "$_k8s_workdir"
+  k8sPullProbedImages "$_k8s_workdir"
+
+  local _k8s_helm_file="${_k8s_workdir}/values-${_k8s_prefix}.yaml"
+  if [ ! -f "$_k8s_helm_file" ]; then
+    _k8s_helm_file="${_k8s_workdir}/values.yaml"
+  fi
+  PanicIfNotFile "$_k8s_helm_file"
+  Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
+  helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
+
+  k8sClearWorkDir "$_k8s_workdir"
+
+  local _k8s_selector
+  _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+  local _k8s_container
+  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
+
+  local _k8s_pvcs
+  _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
+
+  k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_pvcs[@]}"
 }
 export k8sUp
 readonly k8sUp
+
+k8sDown(){
+  Usage $# 1 2 'k8sDown <workdir> [-a|pvc|tls]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_down_pvc=''
+  local _k8s_down_tls=''
+  for _k8s_down_arg in "$@"; do
+    case "$_k8s_down_arg" in
+      -a|all) _k8s_down_pvc='1'; _k8s_down_tls='-a' ;;
+      pvc) _k8s_down_pvc='1' ;;
+      tls) _k8s_down_tls='-a' ;;
+    esac
+  done
+
+  k8sProbeConfigMap "$_k8s_workdir"
+
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+
+  if helm status "$_k8s_chart_name" -n "$_k8s_namespace" >/dev/null 2>&1; then
+    Debug "helm uninstall $_k8s_chart_name -n $_k8s_namespace"
+    helm uninstall "$_k8s_chart_name" -n "$_k8s_namespace"
+  fi
+
+  k8sClearWorkDir "$_k8s_workdir"
+
+  k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
+
+  local _k8s_has_pvc=0
+  if kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
+  then
+    _k8s_has_pvc=1
+  else
+    return 0
+  fi
+
+  if [ -z "$_k8s_down_pvc" ]; then
+    Notice "$_k8s_chart_name pvc is not deleted"
+    return 0
+  fi
+
+  Notice "kubectl delete pvc -n $_k8s_namespace -l app=$_k8s_chart_name"
+  kubectl delete pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name"
+}
+export k8sDown
+readonly k8sDown
+
+k8sDownTLS(){
+  Usage $# 1 2 'k8sDownTLS <workdir> [-a]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_down_all="${2:-}"
+
+  local _k8s_values
+  _k8s_values=$(k8sProbeValues "$_k8s_workdir")
+  if ! k8sValuesExistsTLS "$_k8s_values"; then
+    return
+  fi
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+
+
+  local _k8s_tls_cns
+  if [ "$_k8s_down_all" = '-a' ]; then
+    _k8s_tls_cns=$(echo "$_k8s_values" | yq -r ".${K8S_TLS_TAG}[] | .${K8S_TLS_CN_TAG}")
+  else
+    _k8s_tls_cns=$(echo "$_k8s_values" | yq -r ".${K8S_TLS_TAG}[] | select(.${K8S_TLS_DOWN_TAG} == true) | .${K8S_TLS_CN_TAG}")
+  fi
+
+  while IFS= read -r _k8s_tls_cn; do
+    [ -z "$_k8s_tls_cn" ] && continue
+
+    local _k8s_secret
+    _k8s_secret=$(k8sDefaultTlsSecretName "$_k8s_tls_cn")
+    k8sDeleteSecret "$_k8s_namespace" "$_k8s_secret"
+  done <<EOF
+$_k8s_tls_cns
+EOF
+}
+export k8sDownTLS
+readonly k8sDownTLS
+
+k8sUpTLS(){
+  Usage $# -eq 1 'k8sUpTLS <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+
+  local _k8s_values
+  _k8s_values=$(k8sProbeValues "$_k8s_workdir")
+  if ! k8sValuesExistsTLS "$_k8s_values"; then
+    return
+  fi
+
+  # {} and [] break yq's JSON conversion. Use base64 to encode them.
+  local _k8s_tls_block
+  _k8s_tls_block=$(printf '%s\n' "$_k8s_values" | yq -r ".${K8S_TLS_TAG} // [] | .[] | tojson | @base64" 2>/dev/null)
+  local _k8s_tls_b64
+  while IFS= read -r _k8s_tls_b64; do
+    [ -z "$_k8s_tls_b64" ] && continue
+    local _k8s_tls
+    _k8s_tls=$(echo "$_k8s_tls_b64" | base64 -d)
+    local _k8s_tls_cn
+    _k8s_tls_cn=$(YqGet ".${K8S_TLS_CN_TAG}" -s  "$_k8s_tls" WITH_PANIC)
+
+    local _k8s_secret
+    _k8s_secret=$(k8sDefaultTlsSecretName "$_k8s_tls_cn")
+
+    # Get cert
+    local _k8s_tls_create_nx
+    local _k8s_tls_cert_base
+    local _k8s_tls_cert_dir
+    local _k8s_tls_expire_days
+    local _k8s_tls_cert_file
+    local _k8s_tls_key_file
+    if YqHas "$K8S_TLS_CERT_TAG" -s "$_k8s_tls"; then
+      _k8s_tls_create_nx=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CREAT_NX_TAG}" -s "$_k8s_tls" true)
+      _k8s_tls_cert_base=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_BASE_TAG}" -s "$_k8s_tls")
+      _k8s_tls_cert_dir=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_DIR_TAG}" -s "$_k8s_tls")
+      _k8s_tls_expire_days=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_EXPIRE_DAYS_TAG}" -s "$_k8s_tls" "$CERT_EXPIRE_DAYS")
+      _k8s_tls_cert_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_FILE_TAG}" -s "$_k8s_tls" "$CERT_FILE")
+      _k8s_tls_key_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_KEY_TAG}" -s "$_k8s_tls" "$CERT_KEY_FILE")
+    fi
+
+    if [ -z "$_k8s_tls_cert_dir" ]; then
+      _k8s_tls_cert_dir=$(k8sFindCertDir "$_k8s_workdir" "$_k8s_tls_cn" "$_k8s_tls_cert_base" "$_k8s_tls_cert_file")
+    fi
+
+    local _k8s_tls_down='false'
+    _k8s_tls_down=$(YqGet ".${K8S_TLS_DOWN_TAG}" -s "$_k8s_tls")
+
+    local _k8s_tls_subj='false'
+    _k8s_tls_subj=$(YqGet ".${K8S_TLS_SUBJ_TAG}" -s "$_k8s_tls")
+    local _k8s_tls_san=''
+    _k8s_tls_san=$(YqGet ".${K8S_TLS_SAN_TAG}" -s "$_k8s_tls")
+
+    if [ -z "$_k8s_tls_san" ]; then
+      _k8s_tls_hosts=()
+      if YqIsNotEmptyArray 'hosts' -s "$_k8s_tls"; then
+          while IFS= read -r _k8s_tls_host; do
+            [ -z "$_k8s_tls_host" ] && continue
+            _k8s_tls_hosts+=("$_k8s_tls_host")
+          done < <(echo "$_k8s_tls" | yq -r '.hosts[]' 2>/dev/null)
+      fi
+      if [ ${#_k8s_tls_hosts[@]} -eq 0 ]; then
+          _k8s_tls_hosts=("$_k8s_tls_cn")
+      fi
+      _k8s_tls_san=$(FormatSubjectAltName "${_k8s_tls_hosts[@]}")
+    fi
+
+    local _k8s_tls_key_path="$_k8s_tls_cert_dir/$_k8s_tls_key_file"
+    local _k8s_tls_cert_path="$_k8s_tls_cert_dir/$_k8s_tls_cert_file"
+
+    # Handle cert file
+    if [ ! -f "$_k8s_tls_key_path" ] || [ ! -f "$_k8s_tls_cert_path" ]; then
+      if ! Yes "$_k8s_tls_create_nx"; then
+        ErrorD "missing $_k8s_tls_key_file or $_k8s_tls_cert_file in cert dir $_k8s_tls_cert_dir" \
+               "$_k8s_tls_cert_dir 文件夹缺少证书文件${_k8s_tls_key_file}或${_k8s_tls_cert_file}"
+        return 1
+      fi
+
+      Info "GenerateLeafCert $_k8s_tls_cn $_k8s_tls_cert_dir $_k8s_tls_san $_k8s_tls_subj $_k8s_tls_key_file $_k8s_tls_cert_file $_k8s_tls_expire_days"
+      if ! GenerateLeafCert "$_k8s_tls_cn" "$_k8s_tls_cert_dir" "$_k8s_tls_san" "$_k8s_tls_subj" "$_k8s_tls_key_file" "$_k8s_tls_cert_file" "$_k8s_tls_expire_days" >/dev/null 2>&1; then
+        ErrorD "create leaf certificate failed" "创建自签名证书失败"
+        return 1
+      fi
+    fi
+    k8sCreateTlsSecret "$_k8s_namespace" "$_k8s_secret" "$_k8s_tls_key_path" "$_k8s_tls_cert_path"
+  done <<EOF
+$_k8s_tls_block
+EOF
+}
+export k8sUpTLS
+readonly k8sUpTLS
+
+k8sDestroyHere(){
+  Usage $# -ge 1 'k8sDestroyHere <workdir> [no_confirmation:|-y]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  k8sDestroy "$_k8s_namespace" "$@"
+}
+export k8sDestroyHere
+readonly k8sDestroyHere
+
+k8sNsenterHere(){
+  Usage $# -ge 1 'k8sNsenterHere <workdir> [command=<.nsenter>] [command args]...'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
+  local _k8s_selector
+  _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+  local _k8s_container
+  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
+
+  if [ $# -gt 0 ]; then
+    k8sNsenter "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_nsenter_cmd[@]}"
+    return $?
+  fi
+
+  local _k8s_values
+  _k8s_values=$(k8sProbeValues "$_k8s_workdir")
+  local _k8s_nsenter_cmd
+  _k8s_nsenter_cmd=$(YqGet ".${K8S_NSENTER_CMD_TAG}" -s "$_k8s_values")
+
+  # shellcheck disable=SC2086
+  k8sNsenter "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" $_k8s_nsenter_cmd
+}
+export k8sNsenterHere
+readonly k8sNsenterHere
+
+k8sRestartHere(){
+  Usage $# -ge 1 'k8sRestartHere <workdir> [no_confirmation:|-y]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  local _k8s_setname
+  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir" WITH_CACHE)
+
+  k8sRestart "$_k8s_namespace" "$_k8s_setname"
+}
+export k8sRestartHere
+readonly k8sRestartHere

@@ -13,7 +13,6 @@ set -eu
 
 # 要求兼容 Debian, Alpine, Redhat 等。
 # /bin/sh 是Unix标准默认shell，而alphin等没有默认安装bash。nginx/mysql等docker都使用 /bin/sh
-# @warn POSIX for s in "$@"; 是不会拆分空格的，需要使用兼容性更好的方法，先分割空格为换行，然后IFS读取
 # @warn POSIX 不支持local变量，变量没有作用域，都是全局变量，这里统一加 _前后缀。本页内如果互相调用，也会导致相同变量名冲突，因此必须要带函数前缀
 #   本身shell脚本就很小，因此不要过度优化通用包，这里只保留少量全局变量
 
@@ -67,14 +66,14 @@ readonly _LIGHT_CYAN_='\033[1;96m'
 export _GRAY_
 readonly _GRAY_='\033[0;90m'            # 灰
 
-export HORIZONTAL_LINE
-readonly HORIZONTAL_LINE='-------------------------------------------------------------------------------------------'
-export _HORIZONTAL_LINE
-readonly _HORIZONTAL_LINE="${LF}${HORIZONTAL_LINE}"
-export HORIZONTAL_LINE_
-readonly HORIZONTAL_LINE_="${HORIZONTAL_LINE}${LF}"
-export _HORIZONTAL_LINE_
-readonly _HORIZONTAL_LINE_="${LF}${HORIZONTAL_LINE}${LF}"
+export H_LINE
+readonly H_LINE='-------------------------------------------------------------------------------------------'
+export _H_LINE
+readonly _H_LINE="${LF}${H_LINE}"
+export H_LINE_
+readonly H_LINE_="${H_LINE}${LF}"
+export _H_LINE_
+readonly _H_LINE_="${LF}${H_LINE}${LF}"
 
 export CERT_KEY_FILE='tls.key'        # k8s use this
 export CERT_FILE='tls.crt'            # k8s use this
@@ -587,11 +586,85 @@ PrintColor(){
     printf "%s\n" "$*"
   else
     printf "${_printcolor}%s${_NC_}\n" "$*"
-
   fi
 }
 export PrintColor
 readonly PrintColor
+
+RedLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_RED_" "$_line_str"; }
+export RedLine
+readonly RedLine
+
+GreenLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_GREEN_" "$_line_str"
+}
+export GreenLine
+readonly GreenLine
+
+YellowLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_YELLOW_" "$_line_str"
+}
+export YellowLine
+readonly YellowLine
+
+BlueLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_BLUE_" "$_line_str"
+}
+export BlueLine
+readonly BlueLine
+MagentaLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_MAGENTA_" "$_line_str"
+}
+export MagentaLine
+readonly MagentaLine
+
+CyanLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_CYAN_" "$_line_str"
+}
+export CyanLine
+readonly CyanLine
+
+GrayLine(){
+  _line_format="${1:-}"
+  _line_str="$_H_LINE"
+  if [ -n "$_line_format" ] && [ "$_line_format" != '-' ]; then
+    _line_str=$(printf '%s\n' "$_line_str" | tr '-' "$_line_format")
+  fi
+  PrintColor "$_GRAY_" "$_line_str"
+}
+export GrayLine
+readonly GrayLine
 
 Lowlight(){
   if Yes "$AA_LOG_NO_COLOR"; then
@@ -1837,7 +1910,6 @@ StartWith() {
   if [ -z "$_startwith_s" ]; then return 1; fi
   shift
 
-  # | while IFS 通道不能向外面传参，而这种情形下，也不用考虑空格分割问题，可以直接使用 for in "$@"
   for _startwith_sub in "$@"; do
     if [ -n "$_startwith_sub" ]; then
       case "$_startwith_s" in
@@ -1856,7 +1928,6 @@ EndWith() {
   if [ -z "$_endwith_s" ]; then return 1; fi
   shift
 
-  # | while IFS 通道不能向外面传参，而这种情形下，也不用考虑空格分割问题，可以直接使用 for in "$@"
   for _endwith_sub in "$@"; do
     if [ -n "$_endwith_sub" ]; then
       case "$_endwith_s" in
@@ -3212,17 +3283,14 @@ ChownR() {
     PanicD "$_chownr_user is not a valid user" "$_chownr_user 不是已存在的用户"
   fi
 
-  _chownr_dirs=$(ReplaceSpaceToLF "$@")
-  while IFS= read -r _chownr_dir; do
+  for _chownr_dir in "$@"; do
     if [ -z "$_chownr_dir" ]; then continue; fi
     # 这样修改权限比 `chown -R` 性能更好
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
       continue
     fi
     $SUDO chown -R "$_chownr_user" "$_chownr_dir"
-  done <<EOF
-$_chownr_dirs
-EOF
+  done
 }
 export ChownR
 readonly ChownR
@@ -3234,16 +3302,13 @@ ChgrpR() {
   _chgrpr_group="$1"
   shift
 
-  _chgrpr_dirs=$(ReplaceSpaceToLF "$@")
-   while IFS= read -r _chgrpr_dir; do
+  for _chgrpr_dir in "$@"; do
     if [ -z "$_chgrpr_dir" ]; then continue; fi
     if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
       continue
     fi
     $SUDO chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
-  done <<EOF
-$_chgrpr_dirs
-EOF
+  done
 }
 export ChgrpR
 readonly ChgrpR
@@ -3253,14 +3318,11 @@ ChmodOrMkdir(){
   Usage $# -ge 2 'ChmodOrMkdir <mod> <dir> [dir]...'
   _chmodormkdir_mod="$1"
   shift
-  _chmodormkdir_dirs=$(ReplaceSpaceToLF "$@")
-  while IFS= read -r _chmodormkdir_dir; do
+  for _chmodormkdir_dir in "$@"; do
     if [ -z "$_chmodormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chmodormkdir_dir" ]; then MkdirP "$_chmodormkdir_dir"; fi
     $SUDO chmod "$_chmodormkdir_mod" "$_chmodormkdir_dir"
-  done <<EOF
-$_chmodormkdir_dirs
-EOF
+  done
 }
 export ChmodOrMkdir
 readonly ChmodOrMkdir
@@ -3270,14 +3332,11 @@ ChmodOrCreate(){
   Usage $# -ge 2 'ChmodOrCreate <mod> <file> [file]... => ChmodOrCreate a+rw file1 file 2; ChmodOrCreate 1777 file'
   _chmodorcreate_mod="$1"
   shift
-  _chmodorcreate_dirs=$(ReplaceSpaceToLF "$@")
-  while IFS= read -r _chmodorcreate_file; do
+  for _chmodorcreate_file in "$@"; do
     if [ -z "$_chmodorcreate_file" ]; then continue; fi
     if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
     $SUDO chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
-  done <<EOF
-$_chmodorcreate_dirs
-EOF
+  done
 }
 export ChmodOrCreate
 readonly ChmodOrCreate
@@ -3302,8 +3361,7 @@ ChownOrMkdir(){
     PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
   fi
 
-  _chownormkdir_dirs=$(ReplaceSpaceToLF "$@")
-  while IFS= read -r _chownormkdir_dir; do
+  for _chownormkdir_dir in "$@"; do
     if [ -z "$_chownormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chownormkdir_dir" ]; then MkdirP "$_chownormkdir_dir"; fi
     if [ -n "$_chownormkdir_group" ]; then
@@ -3311,9 +3369,7 @@ ChownOrMkdir(){
       continue
     fi
     ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
-  done <<EOF
-$_chownormkdir_dirs
-EOF
+  done
 }
 export ChownOrMkdir
 readonly ChownOrMkdir
@@ -3374,8 +3430,7 @@ CheckDirs(){
   Usage $# -ge 2 'CheckDirs <ignore_empty_dir 1|0> <dir>[<dir>...]'
   _checkdirs_ignore="$1"
   shift
-  _checkdirs=$(ReplaceSpaceToLF "$@")
-  while IFS= read -r _checkdirs_dir; do
+  for _checkdirs_dir in "$@"; do
     if [ -z "$_checkdirs_dir" ]; then
       if [ "$_checkdirs_ignore" -eq 1 ]; then
         continue
@@ -3383,9 +3438,7 @@ CheckDirs(){
       Panic "directory ${_checkdirs_dir} is not exists"
     fi
     CdOrPanic "$_checkdirs_dir"
-  done <<EOF
-$_checkdirs
-EOF
+  done
 }
 export CheckDirs
 readonly CheckDirs
@@ -3786,6 +3839,29 @@ GenerateRSAKeys() {
 }
 export GenerateRSAKeys
 readonly GenerateRSAKeys
+
+FormatSubjectAltName(){
+  # shellcheck disable=SC2016
+  Usage $# -ge 1 'FormatSubjectAltName [$hosts]...'
+
+  _formatsubjectaltname=''
+  for _formatsubjectaltname_host in "$@"; do
+    [ -n "$_formatsubjectaltname_host" ] || continue
+    if [ -n "$_formatsubjectaltname" ]; then
+      _formatsubjectaltname="${_formatsubjectaltname},"
+    fi
+    if IsDomain "$_formatsubjectaltname_host"; then
+      _formatsubjectaltname="${_formatsubjectaltname}DNS:${_formatsubjectaltname_host}"
+    elif IsIP "$_formatsubjectaltname_host"; then
+      _formatsubjectaltname="${_formatsubjectaltname}IP:${_formatsubjectaltname_host}"
+    else
+      PanicD "invalid host: $_formatsubjectaltname_host, support domain and ip" "非法host: $_formatsubjectaltname_host，仅支持域名和IP地址"
+    fi
+  done
+  printf '%s' "$_formatsubjectaltname"
+}
+export FormatSubjectAltName
+readonly FormatSubjectAltName
 
 # 由CA签发 fullchain.pem，CA 证书可签发子证书。自签名证书不可以签发子证书。
 # fullchain.pem 的本质是：服务器证书 + 中间证书（CA chain）拼接在一起。

@@ -1286,6 +1286,19 @@ testSetConfig() {
   assert 'SetConfig' "$want" "$got"
 }
 
+testFormatSubjectAltName(){
+  testing 'FormatSubjectAltName'
+
+  assert 'FormatSubjectAltName' "IP:127.0.0.1" "$(FormatSubjectAltName "127.0.0.1")"
+  assert 'FormatSubjectAltName' "DNS:luexu.com" "$(FormatSubjectAltName "luexu.com")"
+
+  assert 'FormatSubjectAltName' "IP:::1" "$(FormatSubjectAltName "::1")"
+  assert 'FormatSubjectAltName' "DNS:www.luexu.com" "$(FormatSubjectAltName "www.luexu.com")"
+
+  assert 'FormatSubjectAltName' "IP:::1,IP:192.168.1.100" "$(FormatSubjectAltName "::1" "192.168.1.100")"
+  assert 'FormatSubjectAltName' "IP:::1,IP:192.168.1.100,DNS:luexu.com" "$(FormatSubjectAltName "::1" "192.168.1.100" "luexu.com")"
+}
+
 testGenerateRSAKeys() {
   testing 'GenerateRSAKeys'
 
@@ -1480,6 +1493,8 @@ main() {
   testParseArrays
   testParseConfig
   testSetConfig
+
+  testFormatSubjectAltName
 
   if command -v openssl >/dev/null 2>&1; then
     testGenerateRSAKeys

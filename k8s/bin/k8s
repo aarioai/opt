@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-. /opt/k8s/lib/k3s-lib.sh
+. /opt/k8s/lib/k8s-lib.sh
 
 g_workdir=$(pwd)
 readonly g_workdir
@@ -22,19 +22,22 @@ $g_fn <command> [.]
   rename, restart, rm, rmi, save, start, stats, stop, system prune, tag, top, unpause, update, volume, wait
 
 
-  curl
+  destroy [-y]
+    -y:         no confirmation
   down [-a]     down current (delete)
     -a:         down with all tls secrets
   logs [container|pod]
   ns|nsenter
-  up
+  up [helm args]
   upd|update    update current (down and up)
+  upg|upgrade       helm upgrade
   probe <what>
   pull
   purge
   restart
   run
   status
+    status [nerdctl args]
   tls [command]
     list:       simple list all tls secrets
     json:       list all tls secrets in json format
@@ -42,7 +45,6 @@ $g_fn <command> [.]
     down:       down all tls secrets with config .tls[].down=true
     down -a:    down all tls secrets
     <tls_name>: show this secret
-
 "
 
 readonly help_detail="
@@ -93,376 +95,37 @@ $help
   wait <container>    Block until one or more containers stop, then print their exit codes.
   "
 
-declare g_namespace=''
-declare g_set_name=''
-declare g_selector=''
-declare g_container_name=''
-declare g_ns_cmd=''
-
-init(){
-  InstallOrPanic yq nerdctl >/dev/null
-
-}
-
-valueOf(){
-  Usage $# -eq 1 'valueOf <key>'
-  local key="$1"
-  local value
-  value=$(yq -r "$key" "$g_up_yaml")
-  if [ -z "$value" ] || [ "$value" = "null" ]; then
-    Panic "missing config: $key"
-  fi
-  printf '%s' "$value"
-}
-
-valueOfWithDefault(){
-  Usage $# -eq 2 'valueOfWithDefault <key> <default_value>'
-  local key="$1"
-  local default="$2"
-  local value
-  value=$(yq -r "$key" "$g_up_yaml")
-  if [ -z "$value" ] || [ "$value" = "null" ]; then
-    value="$default"
-  fi
-  printf '%s' "$value"
-}
-
-decodeYq(){
-  Usage $# -eq 2 'decodeYq <str> <key>'
-  local str="$1"
-  local key="$2"
-  local value
-  value=$(echo "$str" | yq -r "$key")
-  if [ -z "$value" ] || [ "$value" = "null" ]; then
-    Panic "missing config: $key in $str"
-  fi
-  printf '%s' "$value"
-}
-
-decodeYqWithDefault(){
-  Usage $# -eq 3 'decodeYqWithDefault <decoded> <key> <default_value>'
-  local decoded="$1"
-  local key="$2"
-  local default="$3"
-  local value
-  value=$(echo "$decoded" | yq -r "$key")
-  if [ -z "$value" ] || [ "$value" = "null" ]; then
-    value="$default"
-  fi
-  printf '%s' "$value"
-}
-
-setupDefault(){
-  if ! k8sIsChartDir "$g_workdir"; then
-    return 1
-  fi
-  g_namespace="$(k3sDetectNamespace "$g_workdir" WITH_PANIC)"
-  local name
-  name=$(basename "$g_workdir")
-  g_set_name="deployment/${name}-set"
-  g_selector="app=${name}"
-  g_container_name="aa-${name}"
-  g_ns_cmd="sh"
-  Notice "setup default: namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
-  return 0
-}
-
-initSetYaml(){
-  local set_yaml="$1"
-  # find mount dir and create it
-  while IFS= read -r volume_base64; do
-    local volume
-    volume=$(echo "$volume_base64" | base64 -d)
-    volume_type=$(decodeYqWithDefault "$volume" '.hostPath.type' '')
-    if [ "$volume_type" = 'DirectoryOrCreate' ]; then
-      volume_name=$(decodeYq "$volume" '.name')
-      volume_path=$(decodeYq "$volume" '.hostPath.path')
-      Debug "mkdir and chmod 777 $volume_name => $volume_path"
-      ChmodOrMkdir 777 "$volume_path"
-    fi
-  done < <(yq -r '.spec.template.spec.volumes[] | select(.hostPath != null) | @base64' "$set_yaml" 2>/dev/null | grep -v '^$')
-  # k3sBuild 会自动查找image，并下载
-}
-
-parseSetYaml(){
-  local with_init="${1:-}"
-  local set_yaml="$g_workdir/$K8S_SET_YAML"
-  if [ ! -f "$set_yaml" ]; then
-    return 1
-  fi
-
-  if [ "$with_init" = '-init' ]; then
-    initSetYaml "$set_yaml"
-  fi
-
-  local kind
-  kind=$(yq -r '.kind' "$set_yaml" | tr '[:upper:]' '[:lower:]')
-  if [ -z "$kind" ] || [ "$kind" = "null" ]; then
-    Panic "$set_yaml missing config: .kind"
-  fi
-
-  local name
-  name=$(yq -r '.metadata.name' "$set_yaml")
-  if [ -z "$name" ] || [ "$name" = "null" ]; then
-    Panic "$set_yaml missing config: .metadata.name"
-  fi
-
-  g_set_name="${kind}/${name}"
-}
-
-parseUpYaml(){
-  Usage $# -le 2 'parseUpYaml [-optional] [-init]'
-  local optional=''
-  local with_init=''
-
-  for arg in "$@"; do
-    case "$arg" in
-      -optional) optional='-optional' ;;
-      -init) with_init='-init' ;;
-    esac
-  done
-
-  parseSetYaml "$with_init"
-
-  if [ ! -f "$g_up_yaml" ]; then
-    if setupDefault ; then
-      return
-    fi
-
-    if [ "$optional" = '-optional' ]; then
-      return
-    fi
-    Panic "missing $g_up_yaml or it's not a valid workdir"
-  fi
-  g_namespace="$(k3sDetectNamespace "$g_workdir" WITH_PANIC)"
-  name=$(valueOfWithDefault '.name' "$(basename "$g_workdir")")
-  g_set_name=$(valueOfWithDefault '.setName' "$g_set_name")
-  g_selector=$(valueOfWithDefault '.selector' "app=${name}")
-  g_container_name=$(valueOfWithDefault '.containerName' "aa-${name}")
-  g_ns_cmd=$(valueOfWithDefault '.nsenterCommand' "sh")
-
-  Notice "namespace=>$g_namespace, setName=>$g_set_name, selector=>$g_selector, containerName=>$g_container_name"
-}
-
-tlsConfigExists(){
-  local tls_value
-  tls_value=$(yq -e '.tls' "$g_up_yaml" 2>/dev/null)
-  Info "$g_up_yaml"
-  if [ -n "$tls_value" ] && [ "$tls_value" != 'null' ]; then
-    return 0
-  fi
-  return 1
-}
-
-tlsDown(){
-  local all="${1:-}"
-  if ! tlsConfigExists; then
-    Info "exists"
-    return
-  fi
-
-  g_temp_file=$(mktemp) || return 1
-  trap 'rm -f "$g_temp_file" 2>/dev/null' EXIT
-  trap 'rm -f "$g_temp_file" 2>/dev/null; return 1' INT TERM
-
-  if [ "$all" = '-a' ]; then
-    yq -r '.tls[] | .secretName' "$g_up_yaml" 2>/dev/null > "$g_temp_file"
-  else
-    yq -r '.tls[] | select(.down == true) | .secretName' "$g_up_yaml" 2>/dev/null > "$g_temp_file"
-  fi
-
-  while read -r secret; do
-    [ -n "$secret" ] && k3sDeleteSecret "$g_namespace" "$secret"
-  done < "$g_temp_file"
-
-  rm -f "$g_temp_file"
-}
-
-tlsUp(){
-  if ! tlsConfigExists; then
-    return
-  fi
-  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
-  yq -r '.tls[] | @base64' "$g_up_yaml" | while read -r tls_b64; do
-    [ -z "$tls_b64" ] && continue
-    tls=$(echo "$tls_b64" | base64 -d)
-    secret=$(decodeYq "$tls" '.secretName')
-    declare first_host=''
-    declare default_san=''
-    # host=xx.xx.xx 不存在特殊字符和换行符，不需要base64
-    while IFS= read -r host; do
-      if [ -z "$first_host" ]; then first_host="$host"; fi
-      if [ -n "$default_san" ]; then default_san="${default_san},"; fi
-
-      if IsDomain "$host"; then
-        default_san="${default_san}DNS:${host}"
-      elif IsIP "$host"; then
-        default_san="${default_san}IP:${host}"
-      else
-        Panic "Invalid host: $host"
-      fi
-    done <<< "$(echo "$tls" | yq -r '.hosts[]')"
-
-    if [ -z "$first_host" ]; then
-      Panic "Missing config tls[].hosts"
-    fi
-
-    local create_nx
-    local common_name
-    local cert_dir
-    local san
-    local subj
-    local privkey_name
-    local cert_name
-    local expire_days
-    create_nx=$(decodeYqWithDefault "$tls" '.createIfNotExists' 'false')
-    common_name=$(decodeYqWithDefault "$tls" '.commonName' "$first_host")
-    cert_dir=$(decodeYqWithDefault "$tls" '.certDir' "")
-    san=$(decodeYqWithDefault "$tls" '.subjectAltName' "$default_san")
-    subj=$(decodeYqWithDefault "$tls" '.subj' "/CN=${common_name}")
-    privkey_name=$(decodeYqWithDefault "$tls" '.privkeyFile' "$CERT_KEY_FILE")
-    cert_name=$(decodeYqWithDefault "$tls" '.certFile' "$CERT_FILE")
-    expire_days=$(decodeYqWithDefault "$tls" '.expireDays' "$CERT_EXPIRE_DAYS")
-
-    if [ -z "$cert_dir" ]; then
-      cert_dir=$(AbsDir "${g_workdir}/../../aa/cert")
-      if [ ! -d "$cert_dir" ]; then
-        cert_dir="/etc/cert"
-      fi
-      cert_dir="$cert_dir/$common_name"
-      mkdir -p "$cert_dir"
-    fi
-
-    k3sCreateTlsSecret "$g_namespace" "$g_workdir" "$secret" "$common_name" "$cert_dir" "$san" "$subj" "$privkey_name" "$cert_name" "$expire_days" "$create_nx"
-
-    Notice "$common_name => $san"
-  done
-}
-
-tlsList(){
-  local format="${1:-}"
-  if ! tlsConfigExists; then
-    return
-  fi
-  # 转为Json以后，tls={} 存在 {}/[] 等特殊符号，因此需要base64一下
-  yq -r '.tls[] | @base64' "$g_up_yaml" 2>/dev/null | while read -r tls_b64; do
-    [ -z "$tls_b64" ] && continue
-    tls=$(echo "$tls_b64" | base64 -d)
-    secret=$(decodeYq "$tls" '.secretName')
-    Highlight "${_HORIZONTAL_LINE_}secret: $secret${_HORIZONTAL_LINE}"
-
-    if [ -n "$format" ]; then
-      $SUDO kubectl get secret "$secret" -n "$g_namespace" -o "$format"
-    else
-      $SUDO kubectl get secret "$secret" -n "$g_namespace"
-    fi
-
-  done
-}
-
-destroy(){
-  parseUpYaml
-  k3sDestroy "$g_namespace"
-}
-
-down(){
-  local all="${1:-}"
-  parseUpYaml
-  tlsDown "$all"
-  k3sDown "$g_workdir"
-}
-
-execCurl(){
-  Usage $# -ge 1 "$g_fn curl [flag] <url>"
-  parseUpYaml -optional
-  k3sCurl "$@" "$g_namespace"
-}
-
-
-# nerdctl logs 功能还不全，暂时不用支持
-logs(){
-  Usage $# -le 1 "$g_fn logs [container|pod]"
-
-  parseUpYaml
-  if [ "$#" -eq 1 ]; then
-    k3sLogs "$g_namespace" "$g_selector" "$g_container_name" "$1"
-  else
-    k3sLogs "$g_namespace" "$g_selector" "$g_container_name"
-  fi
-}
-
-nsenter(){
-  parseUpYaml
-  k3sNsenter "$g_namespace" "$g_selector" "$g_container_name" "$@"
-}
-
 pull(){
   if [ $# -gt 0 ]; then
-    nerdctl pull "$@"
+    $SUDO nerdctl pull "$@"
     return
   fi
-
-  k8sAutoPullImages "$g_workdir"
-}
-
-purge(){
-  parseUpYaml
-  k3sPurge "$g_workdir" "$g_namespace" "$g_set_name" "$g_selector"
-}
-
-
-up(){
-  k8sUp
-
-#  parseUpYaml -init
-#  tlsUp
-#  k3sUp "$g_workdir" "$g_selector" "$g_container_name" "$g_namespace"
+  k8sPullProbedImages "$g_workdir"
 }
 
 restart(){
   if [ $# -gt 0 ]; then
-    nerdctl restart "$@"
+    $SUDO nerdctl restart "$@"
     return
   fi
-  parseUpYaml
-  k3sRestart "$g_namespace" "$g_set_name"
+
+  k8sRestartHere "$g_workdir"
 }
 
 status(){
   if [ $# -gt 0 ]; then
-    nerdctl status "$@"
+    $SUDO nerdctl status "$@"
     return
   fi
-
-  parseUpYaml
-  k3sStatus "$g_namespace" "$g_selector" "$g_container_name"
+  k8sProbe status
 }
-
-
-testRun(){
-  Usage $# -eq 2 "$g_fn test <image> <interact>"
-  local image="$1"
-  local interact="$2"
-
-  parseUpYaml -optional
-  k3sTestRun "$image" "$interact" "$g_namespace" "$g_ns_cmd"
-}
-
-
 
 tls(){
-  Usage $# -le 1 'secret [command]'
   local cmd="${1:-""}"
-  shift 1
-
-  parseUpYaml
-
   case "$cmd" in
-    list) tlsList ;;
-    json) tlsList "json";;
-    down) tlsDown "$@";;
-    up) tlsUp ;;
-    *) $SUDO kubectl get secret "$cmd" -n "$g_namespace" -o "$format" ;;
+    down) shift; k8sDownTLS "$g_workdir" "$@" ;;
+    up) shift; k8sUpTLS "$g_workdir" "$@" ;;
+    *) k8sProbe tls "$@" ;;
   esac
 }
 
@@ -475,24 +138,19 @@ main(){
   local cmd="$1"
   shift
 
-  init
-
   case "$cmd" in
     -h|h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
-    curl) execCurl "$@" ;;
-    destroy) destroy  ;;
-    down) down "$@" ;;
-    logs) logs "$@" ;;
-    ns|nsenter) nsenter "$@" ;;
+    destroy) k8sDestroyHere "$g_workdir" "$@";;
+    down) k8sDown "$g_workdir"  "$@" ;;
+    logs) k8sProbeLogs "$g_workdir" "$@" ;;
+    ns|nsenter) k8sNsenterHere "$g_workdir" "$@" ;;
     probe) k8sProbe "$@" ;;
     pull) pull "$@" ;;
-    purge) purge "$@" ;;
-    up) up ;;
-    upd|update) down && up ;;
+    up) k8sUp "$g_workdir" "$@";;
+    upd|update) k8sDown "$g_workdir"  "$@" && k8sUp "$g_workdir" "$@" ;;
     restart) restart "$@" ;;
     status) status "$@" ;;
-    test) testRun "$@" ;;
     tls) tls "$@" ;;
     *) nerdctl "$cmd" "$@" ;;
   esac

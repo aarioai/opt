@@ -34,8 +34,62 @@ UpgradeYq(){
 export UpgradeYq
 readonly UpgradeYq
 
+YqIsNotEmptyArray(){
+  Usage $# -eq 3 'YqIsNotEmptyArray <key> <-f|-s> <file|str>'
+  _yqisnotemptyarray_key="${1#.}"   # trim .
+  _yqisnotemptyarray_type="$2"
+  _yqisnotemptyarray="$3"
+
+  _yqisnotemptyarray_key="${_yqisnotemptyarray_key%\[\]}"   # trim []
+  _yqisnotemptyarray_qs=".$_yqisnotemptyarray_key | type == \"!!seq\" and length > 0"
+  case "$_yqisnotemptyarray_type" in
+    -f)
+      yq -e "$_yqisnotemptyarray_qs" "$_yqisnotemptyarray" >/dev/null 2>&1
+      return $?
+      ;;
+    -s)
+      printf '%s\n' "$_yqisnotemptyarray" | yq -e "$_yqisnotemptyarray_qs" >/dev/null 2>&1
+      return $?
+      ;;
+    *) PanicArg 2 "$_yqisnotemptyarray_type" '-f:file|-s:string';;
+  esac
+  return 1
+}
+export YqIsNotEmptyArray
+readonly YqIsNotEmptyArray
+
+YqHas(){
+  Usage $# -eq 3 'YqHas <key> <-f|-s> <file|str>'
+  _yqhas_key="${1#.}"   # trim .
+  _yqhas_type="$2"
+  _yqhas="$3"
+
+  case "$_yqhas_key" in
+    *'[]')
+      YqIsNotEmptyArray "$_yqhas_key" "$_yqhas_type" "$_yqhas"
+      return $?
+      ;;
+  esac
+
+  _yqhas_qs=".${_yqhas_key} != null"
+  case "$_yqhas_type" in
+    -f)
+      yq -e "$_yqhas_qs" "$_yqhas" >/dev/null 2>&1
+      return $?
+      ;;
+    -s)
+      printf '%s\n' "$_yqhas" | yq -e "$_yqhas_qs" >/dev/null 2>&1
+      return $?
+      ;;
+    *) PanicArg 2 "$_yqhas_type" '-f:file|-s:string';;
+  esac
+  return 1
+}
+export YqHas
+readonly YqHas
+
 YqGetFromFile(){
-  Usage $# 2 4 'valueOf <key> <yaml> [default] [WITH_PANIC]'
+  Usage $# 2 4 'YqGetFromFile <key> <yaml> [default] [WITH_PANIC]'
   _yqgetfromfile_key="$1"
   _yqgetfromfile_yaml="$2"
   _yqgetfromfile_default="${3:-}"
@@ -61,13 +115,19 @@ export YqGetFromFile
 readonly YqGetFromFile
 
 YqGetFromStr(){
-  Usage $# 2 4 'valueOf <key> <str> [default] [WITH_PANIC]'
+  Usage $# 2 4 'YqGetFromStr <key> <str> [default] [WITH_PANIC]'
   _yqgetfromstr_key="$1"
   _yqgetfromstr_str="$2"
   _yqgetfromstr_default="${3:-}"
   _yqgetfromstr_with_panic="${4:-}"
 
+  if [ $# -eq 3 ] && [ "$_yqgetfromstr_default" = WITH_PANIC ]; then
+    _yqgetfromstr_default=''
+    _yqgetfromstr_with_panic=WITH_PANIC
+  fi
+
   _yqgetfromstr_value=$(printf '%s\n' "$_yqgetfromstr_str" | yq -r "$_yqgetfromstr_key")
+
   if [ -z "$_yqgetfromstr_value" ] || [ "$_yqgetfromstr_value" = "null" ]; then
     if [ -z "$_yqgetfromstr_default" ] && [ "$_yqgetfromstr_with_panic" = WITH_PANIC ]; then
       PanicD "missing key $_yqgetfromstr_key" "缺少键值 $_yqgetfromstr_key"
@@ -80,7 +140,7 @@ export YqGetFromStr
 readonly YqGetFromStr
 
 YqGet(){
-  Usage $# 3 5 'valueOf <key> <-f|-s> <yaml> [default] [WITH_PANIC]'
+  Usage $# 3 5 'YqGet <key> <-f|-s> <yaml> [default] [WITH_PANIC]'
   _yqget_key="$1"
   _yqget_type="$2"
   _yqget_yaml="$3"
