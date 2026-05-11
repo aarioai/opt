@@ -6,45 +6,47 @@ set -euo pipefail
 
 g_workdir=$(pwd)
 readonly g_workdir
-readonly g_up_yaml="$g_workdir/$K8S_UP_YAML"
 
 g_fn=$(basename "$0")
 
 readonly help="
-[.]=[options] <repo>=<repository:[tag]>  <image>=<image id>  <container>=<container id>
+[.]=[OPTS] <REPO>=<repository:[tag]>  <IMG>=<image id>  <CTN>=<container id>
 
-$g_fn <command> [.]
-  -h|h            Show tidy help
-  --help|help     Show detailed help
+$g_fn <CMD> [.]
+  -h            Show tidy help
+  --help|help   Show detailed help
 
   attach, commit, compose, container prune, cp, diff, export, exec, healthcheck, history,
   image inspect, image prune, images, kill, login, logout, logs, network, pause, pull, push,
   rename, restart, rm, rmi, save, start, stats, stop, system prune, tag, top, unpause, update, volume, wait
 
-
-  destroy [-y]
-    -y:         no confirmation
-  down [-a]     down current (delete)
-    -a:         down with all tls secrets
-  logs [container|pod]
-  ns|nsenter
-  up [helm args]
-  upd|update    update current (down and up)
-  upg|upgrade       helm upgrade
-  probe <what>
-  pull
-  purge
-  restart
-  run
-  status
-    status [nerdctl args]
-  tls [command]
-    list:       simple list all tls secrets
-    json:       list all tls secrets in json format
-    up:         up all tls secrets
-    down:       down all tls secrets with config .tls[].down=true
-    down -a:    down all tls secrets
-    <tls_name>: show this secret
+  destroy			  Destroy current namespace
+    -y:           Skip confirmation prompt
+  down     			Down current service
+    -a:           Down with all TLS secrets
+	pvc:          	Down with PVCs (persistent volume claims)
+	tls:		  	  Down with TLS secrets
+  logs 				  Show logs of current service
+    [CTN|POD]		  Show logs of a specific container or pod
+  ns|nsenter 		Nsetner current container
+    [CMD] [ARGS]  Run with another command
+  probe <CMD>		Probe current service
+    -h|configmap|dry|env|global|images|logs|name|n|namespace|prefix|pvc|selector|setname|status|tls [ARGS]|values>
+  pull 				  Pull all images in current service
+    [ARGS]        Pass extra arguments to 'nerdctl pull [ARGS]'
+  restart       Restart current service
+    [ARGS]        Pass extra arguments to 'nerdctl restart [ARGS]'
+  status			  Show status of current pods, services, and PVCs
+    status [ARGS] Arguments passed to 'nerdctl status [ARGS]'
+  tls				    Show TLS secrets of current service
+    json:  	      Show in JSON format
+    down:         Down all TLS secrets of current service within .Values.tls.down: true
+    down -a:      Down all TLS secrets of current service, no matter .Values.tls.down
+    up:           Up all tls secrets in current service
+  up            Up current service
+    [ARGS]        Up with extra helm arguments (e.g. --set service.nodePort=8090)
+  upd|update    Update current service (down + up)
+  upg|upgrade   Upgrade current service
 "
 
 readonly help_detail="
@@ -95,9 +97,17 @@ $help
   wait <container>    Block until one or more containers stop, then print their exit codes.
   "
 
+history(){
+  if [ $# -gt 0 ]; then
+    $(SUDO) nerdctl history "$@"
+    return
+  fi
+  k8sHistory "$g_workdir"
+}
+
 pull(){
   if [ $# -gt 0 ]; then
-    $SUDO nerdctl pull "$@"
+    $(SUDO) nerdctl pull "$@"
     return
   fi
   k8sPullProbedImages "$g_workdir"
@@ -105,7 +115,7 @@ pull(){
 
 restart(){
   if [ $# -gt 0 ]; then
-    $SUDO nerdctl restart "$@"
+    $(SUDO) nerdctl restart "$@"
     return
   fi
 
@@ -114,7 +124,7 @@ restart(){
 
 status(){
   if [ $# -gt 0 ]; then
-    $SUDO nerdctl status "$@"
+    $(SUDO) nerdctl status "$@"
     return
   fi
   k8sProbe status
@@ -130,28 +140,26 @@ tls(){
 }
 
 main(){
-  if CanSudo; then
-    exec sudo "${BASH_SOURCE[0]}" "$@"       # exec 会替换当前shell进程，后续命令不再执行
-  fi
-
   Usage $# -ge 1 "$help"
   local cmd="$1"
   shift
 
   case "$cmd" in
-    -h|h) Lowlight "$help" ;;
+    -h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
-    destroy) k8sDestroyHere "$g_workdir" "$@";;
-    down) k8sDown "$g_workdir"  "$@" ;;
+    destroy) k8sDestroyHere "$g_workdir" "$@" ;;
+    down) k8sDown "$g_workdir" "$@" ;;
+    history) history "$@" ;;
     logs) k8sProbeLogs "$g_workdir" "$@" ;;
     ns|nsenter) k8sNsenterHere "$g_workdir" "$@" ;;
     probe) k8sProbe "$@" ;;
     pull) pull "$@" ;;
-    up) k8sUp "$g_workdir" "$@";;
-    upd|update) k8sDown "$g_workdir"  "$@" && k8sUp "$g_workdir" "$@" ;;
     restart) restart "$@" ;;
     status) status "$@" ;;
     tls) tls "$@" ;;
+    up) k8sUp "$g_workdir" "$@" ;;
+    upd|updown) k8sUpDown "$g_workdir" "$@" ;;
+    upg|upgrade) k8sUpgrade "$g_workdir" "$@" ;;
     *) nerdctl "$cmd" "$@" ;;
   esac
 }

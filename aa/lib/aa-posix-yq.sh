@@ -6,8 +6,6 @@ if [ -x "./aa-posix-lib.sh" ]; then . ./aa-posix-lib.sh; else . /opt/aa/lib/aa-p
 
 # 必须安装 yq v4+
 UpgradeYq(){
-  UpdateSUDO
-
   _installyq_os=$(uname -s | tr '[:upper:]' '[:lower:]')
   _installyq_arch=$(uname -m)
   case "$_installyq_arch" in
@@ -25,9 +23,9 @@ UpgradeYq(){
   if ! Download "$_installyq_url" "$g_temp_file"; then
     PanicD "download $_installyq_url failed" "下载 $_installyq_url 失败"
   fi
-  $SUDO chmod +x "$g_temp_file"
-  $SUDO rm -f /bin/yq /usr/bin/yq /usr/local/bin/yq
-  $SUDO mv "$g_temp_file" /usr/bin/yq
+  ChmodOrSudo +x "$g_temp_file"
+  RemoveFilesOrSudo /bin/yq /usr/bin/yq /usr/local/bin/yq
+  MoveOrSudo "$g_temp_file" /usr/bin/yq
   which -a yq
   yq --version
 }

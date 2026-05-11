@@ -15,108 +15,15 @@ k8sPullProbedImages(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
-  local _k8s_values
-  _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
-
   local _k8s_image
-  while IFS= read -r _k8s_image; do
+  while IFS= read -r _k8s_image || [ -n "$_k8s_image" ]; do
     [ -n "$_k8s_image" ] || continue
     Debug "nerdctl pull $_k8s_image"
-    $SUDO nerdctl pull "$_k8s_image"
-  done <<< "$(k8sProbeImages "$_k8s_values")${LF}"
+    $(SUDO) nerdctl pull "$_k8s_image"
+  done < <(k8sProbeImages "$_k8s_workdir")
 }
 export k8sPullProbedImages
 readonly k8sPullProbedImages
-
-k8sUp(){
-  Usage $# -ge 1 'k8sUp <workdir> [helm args]'
-  local _k8s_workdir
-  _k8s_workdir="$(k8sWorkDir "$1")"
-  shift
-
-  local _k8s_prefix
-  _k8s_prefix=$(k8sProbeNamespacePrefix "$_k8s_workdir" WITH_CACHE)
-  local _k8s_chart_name
-  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
-  local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
-
-  k8sProbeConfigMap "$_k8s_workdir"
-  k8sPullProbedImages "$_k8s_workdir"
-
-  local _k8s_helm_file="${_k8s_workdir}/values-${_k8s_prefix}.yaml"
-  if [ ! -f "$_k8s_helm_file" ]; then
-    _k8s_helm_file="${_k8s_workdir}/values.yaml"
-  fi
-  PanicIfNotFile "$_k8s_helm_file"
-  Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
-  helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
-
-  k8sClearWorkDir "$_k8s_workdir"
-
-  local _k8s_selector
-  _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
-  local _k8s_container
-  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
-
-  local _k8s_pvcs
-  _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
-
-  k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_pvcs[@]}"
-}
-export k8sUp
-readonly k8sUp
-
-k8sDown(){
-  Usage $# 1 2 'k8sDown <workdir> [-a|pvc|tls]'
-  local _k8s_workdir
-  _k8s_workdir="$(k8sWorkDir "$1")"
-  shift
-
-  local _k8s_down_pvc=''
-  local _k8s_down_tls=''
-  for _k8s_down_arg in "$@"; do
-    case "$_k8s_down_arg" in
-      -a|all) _k8s_down_pvc='1'; _k8s_down_tls='-a' ;;
-      pvc) _k8s_down_pvc='1' ;;
-      tls) _k8s_down_tls='-a' ;;
-    esac
-  done
-
-  k8sProbeConfigMap "$_k8s_workdir"
-
-  local _k8s_chart_name
-  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
-  local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
-
-  if helm status "$_k8s_chart_name" -n "$_k8s_namespace" >/dev/null 2>&1; then
-    Debug "helm uninstall $_k8s_chart_name -n $_k8s_namespace"
-    helm uninstall "$_k8s_chart_name" -n "$_k8s_namespace"
-  fi
-
-  k8sClearWorkDir "$_k8s_workdir"
-
-  k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
-
-  local _k8s_has_pvc=0
-  if kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
-  then
-    _k8s_has_pvc=1
-  else
-    return 0
-  fi
-
-  if [ -z "$_k8s_down_pvc" ]; then
-    Notice "$_k8s_chart_name pvc is not deleted"
-    return 0
-  fi
-
-  Notice "kubectl delete pvc -n $_k8s_namespace -l app=$_k8s_chart_name"
-  kubectl delete pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name"
-}
-export k8sDown
-readonly k8sDown
 
 k8sDownTLS(){
   Usage $# 1 2 'k8sDownTLS <workdir> [-a]'
@@ -131,8 +38,7 @@ k8sDownTLS(){
   fi
 
   local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
-
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
 
   local _k8s_tls_cns
   if [ "$_k8s_down_all" = '-a' ]; then
@@ -141,7 +47,7 @@ k8sDownTLS(){
     _k8s_tls_cns=$(echo "$_k8s_values" | yq -r ".${K8S_TLS_TAG}[] | select(.${K8S_TLS_DOWN_TAG} == true) | .${K8S_TLS_CN_TAG}")
   fi
 
-  while IFS= read -r _k8s_tls_cn; do
+  while IFS= read -r _k8s_tls_cn || [ -n "$_k8s_tls_cn" ]; do
     [ -z "$_k8s_tls_cn" ] && continue
 
     local _k8s_secret
@@ -160,7 +66,7 @@ k8sUpTLS(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
 
   local _k8s_values
   _k8s_values=$(k8sProbeValues "$_k8s_workdir")
@@ -172,7 +78,7 @@ k8sUpTLS(){
   local _k8s_tls_block
   _k8s_tls_block=$(printf '%s\n' "$_k8s_values" | yq -r ".${K8S_TLS_TAG} // [] | .[] | tojson | @base64" 2>/dev/null)
   local _k8s_tls_b64
-  while IFS= read -r _k8s_tls_b64; do
+  while IFS= read -r _k8s_tls_b64 || [ -n "$_k8s_tls_b64" ]; do
     [ -z "$_k8s_tls_b64" ] && continue
     local _k8s_tls
     _k8s_tls=$(echo "$_k8s_tls_b64" | base64 -d)
@@ -213,7 +119,7 @@ k8sUpTLS(){
     if [ -z "$_k8s_tls_san" ]; then
       _k8s_tls_hosts=()
       if YqIsNotEmptyArray 'hosts' -s "$_k8s_tls"; then
-          while IFS= read -r _k8s_tls_host; do
+          while IFS= read -r _k8s_tls_host || [ -n "$_k8s_tls_host" ]; do
             [ -z "$_k8s_tls_host" ] && continue
             _k8s_tls_hosts+=("$_k8s_tls_host")
           done < <(echo "$_k8s_tls" | yq -r '.hosts[]' 2>/dev/null)
@@ -256,7 +162,7 @@ k8sDestroyHere(){
   shift
 
   local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   k8sDestroy "$_k8s_namespace" "$@"
 }
 export k8sDestroyHere
@@ -269,9 +175,9 @@ k8sNsenterHere(){
   shift
 
   local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_chart_name
-  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir" WITH_CACHE)
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
   local _k8s_container
@@ -300,11 +206,246 @@ k8sRestartHere(){
   shift
 
   local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir" WITH_CACHE)
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_setname
-  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir" WITH_CACHE)
+  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
 
   k8sRestart "$_k8s_namespace" "$_k8s_setname"
 }
 export k8sRestartHere
 readonly k8sRestartHere
+
+k8sProbePvcBytes(){
+  Usage $# -eq 1 'k8sProbePvcBytes <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_size
+  while IFS= read -r _k8s_size || [[ -n "$_k8s_size" ]]; do
+    _k8s_size="${_k8s_size% }"      # trim spaces
+    [ -z "$_k8s_size" ] && continue
+
+    local _k8s_size_num
+    _k8s_size_num=$(printf '%s' "$_k8s_size" | sed 's/[^0-9.].*$//')
+    local _k8s_size_unit
+    _k8s_size_unit=$(printf '%s' "$_k8s_size" | sed 's/^[0-9.]*//')
+
+    [ -z "$_k8s_size_num" ] && return 1
+
+    case "$_k8s_size_unit" in
+      KI|Ki|ki|k)
+        awk "BEGIN{printf \"%.0f\", $_k8s_size_num * 1024}"
+        ;;
+      MI|Mi|mi|M|m)
+         awk "BEGIN{printf \"%.0f\", $_k8s_size_num * 1024 * 1024}"
+        ;;
+      GI|Gi|gi|G|g)
+        awk "BEGIN{printf \"%.0f\", $_k8s_size_num * 1024 * 1024 * 1024}"
+        ;;
+      TI|Ti|ti|T|t)
+        awk "BEGIN{printf \"%.0f\", $_k8s_size_num * 1024 * 1024 * 1024 * 1024}"
+        ;;
+      *)
+        # fallback assume bytes
+        awk "BEGIN{printf \"%.0f\", $_k8s_size_num}"
+        ;;
+    esac
+    echo ""
+  done < <(k8sProbePvcSizes "$_k8s_workdir" 2>/dev/null)
+}
+export k8sProbePvcBytes
+readonly k8sProbePvcBytes
+
+k8sProbePvcBytesTotal(){
+  Usage $# -eq 1 'k8sProbePvcBytes <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_bytes
+  local _k8s_total=0
+  while IFS= read -r _k8s_bytes || [[ -n "$_k8s_bytes" ]]; do
+    [ -z "$_k8s_bytes" ] && continue
+    _k8s_total=$(( _k8s_total + _k8s_bytes ))
+  done < <(k8sProbePvcBytes "$_k8s_workdir" 2>/dev/null)
+  printf '%s' "$_k8s_total"
+}
+export k8sProbePvcBytesTotal
+readonly k8sProbePvcBytesTotal
+
+k8sUp(){
+  Usage $# -ge 1 'k8sUp <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_dry_run=0
+  for _k8s_arg in "$@"; do
+    if [ "$_k8s_arg" = "--dry-run" ]; then
+      _k8s_dry_run=1
+      break
+    fi
+  done
+
+  local _k8s_prefix
+  _k8s_prefix=$(k8sProbeNamespacePrefix "$_k8s_workdir")
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+  k8sUpNamespaceNx "$_k8s_workdir"
+  k8sProbeConfigMap "$_k8s_workdir"
+
+  if ! Yes "$_k8s_dry_run"; then k8sPullProbedImages "$_k8s_workdir"; fi
+  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_prefix}.yaml"
+  if [ ! -f "$_k8s_helm_file" ]; then
+    _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
+  fi
+
+  PanicIfNotFile "$_k8s_helm_file"
+  Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
+  helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
+
+  if Yes "$_k8s_dry_run"; then
+    return 0
+  fi
+
+  local _k8s_selector
+  _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+  local _k8s_container
+  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
+
+  local _k8s_pvc_total_bytes
+  _k8s_pvc_total_bytes=$(k8sProbePvcBytesTotal "$_k8s_workdir")
+
+  local _k8s_pvcs
+  _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
+
+  k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "$_k8s_pvc_total_bytes" "${_k8s_pvcs[@]}"
+
+  k8sClearWorkDir "$_k8s_workdir"
+}
+export k8sUp
+readonly k8sUp
+
+k8sDown(){
+  Usage $# 1 2 'k8sDown <workdir> [-a|pvc|tls]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_down_pvc=''
+  local _k8s_down_tls=''
+  for _k8s_down_arg in "$@"; do
+    case "$_k8s_down_arg" in
+      -a|all) _k8s_down_pvc='1'; _k8s_down_tls='-a' ;;
+      pvc) _k8s_down_pvc='1' ;;
+      tls) _k8s_down_tls='-a' ;;
+    esac
+  done
+
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+
+  k8sProbeConfigMap "$_k8s_workdir"
+
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  if helm status "$_k8s_chart_name" -n "$_k8s_namespace" >/dev/null 2>&1; then
+    Debug "helm uninstall $_k8s_chart_name -n $_k8s_namespace"
+    helm uninstall "$_k8s_chart_name" -n "$_k8s_namespace"
+  fi
+
+  k8sClearWorkDir "$_k8s_workdir"
+
+  k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
+
+  local _k8s_has_pvc=0
+  if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
+  then
+    _k8s_has_pvc=1
+  else
+    return 0
+  fi
+
+  if [ -z "$_k8s_down_pvc" ]; then
+    Notice "$_k8s_chart_name pvc is not deleted"
+    return 0
+  fi
+
+  Notice "kubectl delete pvc -n $_k8s_namespace -l app=$_k8s_chart_name"
+  $_k8s_cmd_prefix kubectl delete pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name"
+}
+export k8sDown
+readonly k8sDown
+
+k8sUpDown(){
+  Usage $# -ge 1 'k8sUpDown <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  k8sDown "$_k8s_workdir"
+  k8sUp "$_k8s_workdir" "$@"
+}
+export k8sUpDown
+readonly k8sUpDown
+
+k8sHistory(){
+  Usage $# -ge 1 'k8sUpDown <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  Debug "helm history $_k8s_chart_name -n $_k8s_namespace"
+  helm history "$_k8s_chart_name" -n "$_k8s_namespace"
+}
+export k8sHistory
+readonly k8sHistory
+
+k8sUpgrade(){
+  Usage $# -ge 1 'k8sUpgrade <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_chart_name
+  _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  k8sProbeConfigMap "$_k8s_workdir"
+  k8sPullProbedImages "$_k8s_workdir"
+
+  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_prefix}.yaml"
+  if [ ! -f "$_k8s_helm_file" ]; then
+    _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
+  fi
+  PanicIfNotFile "$_k8s_helm_file"
+
+  local _k8s_backup_dir="${_k8s_workdir}/${K8S_BACKUP_DIR}"
+  local _k8s_backup_file
+  _k8s_backup_file="$(date '+%Y%m%d-%H%M%S').tar.gz"
+  ChmodOrMkdir 755 "$_k8s_backup_dir"
+
+  Debug "helm get values $_k8s_chart_name -n $_k8s_namespace -o yaml > $_k8s_backup_file"
+  helm get values "$_k8s_chart_name" -n "$_k8s_namespace" -o yaml > "$_k8s_backup_file"
+
+  Debug "helm repo update"
+  helm repo update
+
+  Debug "helm upgrade $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file --atomic --wait $*"
+  helm upgrade "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" --atomic --wait "$@"
+
+  Debug "helm status $_k8s_chart_name -n $_k8s_namespace"
+  helm status "$_k8s_chart_name" -n "$_k8s_namespace"
+
+}
+export k8sUpgrade
+readonly k8sUpgrade

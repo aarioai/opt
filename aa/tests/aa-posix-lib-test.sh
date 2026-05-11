@@ -105,6 +105,27 @@ testYes(){
   if ! Yes 'Enabled'; then Panic 'Enabled is yes'; fi
   if ! Yes 'ENABLED'; then Panic 'ENABLED is yes'; fi
 }
+testSafeSedSeparator(){
+  testing 'SafeSedSeparator'
+  pattern='Aario'
+  assert "SafeSedSeparator $pattern" "/" "$(SafeSedSeparator "$pattern")"
+
+   pattern='"Aario"'
+   assert "SafeSedSeparator $pattern" "/" "$(SafeSedSeparator "$pattern")"
+
+   pattern='/Aario'
+   assert "SafeSedSeparator $pattern" "#" "$(SafeSedSeparator "$pattern")"
+
+   pattern='#Aario'
+   assert "SafeSedSeparator $pattern" "/" "$(SafeSedSeparator "$pattern")"
+
+   pattern='#/Aario#'
+   assert "SafeSedSeparator $pattern" "|" "$(SafeSedSeparator "$pattern")"
+
+   pattern='/@Aario|Hi|:Name,:name|#'
+   assert "SafeSedSeparator $pattern" ";" "$(SafeSedSeparator "$pattern")"
+}
+
 
 testUnquote(){
   testing 'Unquote'
@@ -499,7 +520,7 @@ testSplit() {
   # 测试遍历
   s="a,b,c,d"
   want='a'
-  Split "$s" | while IFS= read -r c; do
+  Split "$s" | while IFS= read -r c || [ -n "$c" ]; do
     if [ "$c" != "$want" ]; then fail 'Split' "$want" "$c"; fi
     want=$(AddASCII "$want")
   done
@@ -905,12 +926,12 @@ testReplaceSpaceToLF() {
   got=$(ReplaceSpaceToLF "$s")
   assert 'ReplaceSpaceToLF' "$want" "$got"
 }
-testSlicelen() {
+testSliceLen() {
   testing 'SliceLen'
   # 测试单个数组
   want='Aario'
-  Split "$want" | while IFS= read -r got;do
-    assert 'Slice | while IFS= read -r' "$want" "$got"
+  Split "$want" | while IFS= read -r got || [ -n "$got" ]; do
+    assert 'Slice | while' "$want" "$got"
   done
 
   arr=$(Split "A,B,C,D,E,F,G")
@@ -1260,8 +1281,8 @@ testParseArrays() {
   want='abc_32342o,gf34^0ff*o0_xw3Ms,/,.*,.*,.*'
   got=$(ParseArrays "$s")
   assert 'ParseArrays' "$want" "$got"
-  ParseArrays "$s" | while IFS= read -r got; do
-    assert 'ParseArrays | while IFS= read -r' "$want" "$got"
+  ParseArrays "$s" | while IFS= read -r got || [ -n "$got" ]; do
+    assert 'ParseArrays | while' "$want" "$got"
   done
 }
 testParseConfig() {
@@ -1406,6 +1427,8 @@ main() {
     esac
   fi
 
+  testSafeSedSeparator
+
   testUnquote
   testIsInt
   testIsPositiveInt
@@ -1468,7 +1491,7 @@ main() {
   testSlice
 
   testCountMatches
-  testSlicelen
+  testSliceLen
   testJoin
   testSplit
 

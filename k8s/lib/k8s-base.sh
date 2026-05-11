@@ -9,8 +9,30 @@ if [ -x "../../aa/lib/aa-posix-yq.sh" ]; then . ../../aa/lib/aa-posix-yq.sh; els
 export K8S_TEST_POD
 readonly K8S_TEST_POD='aa-temp-test'
 
+
+export K8S_INCLUDE_PREFIX
+readonly K8S_INCLUDE_PREFIX='#include/'
+
+export K8S_GENERATED_PREFIX
+readonly K8S_GENERATED_PREFIX='--generated--'
+
+export K8S_GITIGNORE_GENERATED_FILE
+readonly K8S_GITIGNORE_GENERATED_FILE="**/templates/${K8S_GENERATED_PREFIX}*.yaml"
+
+export K8S_BACKUP_DIR
+readonly K8S_BACKUP_DIR='backup'
+
+export K8S_CHART_YAML='Chart.yaml'
+readonly K8S_CHART_YAML
+
+export K8S_VALUES_YAML_NAME='values'   # values.yaml / values-<env>.yaml
+readonly K8S_VALUES_YAML_NAME
+
 export K8S_ENV_YAML
 readonly K8S_ENV_YAML='._env.yaml'
+
+export K8S_HELPER_TPL
+readonly K8S_HELPER_TPL='templates/_helpers.tpl'
 
 export K8S_SET_YAML_REL
 readonly K8S_SET_YAML_REL='templates/set.yaml'
@@ -29,7 +51,6 @@ readonly K8S_NSENTER_CMD_TAG='nsenter'
 
 export K8S_SELECTOR_TAG
 readonly K8S_SELECTOR_TAG='selector'
-
 
 export K8S_TLS_TAG
 readonly K8S_TLS_TAG='tls'
@@ -86,16 +107,9 @@ k8sDefaultTlsSecretName(){
 export k8sDefaultTlsSecretName
 readonly k8sDefaultTlsSecretName
 
-k8sDefaultSelector(){
-  Usage $# -eq 1 'k8sDefaultSelector <app>'
-  PanicIfEmpty "$1" 'app'
-  printf 'app=%s' "$1"
-}
-export k8sDefaultSelector
-readonly k8sDefaultSelector
-
 k8sKubectlPrefix(){
-  local _k8s_cmd_prefix="$SUDO"
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix="$(SUDO)"
   if command -v k3s >/dev/null 2>&1; then
     _k8s_cmd_prefix="$_k8s_cmd_prefix k3s"
   fi
@@ -106,8 +120,8 @@ readonly k8sKubectlPrefix
 
 k8sJournalCtrlError(){
   if command -v k3s >/dev/null 2>&1; then
-    Debug "$SUDO journalctl -u k3s | grep error | tail -10"
-    $SUDO journalctl -u k3s | grep error | tail -10
+    Debug "journalctl -u k3s | grep error | tail -10"
+    $(SUDO) journalctl -u k3s | grep error | tail -10
   fi
 }
 export k8sJournalCtrlError
@@ -115,7 +129,7 @@ readonly k8sJournalCtrlError
 
 k8sRmiNoneImages(){
   Debug "nerdctl image prune -f $*"
-  $SUDO nerdctl image prune -f "$@"
+  $(SUDO) nerdctl image prune -f "$@"
 }
 export k8sRmiNoneImages
 readonly k8sRmiNoneImages
@@ -128,14 +142,14 @@ k8sPvcStatus(){
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  local i
-  for i in {1..30}; do
+  local _k8s_i=0
+  for _k8s_i in {1..30}; do
     local PVC_STATUS
     PVC_STATUS=$($_k8s_cmd_prefix kubectl get pvc "$_k8s_pvc" -n "$_k8s_namespace" -o jsonpath='{.status.phase}' 2>/dev/null || true || echo "Pending")
     if [ "$PVC_STATUS" = "Bound" ]; then
       return 0
     fi
-    Debug "kubectl get pvc $_k8s_pvc -n $_k8s_namespace -o jsonpath='{.status.phase}' ($i/30)"
+    Debug "kubectl get pvc $_k8s_pvc -n $_k8s_namespace -o jsonpath='{.status.phase}' ($_k8s_i/30)"
     sleep 2
   done
 
@@ -179,17 +193,46 @@ export k8sStatus
 readonly k8sStatus
 
 k8sWaitReady(){
-  Usage $# -ge 3 'k8sWaitReady <namespace> <selector> <container_name> [pvcs]...'
+  Usage $# -ge 3 'k8sWaitReady <namespace> <selector> <container_name> [pvc_total_bytes=0] [pvcs]...'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
   local _k8s_container="$3"
-  shift 3
+  local _k8s_pvc_total_bytes="${4:-0}"
+  shift 4 2>/dev/null || shift $#
 
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  Heading "kubectl wait --for=condition=Ready pod -n $_k8s_namespace -l $_k8s_selector --timeout=180s"
-  if ! $_k8s_cmd_prefix kubectl wait --for=condition=Ready pod -n "$_k8s_namespace" -l "$_k8s_selector" --timeout=180s 2>/dev/null; then
+  if [ $# -gt 0 ]; then
+    Heading "allocating PVC: $*"
+  fi
+
+  while ! kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" --no-headers 2>/dev/null | grep -q .; do
+    Debug "Waiting for pod to be created..."
+    sleep 2
+  done
+
+  local _k8s_wait_timeout=600
+  local _k8s_pvc_total_gi=$(( (_k8s_pvc_total_bytes + 1073741823) / 1073741824 ))
+
+  if [ "$_k8s_pvc_total_gi" -le 1 ]; then
+    _k8s_wait_timeout=30
+  elif [ "$_k8s_pvc_total_gi" -le 10 ]; then
+    _k8s_wait_timeout=60
+  elif [ "$_k8s_pvc_total_gi" -le 50 ]; then
+    _k8s_wait_timeout=120
+  elif [ "$_k8s_pvc_total_gi" -le 100 ]; then
+    _k8s_wait_timeout=180
+  elif [ "$_k8s_pvc_total_gi" -le 500 ]; then
+    _k8s_wait_timeout=300
+  fi
+
+  Heading "kubectl wait --for=condition=Ready pods -n $_k8s_namespace -l $_k8s_selector --timeout=${_k8s_wait_timeout}s"
+  if ! $_k8s_cmd_prefix kubectl wait \
+    --for=condition=Ready pods \
+    -n "$_k8s_namespace" \
+    -l "$_k8s_selector" \
+    --timeout="${_k8s_wait_timeout}s" 2>/dev/null; then
     k8sLogs "$_k8s_namespace" "$_k8s_selector" "$_k8s_container"
     return 1
   fi
@@ -286,7 +329,7 @@ k8sTlsSecrets(){
   _k8s_tls_block=$(printf '%s\n' "$_k8s_values" | yq -r ".${K8S_TLS_TAG} // [] | .[] | tojson | @base64" 2>/dev/null)
 
   local _k8s_tls_b64
-  while IFS= read -r _k8s_tls_b64; do
+  while IFS= read -r _k8s_tls_b64 || [ -n "$_k8s_tls_b64" ]; do
     [ -z "$_k8s_tls_b64" ] && continue
     local _k8s_tls
     _k8s_tls=$(echo "$_k8s_tls_b64" | base64 -d)
@@ -324,7 +367,7 @@ k8sFindCertDir(){
     # Specified tls base directory
     if [ -n "$_k8s_tls_base" ]; then
       _k8s_tls_cert_dir="${_k8s_tls_base}/${_k8s_tls_cn}"
-      $SUDO mkdir -p "$_k8s_tls_cert_dir" >/dev/null 2>&1 || true
+      MkdirsOrSudo "$_k8s_tls_cert_dir" >/dev/null 2>&1 || true
       printf '%s' "$_k8s_tls_cert_dir"
       return 0
     fi
@@ -344,7 +387,7 @@ k8sFindCertDir(){
     if [ -z "$_k8s_tls_cert_dir" ]; then
       _k8s_tls_cert_dir="${K8S_TLS_CERT_DIR_FINAL}/${_k8s_tls_cn}"
     fi
-    $SUDO mkdir -p "$_k8s_tls_cert_dir" >/dev/null 2>&1 || true
+    MkdirsOrSudo "$_k8s_tls_cert_dir" >/dev/null 2>&1 || true
     printf '%s' "$_k8s_tls_cert_dir"
 }
 export k8sFindCertDir
@@ -457,3 +500,35 @@ k8sRestart(){
 export k8sRestart
 readonly k8sRestart
 
+k8sAddYamlToGitIgnore(){
+  Usage $# -eq 1 'k8sAddYamlToGitIgnore <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_gitignore=""
+  local _k8s_current_dir="$_k8s_workdir"
+  while [ "$_k8s_current_dir" != "/" ]; do
+    if [ -f "${_k8s_current_dir}/.gitignore" ]; then
+      _k8s_gitignore="${_k8s_current_dir}/.gitignore"
+      break
+    fi
+    _k8s_current_dir="$(dirname "$_k8s_current_dir")"
+  done
+
+  if [ -z "$_k8s_gitignore" ]; then
+    # fallback: create a .gitignore
+    Notice "creating $K8S_GITIGNORE_GENERATED_FILE ==> $_k8s_gitignore"
+    echo "$K8S_GITIGNORE_GENERATED_FILE" > "$_k8s_gitignore"
+    ChmodOrSudo 644 "$_k8s_gitignore"
+    return
+  fi
+
+  if grep -Fqx "$K8S_GITIGNORE_GENERATED_FILE" "$_k8s_gitignore"; then
+    return 0
+  fi
+
+  Info "appending ${K8S_GITIGNORE_GENERATED_FILE} ==> $_k8s_gitignore"
+  AppendToFile "$_k8s_gitignore" "${K8S_GITIGNORE_GENERATED_FILE}${LF}"
+}
+export k8sAddYamlToGitIgnore
+readonly k8sAddYamlToGitIgnore

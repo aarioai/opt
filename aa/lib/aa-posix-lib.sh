@@ -97,6 +97,29 @@ Yes(){
 export Yes
 readonly Yes
 
+SafeSedSeparator(){
+  Usage $# -eq 1 'SafeSedSeparator <pattern>'
+  _safesedseparator_pattern="$1"
+
+  for _safesedseparator_sep in \
+    '/' '#' '|' '@' ':' ';' ',' '%' '_' '+' '=' '~' '^'
+  do
+    case $_safesedseparator_pattern in
+      *"$_safesedseparator_sep"*)
+        ;;
+      *)
+        printf '%s\n' "$_safesedseparator_sep"
+        return 0
+        ;;
+    esac
+  done
+
+  # fallback：ASCII Unit Separator (0x1F)
+  printf '\037'
+}
+export SafeSedSeparator
+readonly SafeSedSeparator
+
 DetectPkgManager(){
   if command -v apk >/dev/null 2>&1; then
     printf '%s' 'apk'       # alpine
@@ -194,22 +217,69 @@ CanSudo(){
 export CanSudo
 readonly CanSudo
 
-export SUDO=''
 
-UpdateSUDO(){
+SUDO(){
   if CanSudo; then
-    SUDO='sudo'
+    printf '%s' 'sudo'
   fi
+  printf '%s' ''
 }
-export UpdateSUDO
-readonly UpdateSUDO
+export SUDO
+readonly SUDO
+
+MoveOrSudo(){
+  Usage $# -eq 2 'MoveOrSudo <src> <dst>'
+  _moveorsudo_src="$1"
+  _moveorsudo_dst="$2"
+  if mv "$_moveorsudo_src" "$_moveorsudo_dst" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo mv "$_moveorsudo_src" "$_moveorsudo_dst"
+}
+export ClearTMPDIR
+readonly ClearTMPDIR
+
+RemoveFilesOrSudo(){
+  Usage $# -ge 1 'RemoveFilesOrSudo <file> [file...]'
+  if rm -f "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo rm -f "$@"
+}
+export RemoveFilesOrSudo
+readonly RemoveFilesOrSudo
+
+RemoveDirsOrSudo(){
+  Usage $# -ge 1 'RemoveDirsOrSudo <dir> [dir...]'
+  if rm -rf "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo rm -rf "$@"
+}
+export RemoveDirsOrSudo
+readonly RemoveDirsOrSudo
+
+ChmodOrSudo(){
+  Usage $# -ge 2 'ChmodOrSudo <mode> <path> [path...]'
+  _chmodorsudo_mode="$1"
+  shift 1
+  if chmod "$_chmodorsudo_mode" "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo chmod "$_chmodorsudo_mode" "$@"
+}
+export ChmodOrSudo
+readonly ChmodOrSudo
+
+MkdirsOrSudo(){
+  Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
+  if ! mkdir -p "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo mkdir -p "$@"
+}
+export MkdirsOrSudo
+readonly MkdirsOrSudo
 
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
 _install_(){
   _install_pkg="$1"
   _install_quite="${2:-}"
-
-  UpdateSUDO
 
   # handle Install <sudo> -q <app>
   if [ "$_install_pkg" = '-q' ]; then
@@ -234,62 +304,63 @@ _install_(){
   fi
 
   _install_manager="$(DetectPkgManager)"
+  _install_sudo=$(SUDO)
 
   case "$_install_manager" in
     'apk')
-      echo ">>> $SUDO apk update --no-cache $_install_quite"
+      echo ">>> $_install_sudo apk update --no-cache $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO apk update --no-cache $_install_quite
-      echo ">>> $SUDO apk add --no-cache $_install_quite $_install_pkg"
+      $_install_sudo apk update --no-cache $_install_quite
+      echo ">>> $_install_sudo apk add --no-cache $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO apk add --no-cache $_install_quite "$_install_pkg"
+      $_install_sudo apk add --no-cache $_install_quite "$_install_pkg"
       ;;
     'apt-get')
       # -y auto confirm
       # -q quit only output important information
       # --no-install-recommends 只安装依赖包，不安扩展的推荐包
-      echo ">>> $SUDO $_install_manager update -y $_install_quite"
+      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager update -y $_install_quite
-      echo ">>> $SUDO $_install_manager update -y $_install_quite"
+      $_install_sudo $_install_manager update -y $_install_quite
+      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
+      $_install_sudo $_install_manager install -y $_install_quite --no-install-recommends "$_install_pkg"
       ;;
     'dnf'|'microdnf')
-      echo ">>> $SUDO $_install_manager update -y $_install_quite"
+      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager update -y $_install_quite
-      echo ">>> $SUDO $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
+      $_install_sudo $_install_manager update -y $_install_quite
+      echo ">>> $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
+      $_install_sudo $_install_manager install -y --nodocs --setopt=tsflags=nodocs $_install_quite "$_install_pkg"
       ;;
     'yum')
-      echo ">>> $SUDO $_install_manager update -y $_install_quite"
+      echo ">>> $_install_sudo $_install_manager update -y $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager update -y $_install_quite
-      echo ">>> $SUDO $_install_manager install -y $_install_quite $_install_pkg"
+      $_install_sudo $_install_manager update -y $_install_quite
+      echo ">>> $_install_sudo $_install_manager install -y $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_install_manager install -y $_install_quite "$_install_pkg"
+      $_install_sudo $_install_manager install -y $_install_quite "$_install_pkg"
       ;;
     'opkg')
-      echo ">>> $SUDO opkg update $_install_quite"
+      echo ">>> $_install_sudo opkg update $_install_quite"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO opkg update $_install_quite
-      echo ">>> $SUDO opkg install $_install_quite $_install_pkg"
+      $_install_sudo opkg update $_install_quite
+      echo ">>> $_install_sudo opkg install $_install_quite $_install_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO opkg install $_install_quite "$_install_pkg"
+      $_install_sudo opkg install $_install_quite "$_install_pkg"
       ;;
     'pacman')
-      echo ">>> $SUDO pacman -Syu --noconfirm --needed"
-      $SUDO pacman -Syu --noconfirm --needed
-      echo ">>> $SUDO pacman -S --noconfirm --needed $_install_pkg"
-      $SUDO pacman -S --noconfirm --needed "$_install_pkg"
+      echo ">>> $_install_sudo pacman -Syu --noconfirm --needed"
+      $_install_sudo pacman -Syu --noconfirm --needed
+      echo ">>> $_install_sudo pacman -S --noconfirm --needed $_install_pkg"
+      $_install_sudo pacman -S --noconfirm --needed "$_install_pkg"
       ;;
     'zypper')
-      echo ">>> $SUDO zypper --non-interactive refresh"
-      $SUDO zypper --non-interactive refresh
-      echo ">>> $SUDO zypper --non-interactive install $_install_pkg"
-      $SUDO zypper --non-interactive install "$_install_pkg"
+      echo ">>> $_install_sudo zypper --non-interactive refresh"
+      $_install_sudo zypper --non-interactive refresh
+      echo ">>> $_install_sudo zypper --non-interactive install $_install_pkg"
+      $_install_sudo zypper --non-interactive install "$_install_pkg"
       ;;
     *)
       echo "install $_install_pkg failed. unsupported package manager: $_install_manager ($(uname -a))"
@@ -756,12 +827,12 @@ _saveToLogFile(){
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
       mkdir -p "$_savetologfile_dir"
-      $SUDO chmod 777 "$_savetologfile_dir"
+      ChmodOrSudo 777 "$_savetologfile_dir"
     fi
 
     _log_ "" "$_BLUE_" "creating lib log file: $_savetologfile"
     touch "$_savetologfile"
-    $SUDO chmod 777 "$_savetologfile"
+    ChmodOrSudo 777 "$_savetologfile"
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
@@ -1543,33 +1614,32 @@ CleanPkgManager(){
     return 0
   fi
 
-  UpdateSUDO
-
+  _cleanpkgmanager_sudo=$(SUDO)
   Info "clean package manager: $_cleanpkgmanager"
   case "$_cleanpkgmanager" in
     'apk')
-      echo ">>> $SUDO apk cache clean"
-      $SUDO apk cache clean
+      echo ">>> $_cleanpkgmanager_sudo apk cache clean"
+      $_cleanpkgmanager_sudo apk cache clean
       ;;
     'apt-get'|'dnf'|'yum')
-      echo ">>> $SUDO $_cleanpkgmanager clean all -q"
+      echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_cleanpkgmanager clean all -q
+      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all -q
       ;;
     'microdnf')
-      echo ">>> $SUDO $_cleanpkgmanager clean all"
+      echo ">>> $_cleanpkgmanager_sudo $_cleanpkgmanager clean all"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_cleanpkgmanager clean all >/dev/null
+      $_cleanpkgmanager_sudo $_cleanpkgmanager clean all >/dev/null
       ;;
     'opkg')
       ;;
     'pacman')
-      echo ">>> $SUDO pacman -Scc --noconfirm"
-      $SUDO pacman -Scc --noconfirm
+      echo ">>> $_cleanpkgmanager_sudo pacman -Scc --noconfirm"
+      $_cleanpkgmanager_sudo pacman -Scc --noconfirm
       ;;
     'zypper')
-      echo ">>> $SUDO zypper --non-interactive clean"
-      $SUDO zypper --non-interactive clean
+      echo ">>> $_cleanpkgmanager_sudo zypper --non-interactive clean"
+      $_cleanpkgmanager_sudo zypper --non-interactive clean
       ;;
     *)
       ErrorD "clean package manager failed. unsupported package manager: $_cleanpkgmanager" "清理包管理失败。暂不支持包管理：$_cleanpkgmanager"
@@ -1583,48 +1653,45 @@ readonly CleanPkgManager
 _uninstall_(){
   Usage $# -eq 1 '_uninstall_ <app>'
   _uninstall_pkg="$1"
-
-  UpdateSUDO
-
   _uninstall_manager="$(DetectPkgManager)"
-
+  _uninstall_sudo=$(SUDO)
   case "$_uninstall_manager" in
     'apk')
-      echo ">>> $SUDO apk del --no-cache --quiet $_uninstall_pkg"
-      $SUDO apk del --no-cache --quiet "$_uninstall_pkg"
+      echo ">>> $_uninstall_sudo apk del --no-cache --quiet $_uninstall_pkg"
+      $_uninstall_sudo apk del --no-cache --quiet "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'apt-get'|'dnf'|'yum')
-      echo ">>> $SUDO $_uninstall_manager remove -y -q $_uninstall_pkg"
+      echo ">>> $_uninstall_sudo $_uninstall_manager remove -y -q $_uninstall_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_uninstall_manager remove -y -q "$_uninstall_pkg"
-      echo ">>> $SUDO $_uninstall_manager autoremove -y -q"
+      $_uninstall_sudo $_uninstall_manager remove -y -q "$_uninstall_pkg"
+      echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y -q"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_uninstall_manager autoremove -y -q
+      $_uninstall_sudo $_uninstall_manager autoremove -y -q
       CleanPkgManager
       ;;
     'microdnf')
-      echo ">>> $SUDO $_uninstall_manager remove -y $_uninstall_pkg"
+      echo ">>> $_uninstall_sudo $_uninstall_manager remove -y $_uninstall_pkg"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_uninstall_manager remove -y "$_uninstall_pkg" >/dev/null
-      echo ">>> $SUDO $_uninstall_manager autoremove -y"
+      $_uninstall_sudo $_uninstall_manager remove -y "$_uninstall_pkg" >/dev/null
+      echo ">>> $_uninstall_sudo $_uninstall_manager autoremove -y"
       # shellcheck disable=SC2086    # do not add double quote to dynamic arguments
-      $SUDO $_uninstall_manager autoremove -y >/dev/null
+      $_uninstall_sudo $_uninstall_manager autoremove -y >/dev/null
       CleanPkgManager
       ;;
     'opkg')
-      echo ">>> $SUDO opkg remove $_uninstall_pkg"
-      $SUDO opkg remove "$_uninstall_pkg"
+      echo ">>> $_uninstall_sudo opkg remove $_uninstall_pkg"
+      $_uninstall_sudo opkg remove "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'pacman')
-      echo ">>> $SUDO pacman -R --noconfirm --nosave $_uninstall_pkg"
-      $SUDO pacman -R --noconfirm --nosave "$_uninstall_pkg"
+      echo ">>> $_uninstall_sudo pacman -R --noconfirm --nosave $_uninstall_pkg"
+      $_uninstall_sudo pacman -R --noconfirm --nosave "$_uninstall_pkg"
       CleanPkgManager
       ;;
     'zypper')
-      echo ">>> $SUDO zypper --non-interactive remove $_uninstall_pkg"
-      $SUDO zypper --non-interactive remove "$_uninstall_pkg"
+      echo ">>> $_uninstall_sudo zypper --non-interactive remove $_uninstall_pkg"
+      $_uninstall_sudo zypper --non-interactive remove "$_uninstall_pkg"
       CleanPkgManager
       ;;
     *)
@@ -1814,7 +1881,6 @@ Extname(){
 }
 export ExtName
 readonly ExtName
-
 
 FindFileByExt(){
   Usage $# -ge 3 'FindFileByExt <dir> <filename> <ext> [ext]...'
@@ -2034,7 +2100,7 @@ CutLeft() {
   # See: https://github.com/koalaman/shellcheck/wiki/SC2124
   _cutleft_s=$(printf '%s\n' "$@")
   _cutleft_is_first_line=1
-  printf '%s\n' "$_cutleft_s" | while IFS= read -r _cutleft_line; do
+  printf '%s\n' "$_cutleft_s" | while IFS= read -r _cutleft_line || [ -n "$_cutleft_line" ]; do
     if [ "$_cutleft_n" -le 0 ]; then
       if [ "$_cutleft_is_first_line" -ne 1 ]; then printf '\n'; fi
       _cutleft_is_first_line=0
@@ -2091,7 +2157,7 @@ Substr() {
   if [ "$_substr_start" -gt 0 ]; then _substr_s=$(CutLeft "$_substr_start" "$_substr_s"); fi
 
   _substr_is_first_line=1
-  _substr_value=$(printf '%s\n' "$_substr_s" | while IFS= read -r _substr_line; do
+  _substr_value=$(printf '%s\n' "$_substr_s" | while IFS= read -r _substr_line || [ -n "$_substr_line" ]; do
     if Yes "$_substr_is_first_line"; then
       _substr_is_first_line=0
     else
@@ -2187,18 +2253,37 @@ TrimRight() {
 export TrimRight
 readonly TrimRight
 
+TrimSpaces(){
+  Usage $# -eq 1 'TrimSpaces <string>'
+
+  _trimspaces="$1"
+  _trimspaces=${_trimspaces#"${_trimspaces%%[![:space:]]*}"}
+  _trimspaces=${_trimspaces%"${_trimspaces##*[![:space:]]}"}
+  printf '%s' "$_trimspaces"
+}
+export Trim
+readonly Trim
+
 # 把两侧所有匹配的字符，全部删除
 # Required: TrimLeft, TrimRight
 Trim() {
   Usage $# 1 2 'Trim <string> [cut=" "]'
   _trim_s="$1"
   _trim_cut=${2:-' '}
+
+  if [ -z "$_trim_cut" ] || [ "$_trim_cut" = ' ' ]; then
+    TrimSpaces "$_trim_s"
+    return
+  fi
+
   _trim_s=$(TrimLeft "$_trim_s" "$_trim_cut")
   _trim_s=$(TrimRight "$_trim_s" "$_trim_cut")
   printf '%s' "$_trim_s"
 }
 export Trim
 readonly Trim
+
+
 
 # string IndexOf
 # Required: Substr
@@ -2212,7 +2297,7 @@ IndexOf() {
   _indexof_l=${#_indexof_sub}
 
   _indexof_index=0
-  _indexof_result=$(printf '%s\n' "$_indexof_s" | while IFS= read -r _indexof_line; do
+  _indexof_result=$(printf '%s\n' "$_indexof_s" | while IFS= read -r _indexof_line || [ -n "$_indexof_line" ]; do
     _indexof_line_len=${#_indexof_line}
     # 对换行符，只能匹配单个换行符，不能跨行匹配
     if [ "$_indexof_sub" = "$LF" ] || [ "$_indexof_sub" = "\n" ]; then
@@ -2283,7 +2368,7 @@ CountMatches() {
   _countmatches_s=$(printf '%s\n' "$@")
   _countmatches_sublen=${#_countmatches_sub}
   _countmatches_is_first_line=1
-  _countmatches_counting=$(printf '%s\n' "$_countmatches_s" | while IFS= read -r _countmatches_line; do
+  _countmatches_counting=$(printf '%s\n' "$_countmatches_s" | while IFS= read -r _countmatches_line || [ -n "$_countmatches_line" ]; do
     if IsLF "$_countmatches_sub"; then
       if [ "$_countmatches_is_first_line" -eq 1 ]; then
         _countmatches_is_first_line=0
@@ -2323,7 +2408,8 @@ ReplaceLineRecursive(){
 
   case "$_replacelinerecursive_str" in
     *"$_replacelinerecursive_pattern"*)
-      _replacelinerecursive_new_str=$(printf "%s" "$_replacelinerecursive_str" | sed "s/$_replacelinerecursive_pattern/$_replacelinerecursive_replacement/g")
+      _replacelinerecursive_sep=$(SafeSedSeparator "${_replacelinerecursive_pattern}${_replacelinerecursive_replacement}")
+      _replacelinerecursive_new_str=$(printf "%s" "$_replacelinerecursive_str" | sed "s${_replacelinerecursive_sep}${_replacelinerecursive_pattern}${_replacelinerecursive_sep}${_replacelinerecursive_replacement}${_replacelinerecursive_sep}g")
       ReplaceLineRecursive "$_replacelinerecursive_new_str" "$_replacelinerecursive_pattern" "$_replacelinerecursive_replacement"
       ;;
     *)
@@ -2359,7 +2445,8 @@ ReplaceOnce() {
   if ! ContainsLF "$_replace_s" "$_replace_old" "$_replace_new"; then
     _replace_escaped_old=$(printf "%s" "$_replace_old" | sed 's/[][\/.^$*]/\\&/g')
     _replace_escaped_new=$(printf "%s" "$_replace_new" | sed 's/[\/&]/\\&/g')
-    printf "%s" "$_replace_s" | sed "s/${_replace_escaped_old}/${_replace_escaped_new}/"
+    _replace_sep=$(SafeSedSeparator "${_replace_escaped_old}${_replace_escaped_new}")
+    printf "%s" "$_replace_s" | sed "s${_replace_sep}${_replace_escaped_old}${_replace_sep}${_replace_escaped_new}${_replace_sep}"
     return
   fi
 
@@ -2398,7 +2485,8 @@ Replace() {
   if ! ContainsLF "$_replace_s" "$_replace_old" "$_replace_new"; then
     _replace_escaped_old=$(printf "%s" "$_replace_old" | sed 's/[][\/.^$*]/\\&/g')
     _replace_escaped_new=$(printf "%s" "$_replace_new" | sed 's/[\/&]/\\&/g')
-    printf "%s" "$_replace_s" | sed "s/${_replace_escaped_old}/${_replace_escaped_new}/g"
+    _replace_sep=$(SafeSedSeparator "${_replace_escaped_old}${_replace_escaped_new}")
+    printf "%s" "$_replace_s" | sed "s${_replace_sep}${_replace_escaped_old}${_replace_sep}${_replace_escaped_new}${_replace_sep}g"
     return
   fi
 
@@ -2464,7 +2552,8 @@ ReplaceLF(){
   if [ "$_replacelf_to" = "/" ] || [ "$_replacelf_to" = "#" ] || [ "$_replacelf_to" = "\$" ]; then
     _replacelf_to="\\${_replacelf_to}"
   fi
-  printf '%s' "$_replacelf" | sed ":a;N;\$!ba;s/\n/$_replacelf_to/g"
+  _replacelf_sep=$(SafeSedSeparator "$_replacelf_to")
+  printf '%s' "$_replacelf" | sed ":a;N;\$!ba;s${_replacelf_sep}\n${_replacelf_sep}${_replacelf_to}${_replacelf_sep}g"
 }
 export ReplaceLF
 readonly ReplaceLF
@@ -2485,7 +2574,7 @@ EOF
   # See: https://github.com/koalaman/shellcheck/wiki/SC2124
   _replacelftospace_s=$(printf '%s\n' "$@")
   _replacelftospace_is_first_line=1
-  printf '%s\n' "$_replacelftospace_s" | while IFS= read -r _replacelftospace_line; do
+  printf '%s\n' "$_replacelftospace_s" | while IFS= read -r _replacelftospace_line || [ -n "$_replacelftospace_line" ]; do
     if [ "$_replacelftospace_line" = "" ]; then
       case "$_replacelftospace_flag" in
       0) continue ;;
@@ -2507,7 +2596,6 @@ EOF
     else
       _replacelftospace_is_first_line=0
     fi
-
     printf '%s' "$_replacelftospace_line" | sed 's/\\n/ /g' # \n is not LF, it's `\` + `n`
   done
 }
@@ -2516,7 +2604,7 @@ readonly ReplaceLFToSpace
 
 # Replace all spaces into LF, trailing LFs will be ignored
 ReplaceSpaceToLF() {
-  Usage $# -ge 1 'ReplaceSpaceToLF {string} | while IFS= read -r <line>; do ...; done'
+  Usage $# -ge 1 'ReplaceSpaceToLF {string} | while IFS= read -r <line> || [ -n "<line>" ]; do ...; done'
   printf '%s\n' "$@" | tr ' ' '\n'
 }
 export ReplaceSpaceToLF
@@ -2528,9 +2616,9 @@ SliceLen() {
   Usage $# -ge 1 'SliceLen {string}'
   # See: https://github.com/koalaman/shellcheck/wiki/SC2124
   _slicelen_s=$(printf '%s\n' "$@")
-  _slicelen_counting=$(printf '%s\n' "$_slicelen_s" | while IFS= read -r _slicelen_line; do
+  _slicelen_counting=$(printf '%s\n' "$_slicelen_s" | while IFS= read -r _slicelen_line || [ -n "$_slicelen_line" ]; do
     if [ -z "$_slicelen_line" ]; then continue; fi
-    ReplaceSpaceToLF "$_slicelen_line" | while IFS= read -r _slicelen_item; do
+    ReplaceSpaceToLF "$_slicelen_line" | while IFS= read -r _slicelen_item || [ -n "$_slicelen_item" ]; do
       if [ -z "$_slicelen_item" ]; then continue; fi
       printf '|'
     done
@@ -2557,7 +2645,7 @@ Slice() {
   fi
 
   _slice_slices=$(ReplaceSpaceToLF "$@")
-   while IFS= read -r _slice_seg; do
+   while IFS= read -r _slice_seg || [ -n "$_slice_seg" ]; do
     # 排除连续多个空格
     if [ -z "$_slice_seg" ]; then
       continue
@@ -2579,7 +2667,7 @@ readonly Slice
 # Split string
 # Required: Replace
 Split() {
-  Usage $# 1 3 "Split <strings> [delimiter=,] [merge=0 merge continuous delimiters]\n  Split <string> | while IFS= read -r xxx; do ... done"
+  Usage $# 1 3 "Split <strings> [delimiter=,] [merge=0 merge continuous delimiters]\n  Split <string> | while IFS= read -r xxx || [ -n xxx ]; do ... done"
   _split_s="$1"
   _split_delimiter=${2:-","}
   _split_merge=${3:-0}
@@ -2610,7 +2698,7 @@ readonly Split
 
 # Split array-like [a,b,c] or a,b,c
 SplitArray() {
-  Usage $# -ge 1 'SplitArray {string} | while IFS= read -r <item>; do ...; done'
+  Usage $# -ge 1 'SplitArray {string} | while IFS= read -r <item> || [ -n <item> ]; do ...; done'
   _parsearray_input="$*"
   if [ -z "$_parsearray_input" ]; then return 0; fi
   _parsearray_input=$(TrimLeft "$_parsearray_input" '[')
@@ -2629,7 +2717,7 @@ Join() {
   _join_first=1
 
   _join_slice=$(ReplaceSpaceToLF "$@")
-   while IFS= read -r _join_seg; do
+   while IFS= read -r _join_seg || [ -n "$_join_seg" ]; do
     # 通道可以将外界值传进来，并且期间可以改变。但是传不出去。
     # 因此 first 修改之后，通道内可以重复使用，但是通道外值不会变
     if [ "$_join_first" -eq 1 ]; then
@@ -2893,7 +2981,7 @@ ProcessMatch(){
   # alpine 不支持 -o command（得用comm）且不支持 --no-headers
   # git-bash 里面 ps 不支持 -o -x
   # ps -f 是兼容性最大的
-  _processmatch_matched=$(ps -f | while IFS= read -r _processmatch_ps; do
+  _processmatch_matched=$(ps -f | while IFS= read -r _processmatch_ps || [ -n "$_processmatch_ps" ]; do
     if [ -z "$_processmatch_matched_n" ]; then
       _processmatch_matched_n="$(CountWords "$_processmatch_ps")"
       _processmatch_matched_n_pid="$(WordIndex 'PID' "$_processmatch_ps")"
@@ -3022,7 +3110,8 @@ ExportProfile(){
     Warn "export ${_exportprofile_key}=${_exportprofile_value} failed. ${_exportprofile_dst} is not writable"
     return 0
   fi
-  sed -i "/^\s*export\s*${_exportprofile_key}\s*=.*/d" "$_exportprofile_dst" >/dev/null 2>&1
+  _exportprofile_sep=$(SafeSedSeparator "$_exportprofile_key")
+  sed -i "${_exportprofile_sep}^\s*export\s*${_exportprofile_key}\s*=.*${_exportprofile_sep}d" "$_exportprofile_dst" >/dev/null 2>&1
   printf "export %s=%s\n" "$_exportprofile_key" "$_exportprofile_value" >> "$_exportprofile_dst"
 }
 export ExportProfile
@@ -3160,20 +3249,20 @@ AddGroupNx(){
   if command -v addgroup >/dev/null 2>&1; then
     if [ -z "$_addgroupnx_gid" ]; then
       # @warn do not quote $_addgroupnx_r
-      $SUDO addgroup $_addgroupnx_r "$_addgroupnx_group"
+      $(SUDO) addgroup $_addgroupnx_r "$_addgroupnx_group"
     else
       # @warn do not quote $_addgroupnx_r
-      $SUDO addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+      $(SUDO) addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
     fi
     return
   fi
 
   if [ -z "$_addgroupnx_gid" ]; then
     # @warn do not quote $_addgroupnx_r
-    $SUDO groupadd $_addgroupnx_r "$_addgroupnx_group"
+    $(SUDO) groupadd $_addgroupnx_r "$_addgroupnx_group"
   else
     # @warn do not quote $_addgroupnx_r
-    $SUDO groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+    $(SUDO) groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
   fi
 }
 export addGroupx
@@ -3195,26 +3284,27 @@ AddUserNx(){
   if ExistsUser "$_addusernx_user"; then
     return
   fi
+  _addusernx_sudo="$(SUDO)"
 
   # --gid
   if IsInt "$_addusernx_group"; then
     if command -v adduser >/dev/null 2>&1; then
       if [ -n "$_addusernx_group" ];then
         # @warn do not quote $_addusernx_r
-        $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
       else
         # @warn do not quote $_addusernx_r
-        $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
       fi
       return
     fi
 
     if [ -n "$_addusernx_group" ]; then
       # @warn do not quote $_addusernx_r
-      $SUDO useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
+      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
     else
       # @warn do not quote $_addusernx_r
-      $SUDO useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
     fi
 
     return
@@ -3228,49 +3318,24 @@ AddUserNx(){
   if command -v adduser >/dev/null 2>&1; then
     if [ -n "$_addusernx_group" ];then
       # @warn do not quote $_addusernx_r
-      $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
     else
       # @warn do not quote $_addusernx_r
-      $SUDO adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
     fi
     return
   fi
 
   if [ -n "$_addusernx_group" ]; then
     # @warn do not quote $_addusernx_r
-    $SUDO useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
+    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
   else
     # @warn do not quote $_addusernx_r
-    $SUDO useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
   fi
 }
 export AddUserNx
 readonly AddUserNx
-
-MkdirP(){
-  Usage $# 1 2 'MkdirP <dir> [mod=755]'
-  _mkdir="$1"
-  _mkdir_mod="${2:-"755"}"
-  if [ -d "$_mkdir" ]; then
-    return 0
-  fi
-
-  if mkdir -p "$_mkdir" >/dev/null 2>&1; then
-    chmod "$_mkdir_mod" "$_mkdir" 2>/dev/null && return 0
-  fi
-
-  if ! CanSudo; then
-    return 1
-  fi
-
-  sudo mkdir -p "$_mkdir" || return 1
-  sudo chmod "$_mkdir_mod" "$_mkdir" || return 1
-
-  return 0
-}
-export MkdirP
-readonly MkdirP
-
 
 # 递归修改目录及子目录用户。
 # Required: ReplaceSpaceToLF
@@ -3289,7 +3354,7 @@ ChownR() {
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
       continue
     fi
-    $SUDO chown -R "$_chownr_user" "$_chownr_dir"
+    $(SUDO) chown -R "$_chownr_user" "$_chownr_dir"
   done
 }
 export ChownR
@@ -3307,7 +3372,7 @@ ChgrpR() {
     if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
       continue
     fi
-    $SUDO chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
+    $(SUDO) chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
   done
 }
 export ChgrpR
@@ -3320,8 +3385,8 @@ ChmodOrMkdir(){
   shift
   for _chmodormkdir_dir in "$@"; do
     if [ -z "$_chmodormkdir_dir" ]; then continue; fi
-    if [ ! -d "$_chmodormkdir_dir" ]; then MkdirP "$_chmodormkdir_dir"; fi
-    $SUDO chmod "$_chmodormkdir_mod" "$_chmodormkdir_dir"
+    if [ ! -d "$_chmodormkdir_dir" ]; then MkdirsOrSudo "$_chmodormkdir_dir"; fi
+    ChmodOrSudo "$_chmodormkdir_mod" "$_chmodormkdir_dir"
   done
 }
 export ChmodOrMkdir
@@ -3335,7 +3400,7 @@ ChmodOrCreate(){
   for _chmodorcreate_file in "$@"; do
     if [ -z "$_chmodorcreate_file" ]; then continue; fi
     if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
-    $SUDO chmod "$_chmodorcreate_mod" "$_chmodorcreate_file"
+    ChmodOrSudo "$_chmodorcreate_mod" "$_chmodorcreate_file"
   done
 }
 export ChmodOrCreate
@@ -3363,9 +3428,9 @@ ChownOrMkdir(){
 
   for _chownormkdir_dir in "$@"; do
     if [ -z "$_chownormkdir_dir" ]; then continue; fi
-    if [ ! -d "$_chownormkdir_dir" ]; then MkdirP "$_chownormkdir_dir"; fi
+    if [ ! -d "$_chownormkdir_dir" ]; then MkdirsOrSudo "$_chownormkdir_dir"; fi
     if [ -n "$_chownormkdir_group" ]; then
-      $SUDO chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
+      $(SUDO) chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
       continue
     fi
     ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
@@ -3386,7 +3451,7 @@ CleanOrMkdir(){
   if [ -z "$(ls -A "$_cleanormkdir" 2>/dev/null)" ]; then
     return 0
   fi
-  $SUDO rm -rf "$_cleanormkdir/"*
+  RemoveDirsOrSudo "$_cleanormkdir/"*
 }
 export CleanOrMkdir
 readonly CleanOrMkdir
@@ -3400,6 +3465,33 @@ ClearTMPDIR(){
 }
 export ClearTMPDIR
 readonly ClearTMPDIR
+
+AppendToFile(){
+  Usage $# -ge 2 'AppendToFile <file> <string>'
+  _appendtofile_file="$1"
+  shift
+  if [ ! -f "$_appendtofile_file" ]; then
+    printf '%s' "$@" > "$_appendtofile_file" || return 1
+    ChmodOrSudo 644 "$_appendtofile_file" || true
+    return 0
+  fi
+
+  _g_appendtofile_temp_file=$(mktemp) || return 1
+  trap 'rm -f "$_g_appendtofile_temp_file" 2>/dev/null' EXIT
+  trap 'rm -f "$_g_appendtofile_temp_file" 2>/dev/null; return 1' INT TERM
+
+  {
+    printf '%s' "$@"
+    cat "$_appendtofile_file"
+  } > "$_g_appendtofile_temp_file" || {
+    rm -f "$_g_appendtofile_temp_file"
+    return 1
+  }
+
+  MoveOrSudo "$_g_appendtofile_temp_file" "$_appendtofile_file"
+}
+export AppendToFile
+readonly AppendToFile
 
 CdOrPanic(){
   Usage $# -eq 1 'CdOrPanic <path>'
@@ -3465,7 +3557,7 @@ EOF
   printf '['
   _formatarraystring_item_start=0
   _formatarraystring_item_empty_n=0
-  Split "$_formatarraystring_s"  | while IFS= read -r _formatarraystring_item; do
+  Split "$_formatarraystring_s"  | while IFS= read -r _formatarraystring_item || [ -n "$_formatarraystring_item" ]; do
     _formatarraystring_item="$(Trim "$_formatarraystring_item")"
     if [ -z "$_formatarraystring_item" ]; then
       _formatarraystring_item_empty_n=$(( _formatarraystring_item_empty_n + 1 ))
@@ -3495,7 +3587,7 @@ readonly FormatArrayString
 # Parse string like "[x,xx],[xx,x]" into array. Note: can not contains invalid spaces
 # Required: StartWith, Substr, Substring
 ParseArrays() {
-  Usage $# -ge 1 'ParseArrays {string} | while IFS= read -r <item>; do ...; done'
+  Usage $# -ge 1 'ParseArrays {string} | while IFS= read -r <item> || [ -n <item> ]; do ...; done'
   _parsearrargs_input="$*"
 
   # 不以 [ 开头，直接返回
@@ -3532,7 +3624,7 @@ ParseArrays() {
     fi
     _parsearrargs_i=$((_parsearrargs_i + 1))
   done
-  # append a LF for | while IFS= read -r <item>; do ...; done
+  # append a LF for | while IFS= read -r <item> || [ -n <item> ]; do ...; done
   if [ -n "$_parsearrargs_result" ]; then printf '%s\n' "$_parsearrargs_result"; fi
 }
 export ParseArrays
@@ -3597,7 +3689,8 @@ SetConfig() {
       sed '${/^$/d}' "$_setconfig_file"
       printf '\n%s\n' "$_setconfig_data" >> "$_setconfig_file"
     elif [ "$_setconfig_old" != "$_setconfig_value" ]; then
-      sed -i.bak -E "s/^[[:space:]]*${_setconfig_key}[[:space:]]*=*[[:space:]]*.*$/${_setconfig_data}/" "$_setconfig_file"
+      _setconfig_sep=$(SafeSedSeparator "$_setconfig_key")
+      sed -i.bak -E "s${_setconfig_sep}^[[:space:]]*${_setconfig_key}[[:space:]]*=*[[:space:]]*.*\$${_setconfig_sep}${_setconfig_data}${_setconfig_sep}" "$_setconfig_file"
       rm -f "${_setconfig_file}.bak"
     fi
   fi
@@ -3606,7 +3699,8 @@ SetConfig() {
 # 整行匹配，并过滤掉重复的
 # Require: StrIn
 MatchedLines(){
-  Usage $# 2 3 'MatchedLines <file> <pattern> [trim={Yes}] | while IFS= read -r match; do ... done'
+  # shellcheck disable=SC2016
+  Usage $# 2 3 'MatchedLines <file> <pattern> [trim={Yes}] | while IFS= read -r match || [ -n "$match" ]; do ... done'
   _matchedlines_file="$1"
   _matchedlines_pattern="$2"
   _matchedlines_trim="${3:-1}"
@@ -3615,7 +3709,7 @@ MatchedLines(){
   _matchedlines_matched=0
   _matchedlines_result="$TAB"
   InstallGrep
-  grep "^[[:space:]]*${_matchedlines_pattern}.*[[:space:]]*$" "$_matchedlines_file" | while IFS= read -r _matchedlines_match; do
+  grep "^[[:space:]]*${_matchedlines_pattern}.*[[:space:]]*$" "$_matchedlines_file" | while IFS= read -r _matchedlines_match || [ -n "$_matchedlines_match" ]; do
     if Yes "$_matchedlines_trim"; then
       # trim left spaces
       _matchedlines_match="${_matchedlines_match#"${_matchedlines_match%%[![:space:]]*}"}"
@@ -3650,6 +3744,7 @@ ReplaceYamlConfig(){
 
   PanicIfNotFile "$_replaceyamlconfig_src" "$_replaceyamlconfig_rep"
 
+  _replaceyamlconfig_sep=$(SafeSedSeparator "$_replaceyamlconfig_tag")
   _replaceyamlconfig_temp=$(mktemp)
   trap 'rm -f "$_replaceyamlconfig_temp"' EXIT
   trap 'rm -f "$_replaceyamlconfig_temp"; exit 1' INT TERM
@@ -3659,7 +3754,7 @@ ReplaceYamlConfig(){
     case "$_replaceyamlconfig_line" in
       *"$_replaceyamlconfig_tag"*)
         # 获取当前行的缩进部分
-        _replaceyamlconfig_indent=$(echo "$_replaceyamlconfig_line" | sed "s#${_replaceyamlconfig_tag}.*##")
+        _replaceyamlconfig_indent=$(echo "$_replaceyamlconfig_line" | sed "s${_replaceyamlconfig_sep}${_replaceyamlconfig_tag}.*${_replaceyamlconfig_sep}${_replaceyamlconfig_sep}")
 
         # 读取替换文件内容并添加缩进
         while IFS= read -r _replaceyamlconfig_rep_line || [ -n "$_replaceyamlconfig_rep_line" ]; do
@@ -3823,7 +3918,7 @@ GenerateRSAKeys() {
   mkdir -p "$_generatersakeys_dir"
 
   # ()& 并行操作
-  Split "$5" | while IFS= read -r _generatersakeys_size; do
+  Split "$5" | while IFS= read -r _generatersakeys_size || [ -n "$_generatersakeys_size" ]; do
     _generatersakeys_base="${_generatersakeys_dir}/${_generatersakeys_prefix}${_generatersakeys_size}"
     _generatersakeys_tmp="${_generatersakeys_tempdir}/${_generatersakeys_prefix}${_generatersakeys_size}"
     if ! _generateRSAKey_ "$_generatersakeys_size" "$_generatersakeys_full" "$_generatersakeys_base" "$_generatersakeys_tmp"; then
@@ -3909,12 +4004,12 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "openssl genrsa -out $_signcertbyca_ckf 2048"
-      $SUDO openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
-      $SUDO chmod 600 "$_signcertbyca_ckf"
+      $(SUDO) openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
+      ChmodOrSudo 600 "$_signcertbyca_ckf"
     fi
 
     Info "Generating CSR.."
-    if ! $SUDO openssl req -new            \
+    if ! $(SUDO) openssl req -new            \
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
@@ -3929,7 +4024,7 @@ SignCertByCA(){
   # openssl x509 签发已有的证书（基于CA或private key）
   Info "Signing certificate with CA..."
 
-  if ! $SUDO openssl x509 -req             \
+  if ! $(SUDO) openssl x509 -req             \
       -in "$_signcertbyca_server_csr"     \
       -CA "$_signcertbyca_ca_cert_file"   \
       -CAkey "$_signcertbyca_ca_key_file" \
@@ -3945,14 +4040,14 @@ SignCertByCA(){
   ChmodOrCreate 666 "$_signcertbyca_out"
   cat "$_signcertbyca_ck" "$_signcertbyca_ca_cert_file" > "$_signcertbyca_out"
 
-  $SUDO chmod 600 "$_signcertbyca_ckf"
-  $SUDO chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
+  ChmodOrSudo 600 "$_signcertbyca_ckf"
+  ChmodOrSudo 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
-  if ! $SUDO openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
+  if ! $(SUDO) openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
     Debug "openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
-    $SUDO rm -rf "$_signcertbyca_cert_dir"
+    RemoveDirsOrSudo "$_signcertbyca_cert_dir"
     return 1
   fi
 
@@ -3988,7 +4083,7 @@ SignLeafCert(){
   fi
 
   Info "Sign leaf certificate..."
-  if ! $SUDO openssl req -x509 -new  \
+  if ! $(SUDO) openssl req -x509 -new  \
       -key "$_signleafcert_ckf"   \
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
@@ -3999,12 +4094,12 @@ SignLeafCert(){
     return 1
   fi
 
-  $SUDO chmod 600 "$_signleafcert_ckf"
-  $SUDO chmod 644 "$_signleafcert_ck"
+  ChmodOrSudo 600 "$_signleafcert_ckf"
+  ChmodOrSudo 644 "$_signleafcert_ck"
 
   Info "Verifying leaf certificate..."
-  if ! $SUDO openssl x509 -in "$_signleafcert_ck" -text -noout; then
-    $SUDO rm -rf "$_signleafcert_cert_dir"
+  if ! $(SUDO) openssl x509 -in "$_signleafcert_ck" -text -noout; then
+    RemoveDirsOrSudo "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
     Debug "openssl x509 -in $_signleafcert_ck -text -noout"
     return 1
@@ -4043,7 +4138,7 @@ GenerateLeafCert(){
   mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
-  if ! $SUDO openssl req -x509 -nodes -newkey rsa:2048 \
+  if ! $(SUDO) openssl req -x509 -nodes -newkey rsa:2048 \
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
@@ -4053,13 +4148,13 @@ GenerateLeafCert(){
     return 1
   fi
 
-  $SUDO chmod 644 "$_generateleafcert_ckf"
-  $SUDO chmod 644 "$_generateleafcert_ck"
+  ChmodOrSudo 644 "$_generateleafcert_ckf"
+  ChmodOrSudo 644 "$_generateleafcert_ck"
   ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
   Info "Verifying leaf certificate..."
-  if ! $SUDO openssl x509 -in "$_generateleafcert_ck" -text -noout; then
-    $SUDO rm -rf "$_generateleafcert_cert_dir"
+  if ! $(SUDO) openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+    RemoveDirsOrSudo "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
     Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1
