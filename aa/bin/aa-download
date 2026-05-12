@@ -150,9 +150,9 @@ download() {
   fi
 
   Info "downloading $url to $want"
-  g_temp=$(mktemp -d)
-  trap 'rm -rf "$g_temp"' EXIT
-  trap 'rm -rf "$g_temp"; exit 1' INT TERM
+  g_temp=$(mktemp -d) || PanicMktempD
+  trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_temp" 2>/dev/null; exit 1' INT TERM
   cd "$g_temp"
 
   if ! Download "$url";then

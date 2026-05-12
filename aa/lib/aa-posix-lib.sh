@@ -217,7 +217,6 @@ CanSudo(){
 export CanSudo
 readonly CanSudo
 
-
 SUDO(){
   if CanSudo; then
     printf '%s' 'sudo'
@@ -226,55 +225,6 @@ SUDO(){
 }
 export SUDO
 readonly SUDO
-
-MoveOrSudo(){
-  Usage $# -eq 2 'MoveOrSudo <src> <dst>'
-  _moveorsudo_src="$1"
-  _moveorsudo_dst="$2"
-  if mv "$_moveorsudo_src" "$_moveorsudo_dst" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo mv "$_moveorsudo_src" "$_moveorsudo_dst"
-}
-export ClearTMPDIR
-readonly ClearTMPDIR
-
-RemoveFilesOrSudo(){
-  Usage $# -ge 1 'RemoveFilesOrSudo <file> [file...]'
-  if rm -f "$@" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo rm -f "$@"
-}
-export RemoveFilesOrSudo
-readonly RemoveFilesOrSudo
-
-RemoveDirsOrSudo(){
-  Usage $# -ge 1 'RemoveDirsOrSudo <dir> [dir...]'
-  if rm -rf "$@" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo rm -rf "$@"
-}
-export RemoveDirsOrSudo
-readonly RemoveDirsOrSudo
-
-ChmodOrSudo(){
-  Usage $# -ge 2 'ChmodOrSudo <mode> <path> [path...]'
-  _chmodorsudo_mode="$1"
-  shift 1
-  if chmod "$_chmodorsudo_mode" "$@" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo chmod "$_chmodorsudo_mode" "$@"
-}
-export ChmodOrSudo
-readonly ChmodOrSudo
-
-MkdirsOrSudo(){
-  Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
-  if ! mkdir -p "$@" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo mkdir -p "$@"
-}
-export MkdirsOrSudo
-readonly MkdirsOrSudo
 
 # Usage 函数依赖 grep，因此 _install_ 函数不要引用 Usage，否则当 grep 没安装时，_install_ 将无法使用
 _install_(){
@@ -480,6 +430,18 @@ _isInt_(){
   esac
 }
 readonly _isInt_
+
+PanicMktemp(){
+  Panic '"mktemp" failed'
+}
+export PanicMktemp
+readonly PanicMktemp
+
+PanicMktempD(){
+  Panic '"mktemp -d" failed'
+}
+export PanicMktempD
+readonly PanicMktempD
 
 PanicIfNotNumber(){
   Usage $# -ge 1 'PanicIfNotNumber <arg> [arg]...'
@@ -806,7 +768,6 @@ SetNxLibLogFile(){
 export SetLibLogFile
 readonly SetLibLogFile
 
-
 UnsetLibLogFile(){
   unset LIB_LOG_FILE
   export LIB_LOG_FILE=''
@@ -826,13 +787,21 @@ _saveToLogFile(){
   if [ ! -f "$_savetologfile" ]; then
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
-      mkdir -p "$_savetologfile_dir"
-      ChmodOrSudo 777 "$_savetologfile_dir"
+      if ! mkdir -p "$_savetologfile_dir" 2>/dev/null; then
+        sudo mkdir -p "$_savetologfile_dir"
+      fi
+      if ! chmod 777 "$_savetologfile_dir" 2>/dev/null; then
+        sudo chmod 777 "$_savetologfile_dir"
+      fi
     fi
 
     _log_ "" "$_BLUE_" "creating lib log file: $_savetologfile"
-    touch "$_savetologfile"
-    ChmodOrSudo 777 "$_savetologfile"
+    if ! touch "$_savetologfile" 2>/dev/null; then
+      sudo touch "$_savetologfile"
+    fi
+    if ! chmod 777 "$_savetologfile" 2>/dev/null; then
+      sudo chmod 777 "$_savetologfile"
+    fi
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"
 }
@@ -1033,6 +1002,28 @@ Unquote(){
 export Unquote
 readonly Unquote
 
+ExtractNumber(){
+  Usage $# -eq 1 'ExtractNumber <str|number>'
+  printf '%s' "$1" |
+    sed '
+      s/^[^0-9]*//
+      s/[^0-9]*$//
+    '
+}
+export ExtractNumber
+readonly ExtractNumber
+
+ExtractInt(){
+  Usage $# -eq 1 'ExtractInt <str|number>'
+  printf '%s' "$1" |
+    sed '
+      s/^[^0-9]*//
+      s/[^0-9]*$//
+      s/\.[^.]*$//
+    '
+}
+export ExtractInt
+readonly ExtractInt
 
 IsInt(){
   Usage $# 1 2 'if ! IsInt <string> [enable_negative={Yes}]; then ... fi'
@@ -1049,6 +1040,8 @@ IsPositiveInt(){
   fi
   return 0
 }
+export IsPositiveInt
+readonly IsPositiveInt
 
 Abs(){
   Usage $# -eq 1 'Abs <number>'
@@ -1078,7 +1071,6 @@ Min(){
 }
 export Min
 readonly Min
-
 
 # Check is LF or '\n'
 IsLF() {
@@ -1117,7 +1109,50 @@ ConfirmD(){
 export ConfirmD
 readonly ConfirmD
 
+BytesToIEC() {
+  Usage $# 1 3 'BytesToIEC <bytes> [decimal=0] [separator=""]'
+  _bytestoiec_bytes=$(ExtractInt "$1")
+  _bytestoiec_decimal=${2:-0}
+  _bytestoiec_separator="${3-}"
 
+  if ! IsInt "$_bytestoiec_bytes" 0 || ! IsInt "$_bytestoiec_decimal"; then
+    return 1
+  fi
+
+  _bytestoiec_unit='Bi'
+  _bytestoiec_value=$_bytestoiec_bytes
+
+  if [ "$_bytestoiec_bytes" -ge 1099511627776 ] 2>/dev/null; then
+    _bytestoiec_unit='Ti'
+    _bytestoiec_div=1099511627776
+  elif [ "$_bytestoiec_bytes" -ge 1073741824 ] 2>/dev/null; then
+    _bytestoiec_unit='Gi'
+    _bytestoiec_div=1073741824
+  elif [ "$_bytestoiec_bytes" -ge 1048576 ] 2>/dev/null; then
+    _bytestoiec_unit='Mi'
+    _bytestoiec_div=1048576
+  elif [ "$_bytestoiec_bytes" -ge 1024 ] 2>/dev/null; then
+    _bytestoiec_unit='Ki'
+    _bytestoiec_div=1024
+  else
+    printf '%s%s%s' "$_bytestoiec_bytes" "$_bytestoiec_separator" "$_bytestoiec_unit"
+    return 0
+  fi
+
+  if [ "$_bytestoiec_decimal" -le 0 ]; then
+    printf '%s' "$(( _bytestoiec_bytes / _bytestoiec_div ))"
+  else
+    awk -v decimal="$_bytestoiec_decimal" \
+      -v bytes="$_bytestoiec_bytes" \
+      -v divisor="$_bytestoiec_div" \
+    "BEGIN {
+      printf \"%.*f\", decimal, bytes / divisor
+    }"
+  fi
+  printf '%s%s' "$_bytestoiec_separator" "$_bytestoiec_unit"
+}
+export BytesToIEC
+readonly BytesToIEC
 
 # 获取CPU类型：amd 或 arm 架构
 CpuArch() {
@@ -1582,6 +1617,740 @@ IncrVersion() {
 export IncrVersion
 readonly IncrVersion
 
+CopyOrSudo(){
+  Usage $# -eq 2 'CopyOrSudo <src> <dst>'
+  _copyorsudo_src="$1"
+  _copyorsudo_dst="$2"
+  if cp "$_copyorsudo_src" "$_copyorsudo_dst" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo cp "$_copyorsudo_src" "$_copyorsudo_dst"
+}
+export CopyOrSudo
+readonly CopyOrSudo
+
+CopyOrPanic(){
+  Usage $# -eq 2 'CopyOrPanic <src> <dst>'
+  _copyorpanic_src="$1"
+  _copyorpanic_dst="$2"
+  if ! CopyOrSudo "$@"; then
+    PanicD "fail to cp $_copyorpanic_src -> $_copyorpanic_dst" "无法复制 $_copyorpanic_src -> $_copyorpanic_dst"
+  fi
+}
+export CopyOrPanic
+readonly CopyOrPanic
+
+CopyOrTouch(){
+  Usage $# -eq 2 'CopyOrTouch <src> <dst>'
+  _copyortouch_src="$1"
+  _copyortouch_dst="$2"
+
+  if [ ! -f "$_copyortouch_src" ]; then
+    TouchOrSudo "$_copyortouch_dst"
+    return $?
+  fi
+  CopyOrSudo "$_copyortouch_src" "$_copyortouch_dst"
+}
+export CopyOrTouch
+readonly CopyOrTouch
+
+CopyOrTouchOrPanic(){
+  Usage $# -eq 2 'CopyOrTouchOrPanic <src> <dst>'
+  _copyortouchorpanic_src="$1"
+  _copyortouchorpanic_dst="$2"
+
+  if [ ! -f "$_copyortouchorpanic_src" ]; then
+    TouchOrPanic "$_copyortouchorpanic_dst"
+    return $?
+  fi
+  CopyOrPanic "$_copyortouchorpanic_src" "$_copyortouchorpanic_dst"
+}
+export CopyOrTouchOrPanic
+readonly CopyOrTouchOrPanic
+
+MoveOrSudo(){
+  Usage $# -eq 2 'MoveOrSudo <src> <dst>'
+  _moveorsudo_src="$1"
+  _moveorsudo_dst="$2"
+  if mv "$_moveorsudo_src" "$_moveorsudo_dst" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo mv "$_moveorsudo_src" "$_moveorsudo_dst"
+}
+export MoveOrSudo
+readonly MoveOrSudo
+
+MoveOrPanic(){
+  Usage $# -eq 2 'MoveOrPanic <src> <dst>'
+  _moveorpanic_src="$1"
+  _moveorpanic_dst="$2"
+  if ! MoveOrSudo "$@"; then
+    PanicD "fail to mv $_moveorpanic_src -> $_moveorpanic_dst" "无法移动 $_moveorpanic_src -> $_moveorpanic_dst"
+  fi
+}
+export MoveOrPanic
+readonly MoveOrPanic
+
+RemoveFilesOrSudo(){
+  Usage $# -ge 1 'RemoveFilesOrSudo <file> [file...]'
+  if rm -f "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo rm -f "$@"
+}
+export RemoveFilesOrSudo
+readonly RemoveFilesOrSudo
+
+RemoveFilesOrPanic(){
+  Usage $# -eq 2 'RemoveFilesOrPanic <file> [file...]'
+  if ! RemoveFilesOrSudo "$@"; then
+    PanicD "fail to rm -f $*" "无法删除 $*"
+  fi
+}
+export RemoveFilesOrPanic
+readonly RemoveFilesOrPanic
+
+RemoveDirsOrSudo(){
+  Usage $# -ge 1 'RemoveDirsOrSudo <dir> [dir...]'
+  if rm -rf "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo rm -rf "$@"
+}
+export RemoveDirsOrSudo
+readonly RemoveDirsOrSudo
+
+RemoveDirsOrPanic(){
+  Usage $# -eq 2 'RemoveDirsOrPanic <dir> [dir...]'
+  if ! RemoveDirsOrSudo "$@"; then
+    PanicD "fail to rm -rf $*" "无法删除文件夹 $*"
+  fi
+}
+export RemoveDirsOrPanic
+readonly RemoveDirsOrPanic
+
+ChmodOrSudo(){
+  Usage $# -ge 2 'ChmodOrSudo <mode> <path> [path...]'
+  _chmodorsudo_mode="$1"
+  shift 1
+  if chmod "$_chmodorsudo_mode" "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo chmod "$_chmodorsudo_mode" "$@"
+}
+export ChmodOrSudo
+readonly ChmodOrSudo
+
+ChmodOrPanic(){
+  Usage $# -ge 2 'ChmodOrPanic <mode> <path> [path...]'
+  if ! ChmodOrSudo "$@"; then
+    PanicD "fail to chmod $*" "无法 chmod $*"
+  fi
+}
+export ChmodOrPanic
+readonly ChmodOrPanic
+
+MkdirsOrSudo(){
+  Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
+  if ! mkdir -p "$@" 2>/dev/null; then return 0; fi
+  if ! CanSudo; then return 1; fi
+  sudo mkdir -p "$@"
+}
+export MkdirsOrSudo
+readonly MkdirsOrSudo
+
+MkdirsOrPanic(){
+  Usage $# 1 2 'MkdirsOrPanic <dir> [dir...]'
+  if ! MkdirsOrSudo "$@"; then
+    PanicD "fail to mkdir -p $*" "无法创建文件夹 $*"
+  fi
+}
+export MkdirsOrPanic
+readonly MkdirsOrPanic
+
+
+Filename(){
+  Usage $# 1 2 'Filename <path> [with_ext]'
+  _filename=$(basename "$1")
+  _filename_with_ext="${2:-}"
+  if [ "$_filename_with_ext" = 'with_ext' ]; then
+    printf '%s' "$_filename"
+    return 0
+  fi
+
+  case "$_filename" in
+  *.*)
+    printf '%s' "${_filename%.*}"
+    return 0
+    ;;
+  esac
+  printf '%s' "$_filename"
+}
+export Filename
+readonly Filename
+
+Extname(){
+  Usage $# 1 2 'Extname <path> [with_dot]'
+  _extname_base=$(basename "$1")
+  _extname_with_dot="${2:-}"
+
+  _extname_dot=''
+  if [ "$_extname_with_dot" = 'with_dot' ]; then
+    _extname_dot='.'
+  fi
+
+  case "$_extname_base" in
+  *.*)
+    printf '%s%s' "$_extname_dot" "${_extname_base##*.}"
+    return 0
+    ;;
+  esac
+  printf ''
+}
+export ExtName
+readonly ExtName
+
+FindFileByExt(){
+  Usage $# -ge 3 'FindFileByExt <dir> <filename> <ext> [ext]...'
+  _findfilebyext_dir="$1"
+  _findfilebyext_filename="$2"
+  shift 2
+  if [ ! -d "$_findfilebyext_dir" ]; then
+    printf ''
+    return 0
+  fi
+  for _findfilebyext_ext in "$@"; do
+    # remove dot
+    _findfilebyext_ext="${_findfilebyext_ext#.}"
+    _findfilebyext_path="$_findfilebyext_dir/$_findfilebyext_filename.$_findfilebyext_ext"
+
+    if [ -f "$_findfilebyext_path" ]; then
+      printf '%s' "$_findfilebyext_path"
+      return 0
+    fi
+  done
+  printf ''
+}
+export FindFileByExt
+readonly FindFileByExt
+
+
+AbsDir() {
+  # shellcheck disable=SC2016
+  Usage $# -eq 1 'AbsDir <path> => bash: AbsDir "${BASH_SOURCE[0]}"; posix: AbsDir "$0"'
+  _absdir="$1"
+  PanicIfEmpty "$_absdir" 'AbsDir <path>'
+
+  if [ -f "$_absdir" ]; then
+    _absdir=$(dirname "$_absdir")
+  fi
+  if [ -d "$_absdir" ]; then
+    printf '%s' "$(cd "$_absdir" && pwd)"
+    return
+  fi
+
+  case "$_absdir" in
+      /*)
+        _absdir_new=""
+        _absdir_remaining="$_absdir"
+        ;;
+      *)
+        _absdir_new="$PWD/"
+        _absdir_remaining="$_absdir"
+        ;;
+    esac
+
+    _absdir_old_ifs="$IFS"
+    IFS='/'
+    # shellcheck disable=SC2086    # set -- no need quotes
+    set -- $_absdir_remaining
+    IFS="$_absdir_old_ifs"
+
+    for _absdir_part; do
+      case "$_absdir_part" in
+        ''|'.') continue ;;
+        '..')
+          _absdir_new="${_absdir_new%/*}"
+          ;;
+        *)
+          _absdir_new="${_absdir_new%/}/$_absdir_part"
+          ;;
+      esac
+    done
+
+    [ -z "$_absdir_new" ] && _absdir_new="/"
+
+    printf '%s' "$_absdir_new"
+}
+export AbsDir
+readonly AbsDir
+
+ParentDir(){
+  Usage $# 1 2 'ParentDir <path> [depth=1]'
+  _parentdir_path="$1"
+  _parentdir_depth="${2:-1}"
+
+  _parentdir_path="$(AbsDir "$_parentdir_path")"
+
+  while [ "$_parentdir_depth" -gt 0 ]; do
+    _parentdir_path="${_parentdir_path}/.."
+    _parentdir_depth=$((_parentdir_depth - 1))
+  done
+  printf '%s' "$(AbsDir "$_parentdir_path")"
+}
+export ParentDir
+readonly ParentDir
+
+# Require: FirstChar, AbsDir
+AbsPath(){
+  Usage $# -eq 1 'AbsPath <path>'
+  _fullpath_file="$1"
+  PanicIfEmpty "$_fullpath_file" "AbsPath <path>"
+  if [ "$(FirstChar "$_fullpath_file")" = '/' ]; then
+    printf '%s' "$_fullpath_file"
+    return 0
+  fi
+  _fullpath_dir=$(AbsDir "$_fullpath_file")
+  _fullpath_filename=$(basename "$_fullpath_file")
+  if [ -z "$_fullpath_filename" ] || [ "$_fullpath_filename" = '.' ]; then
+    printf '%s' "$_fullpath_dir"
+    return 0
+  fi
+
+  printf '%s/%s' "$_fullpath_dir" "$_fullpath_filename"
+}
+export AbsPath
+readonly AbsPath
+
+ExistGroup(){
+  Usage $# -eq 1 'ExistGroup <group>'
+  _existgroup_g="$1"
+
+  if [ -f "/etc/group" ]; then
+    InstallGrep
+    if ! grep -q "^${_existgroup_g}:" /etc/group; then
+      return 1
+    fi
+    return
+  fi
+
+  if command -v getent >/dev/null 2>&1; then
+    if ! getent group "$_existgroup_g" >/dev/null 2>&1; then
+      return 1
+    fi
+    return
+  fi
+  Panic "missing command getent or file /etc/group"
+}
+export ExistGroup
+readonly ExistGroup
+
+
+# Add a group if not exists
+AddGroupNx(){
+  _addgroupnx_usage="AddGroupNx [-r/--system] <group> [gid]"
+  Usage $# 1 3 "$_addgroupnx_usage"
+  _addgroupnx_r=''
+  if [ "$1" = "-r" ] || [ "$1" = "--system" ] || [ "$1" = "-S" ]; then
+    _addgroupnx_r="--system"
+    shift
+    Usage $# 1 2 "$_addgroupnx_usage"
+  fi
+  _addgroupnx_group="$1"
+  _addgroupnx_gid="${2-}"
+
+  # group exists
+  if ExistGroup "$_addgroupnx_group"; then
+    return
+  fi
+
+  if command -v addgroup >/dev/null 2>&1; then
+    if [ -z "$_addgroupnx_gid" ]; then
+      # @warn do not quote $_addgroupnx_r
+      $(SUDO) addgroup $_addgroupnx_r "$_addgroupnx_group"
+    else
+      # @warn do not quote $_addgroupnx_r
+      $(SUDO) addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+    fi
+    return
+  fi
+
+  if [ -z "$_addgroupnx_gid" ]; then
+    # @warn do not quote $_addgroupnx_r
+    $(SUDO) groupadd $_addgroupnx_r "$_addgroupnx_group"
+  else
+    # @warn do not quote $_addgroupnx_r
+    $(SUDO) groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+  fi
+}
+export addGroupx
+readonly addGroupx
+
+# add a non-login user if not exists
+AddUserNx(){
+  _addusernx_usage="AddUserNx [-r/--system] <user> [group=users|gid]"
+  Usage $# 1 3 "$_addusernx_usage"
+  _addusernx_r=''
+  if [ "$1" = "-r" ] || [ "$1" = "--system" ]; then
+    _addusernx_r="--system"
+    shift
+    Usage $# 1 2 "$_addusernx_usage"
+  fi
+  _addusernx_user="$1"
+  _addusernx_group="${2-}"
+
+  if ExistsUser "$_addusernx_user"; then
+    return
+  fi
+  _addusernx_sudo="$(SUDO)"
+
+  # --gid
+  if IsInt "$_addusernx_group"; then
+    if command -v adduser >/dev/null 2>&1; then
+      if [ -n "$_addusernx_group" ];then
+        # @warn do not quote $_addusernx_r
+        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+      else
+        # @warn do not quote $_addusernx_r
+        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+      fi
+      return
+    fi
+
+    if [ -n "$_addusernx_group" ]; then
+      # @warn do not quote $_addusernx_r
+      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
+    else
+      # @warn do not quote $_addusernx_r
+      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+    fi
+
+    return
+  fi
+
+  # --group
+  if [ -n "$_addusernx_group" ]; then
+    # @warn do not quote $_addusernx_r
+    AddGroupNx $_addusernx_r "$_addusernx_group"
+  fi
+  if command -v adduser >/dev/null 2>&1; then
+    if [ -n "$_addusernx_group" ];then
+      # @warn do not quote $_addusernx_r
+      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
+    else
+      # @warn do not quote $_addusernx_r
+      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
+    fi
+    return
+  fi
+
+  if [ -n "$_addusernx_group" ]; then
+    # @warn do not quote $_addusernx_r
+    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
+  else
+    # @warn do not quote $_addusernx_r
+    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
+  fi
+}
+export AddUserNx
+readonly AddUserNx
+
+# 递归修改目录及子目录用户。
+# Required: ReplaceSpaceToLF
+ChownR() {
+  Usage $# -ge 2 'ChownR <user> <dir> [dir...]'
+  _chownr_user="$1"
+  shift
+
+  if ! ExistsUser "$_chownr_user"; then
+    PanicD "$_chownr_user is not a valid user" "$_chownr_user 不是已存在的用户"
+  fi
+
+  for _chownr_dir in "$@"; do
+    if [ -z "$_chownr_dir" ]; then continue; fi
+    # 这样修改权限比 `chown -R` 性能更好
+    if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
+      continue
+    fi
+    $(SUDO) chown -R "$_chownr_user" "$_chownr_dir"
+  done
+}
+export ChownR
+readonly ChownR
+
+# 递归修改目录及子目录用户组。这样修改权限比 `chgrp -R` 性能更好
+# Required: ReplaceSpaceToLF
+ChgrpR() {
+  Usage $# -ge 2 'ChgrpR <group> <dir> [dir...]'
+  _chgrpr_group="$1"
+  shift
+
+  for _chgrpr_dir in "$@"; do
+    if [ -z "$_chgrpr_dir" ]; then continue; fi
+    if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
+      continue
+    fi
+    $(SUDO) chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
+  done
+}
+export ChgrpR
+readonly ChgrpR
+
+# Require: ReplaceSpaceToLF, Mkdir
+ChmodOrMkdir(){
+  Usage $# -ge 2 'ChmodOrMkdir <mod> <dir> [dir]...'
+  _chmodormkdir_mod="$1"
+  shift
+  for _chmodormkdir_dir in "$@"; do
+    if [ -z "$_chmodormkdir_dir" ]; then continue; fi
+    if [ ! -d "$_chmodormkdir_dir" ]; then MkdirsOrSudo "$_chmodormkdir_dir"; fi
+    ChmodOrSudo "$_chmodormkdir_mod" "$_chmodormkdir_dir"
+  done
+}
+export ChmodOrMkdir
+readonly ChmodOrMkdir
+
+# Change mode of files, create files if not exists
+ChmodOrCreate(){
+  Usage $# -ge 2 'ChmodOrCreate <mod> <file> [file]... => ChmodOrCreate a+rw file1 file 2; ChmodOrCreate 1777 file'
+  _chmodorcreate_mod="$1"
+  shift
+  for _chmodorcreate_file in "$@"; do
+    if [ -z "$_chmodorcreate_file" ]; then continue; fi
+    if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
+    ChmodOrSudo "$_chmodorcreate_mod" "$_chmodorcreate_file"
+  done
+}
+export ChmodOrCreate
+readonly ChmodOrCreate
+
+# Create dirs with a certain owner
+# Require: Split
+ChownOrMkdir(){
+  Usage $# -ge 2 'ChownOrMkdir <user|user:group> <dir> [dir...]'
+  _chownormkdir_ug="$1"
+  shift
+  _chownormkdir_user="$_chownormkdir_ug"
+  _chownormkdir_group=''
+  case "$_chownormkdir_user" in
+    *:*)
+      _chownormkdir_group="${_chownormkdir_ug#*:}"
+      _chownormkdir_user="${_chownormkdir_ug%:*}"
+      ;;
+  esac
+
+  if [ -z "$_chownormkdir_user" ]; then PanicUsage 'ChownOrMkdir <user|user:group> <dir> [dir...]'; fi
+  if ! ExistsUser "$_chownormkdir_user"; then
+    PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
+  fi
+
+  for _chownormkdir_dir in "$@"; do
+    if [ -z "$_chownormkdir_dir" ]; then continue; fi
+    if [ ! -d "$_chownormkdir_dir" ]; then MkdirsOrSudo "$_chownormkdir_dir"; fi
+    if [ -n "$_chownormkdir_group" ]; then
+      $(SUDO) chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
+      continue
+    fi
+    ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
+  done
+}
+export ChownOrMkdir
+readonly ChownOrMkdir
+
+CleanOrMkdir(){
+  Usage $# 1 2 'CleanOrMkdir <dir> [mod=0777]'
+  _cleanormkdir="$1"
+  _cleanormkdir_mod="${2:-0777}"
+  if [ ! -d "$_cleanormkdir" ]; then
+    ChmodOrMkdir "$_cleanormkdir_mod" "$_cleanormkdir"
+    return 0
+  fi
+  # Check is already empty
+  if [ -z "$(ls -A "$_cleanormkdir" 2>/dev/null)" ]; then
+    return 0
+  fi
+  RemoveDirsOrSudo "$_cleanormkdir/"*
+}
+export CleanOrMkdir
+readonly CleanOrMkdir
+
+# Create a temporary directory if not exists or clear this directory
+# Require: ChmodOrMkdir
+ClearTMPDIR(){
+  # shellcheck disable=SC2016
+  Usage $# -le 1 'ClearTMPDIR [dir=$TMPDIR]'
+  CleanOrMkdir "${1:-"$TMPDIR"}" 1777
+}
+export ClearTMPDIR
+readonly ClearTMPDIR
+
+TouchOrSudo(){
+  Usage $# -eq 1 'TouchOrSudo <file>'
+  _touchorsudo_file="$1"
+  shift
+
+  touch "$_touchorsudo_file" 2>/dev/null && return 0
+  sudo touch "$_touchorsudo_file" > /dev/null || return 1
+  ChmodOrSudo 644 "$_touchorsudo_file" || true
+  return 0
+}
+export TouchOrSudo
+readonly TouchOrSudo
+
+TouchOrPanic(){
+  Usage $# -eq 1 'TouchOrPanic <file>'
+  _touchorpanic_file="$1"
+  if ! TouchOrSudo "$_touchorpanic_file"; then
+    PanicD "fail to touch $_touchorpanic_file" "无法创建文件 ${_touchorpanic_file}"
+  fi
+}
+export TouchOrPanic
+readonly TouchOrPanic
+
+CatOrSudo(){
+  Usage $# 1 3 'CatOrSudo <file> [flag=|->|->>] [dst=|<file>]'
+  _catorsudo_file="$1"
+  _catorsudo_flag="${2:-}"
+  _catorsudo_dst="${3:-}"
+
+  case "$_catorsudo_flag" in
+    '->')
+      cat "$_catorsudo_file" > "$_catorsudo_dst" 2>/dev/null && return 0
+      sudo sh -c 'cat "$1" > "$2"' _ "$_catorsudo_file" "$_catorsudo_dst" || return 1
+      ;;
+    '->>')
+      cat "$_catorsudo_file" >> "$_catorsudo_dst" 2>/dev/null && return 0
+      sudo sh -c 'cat "$1" >> "$2"' _ "$_catorsudo_file" "$_catorsudo_dst" || return 1
+      ;;
+    *)
+      cat "$_catorsudo_file" 2>/dev/null  && return 0
+      sudo cat "$_catorsudo_file" 2>/dev/null || return 1
+      ;;
+  esac
+
+  return 0
+}
+export CatOrSudo
+readonly CatOrSudo
+
+CatOrPanic(){
+  Usage $# 1 3 'CatOrPanic <file> [flag=|->|->>] [dst=|<file>]'
+  if ! CatOrSudo "$@"; then
+    PanicD "fail cat $*" "无法 cat $*"
+  fi
+}
+export CatOrPanic
+readonly CatOrPanic
+
+WriteFileOrSudo(){
+  Usage $# -eq 3 'WriteFileOrSudo <str> <flag=->|->>> <file> '
+  _writefileorsudo_str="$1"
+  _writefileorsudo_flag="$2"
+  _writefileorsudo_file="$3"
+
+  case "$_writefileorsudo_flag" in
+    '->')
+      printf '%s' "$_writefileorsudo_str" > "$_writefileorsudo_file" 2>/dev/null && return 0
+      sudo sh -c 'printf "$1" > "$2"' _ "$_writefileorsudo_str" "$_writefileorsudo_file" || return 1
+      ;;
+    '->>')
+      printf '%s' "$_writefileorsudo_str" >> "$_writefileorsudo_file" 2>/dev/null && return 0
+      sudo sh -c 'printf "$1" >> "$2"' _ "$_writefileorsudo_str" "$_writefileorsudo_file" || return 1
+      ;;
+    *)
+      PanicArg 2 "$_writefileorsudo_flag" 'flag=>|>>'
+      ;;
+  esac
+  return 0
+}
+export WriteFileOrSudo
+readonly WriteFileOrSudo
+
+WriteFileOrPanic(){
+  Usage $# -eq 3 'WriteFileOrPanic <str> <flag=>|>>> <file> '
+  _writefileorpanic_file="$3"
+  if ! WriteFileOrSudo "$@"; then
+    PanicD "fail to write file $_writefileorpanic_file" "无法写入文件 ${_writefileorpanic_file}"
+  fi
+}
+export WriteFileOrPanic
+readonly WriteFileOrPanic
+
+PrependToFileOrSudo(){
+  Usage $# -eq 2 'PrependToFileOrSudo <file> <str>'
+  _prependtofileorsudo_file="$1"
+  _prependtofileorsudo_str="$2"
+
+  if [ ! -f "$_prependtofileorsudo_file" ]; then
+    WriteFileOrSudo "$_prependtofileorsudo_str" > "$_prependtofileorsudo_file"
+    return $?
+  fi
+
+  _g_appendtofileorsudotemp_file=$(mktemp) || return 1
+  trap 'rm -f "$_g_appendtofileorsudotemp_file" 2>/dev/null' EXIT
+  trap 'rm -f "$_g_appendtofileorsudotemp_file" 2>/dev/null; return 1' INT TERM
+
+  {
+    printf '%s' "$_prependtofileorsudo_str"
+    cat "$_prependtofileorsudo_file"
+  } > "$_g_appendtofileorsudotemp_file" || {
+    rm -f "$_g_appendtofileorsudotemp_file"
+    return 1
+  }
+
+  MoveOrSudo "$_g_appendtofileorsudotemp_file" "$_prependtofileorsudo_file"
+}
+export PrependToFileOrSudo
+readonly PrependToFileOrSudo
+
+PrependToFileOrPanic(){
+  Usage $# -eq 2 'PrependToFileOrPanic <file> <str>'
+  _prependtofileorpanic_file="$1"
+  if ! PrependToFileOrSudo "$@"; then
+    PanicD "fail to append file $_prependtofileorpanic_file" "无法追加文件 ${_prependtofileorpanic_file}"
+  fi
+}
+export PrependToFileOrPanic
+readonly PrependToFileOrPanic
+
+CdOrPanic(){
+  Usage $# -eq 1 'CdOrPanic <path>'
+  _cdorpanic_dir="$1"
+  if [ -z "$_cdorpanic_dir" ] || [ "$_cdorpanic_dir" = ' ' ] || [ "$_cdorpanic_dir" = '*' ]; then
+    Panic "illegal directory name: '$_cdorpanic_dir'"
+  fi
+  PanicIfNotDir "$_cdorpanic_dir"
+  cd "$1" || Panic "fail to ${_NC_}cd $_cdorpanic_dir"
+}
+export CdOrPanic
+readonly CdOrPanic
+
+# Require: ChmodOrMkdir, CdOrPanic
+CdOrMkdir(){
+  Usage $# 1 2 'CdOrMkdir <dir> [mod=0777]'
+  _cdormkdir="$1"
+  _cdormkdir_mod="${2:-0777}"
+  if [ ! -d "$_cdormkdir" ]; then
+    ChmodOrMkdir "$_cdormkdir_mod" "$_cdormkdir"
+  fi
+  CdOrPanic "$_cdormkdir"
+}
+export CdOrMkdir
+readonly CdOrMkdir
+
+CheckDirs(){
+  Usage $# -ge 2 'CheckDirs <ignore_empty_dir 1|0> <dir>[<dir>...]'
+  _checkdirs_ignore="$1"
+  shift
+  for _checkdirs_dir in "$@"; do
+    if [ -z "$_checkdirs_dir" ]; then
+      if [ "$_checkdirs_ignore" -eq 1 ]; then
+        continue
+      fi
+      Panic "directory ${_checkdirs_dir} is not exists"
+    fi
+    CdOrPanic "$_checkdirs_dir"
+  done
+}
+export CheckDirs
+readonly CheckDirs
+
+
 Install(){
   Usage $# -ge 1 'Install <app> [app]...'
 
@@ -1601,7 +2370,7 @@ readonly Install
 InstallOrPanic(){
   Usage $# -ge 1 'InstallOrPanic <app> [app]...'
   if ! Install "$@"; then
-    PanicD "Install $* failed" "安装 $* 失败"
+    PanicD "fail to install $*" "无法安装 $*"
   fi
 }
 export InstallOrPanic
@@ -1841,70 +2610,6 @@ Download(){
 export Download
 readonly Download
 
-Filename(){
-  Usage $# 1 2 'Filename <path> [with_ext]'
-  _filename=$(basename "$1")
-  _filename_with_ext="${2:-}"
-  if [ "$_filename_with_ext" = 'with_ext' ]; then
-    printf '%s' "$_filename"
-    return 0
-  fi
-
-  case "$_filename" in
-  *.*)
-    printf '%s' "${_filename%.*}"
-    return 0
-    ;;
-  esac
-  printf '%s' "$_filename"
-}
-export Filename
-readonly Filename
-
-Extname(){
-  Usage $# 1 2 'Extname <path> [with_dot]'
-  _extname_base=$(basename "$1")
-  _extname_with_dot="${2:-}"
-
-  _extname_dot=''
-  if [ "$_extname_with_dot" = 'with_dot' ]; then
-    _extname_dot='.'
-  fi
-
-  case "$_extname_base" in
-  *.*)
-    printf '%s%s' "$_extname_dot" "${_extname_base##*.}"
-    return 0
-    ;;
-  esac
-  printf ''
-}
-export ExtName
-readonly ExtName
-
-FindFileByExt(){
-  Usage $# -ge 3 'FindFileByExt <dir> <filename> <ext> [ext]...'
-  _findfilebyext_dir="$1"
-  _findfilebyext_filename="$2"
-  shift 2
-  if [ ! -d "$_findfilebyext_dir" ]; then
-    printf ''
-    return 0
-  fi
-  for _findfilebyext_ext in "$@"; do
-    # remove dot
-    _findfilebyext_ext="${_findfilebyext_ext#.}"
-    _findfilebyext_path="$_findfilebyext_dir/$_findfilebyext_filename.$_findfilebyext_ext"
-
-    if [ -f "$_findfilebyext_path" ]; then
-      printf '%s' "$_findfilebyext_path"
-      return 0
-    fi
-  done
-  printf ''
-}
-export FindFileByExt
-readonly FindFileByExt
 
 # 获取字符的ASCII码
 EncodeASCII() {
@@ -2018,7 +2723,6 @@ StrRepeat() {
 }
 export StrRepeat
 readonly StrRepeat
-
 
 StrPad(){
   Usage $# 2 4 'StrPad <string> <length> [padding=" "] [pad_left=0]'
@@ -3117,424 +3821,6 @@ ExportProfile(){
 export ExportProfile
 readonly ExportProfile
 
-AbsDir() {
-  # shellcheck disable=SC2016
-  Usage $# -eq 1 'AbsDir <path> => bash: AbsDir "${BASH_SOURCE[0]}"; posix: AbsDir "$0"'
-  _absdir="$1"
-  PanicIfEmpty "$_absdir" 'AbsDir <path>'
-
-  if [ -f "$_absdir" ]; then
-    _absdir=$(dirname "$_absdir")
-  fi
-  if [ -d "$_absdir" ]; then
-    printf '%s' "$(cd "$_absdir" && pwd)"
-    return
-  fi
-
-  case "$_absdir" in
-      /*)
-        _absdir_new=""
-        _absdir_remaining="$_absdir"
-        ;;
-      *)
-        _absdir_new="$PWD/"
-        _absdir_remaining="$_absdir"
-        ;;
-    esac
-
-    _absdir_old_ifs="$IFS"
-    IFS='/'
-    # shellcheck disable=SC2086    # set -- no need quotes
-    set -- $_absdir_remaining
-    IFS="$_absdir_old_ifs"
-
-    for _absdir_part; do
-      case "$_absdir_part" in
-        ''|'.') continue ;;
-        '..')
-          _absdir_new="${_absdir_new%/*}"
-          ;;
-        *)
-          _absdir_new="${_absdir_new%/}/$_absdir_part"
-          ;;
-      esac
-    done
-
-    [ -z "$_absdir_new" ] && _absdir_new="/"
-
-    printf '%s' "$_absdir_new"
-}
-export AbsDir
-readonly AbsDir
-
-ParentDir(){
-  Usage $# 1 2 'ParentDir <path> [depth=1]'
-  _parentdir_path="$1"
-  _parentdir_depth="${2:-1}"
-
-  _parentdir_path="$(AbsDir "$_parentdir_path")"
-
-  while [ "$_parentdir_depth" -gt 0 ]; do
-    _parentdir_path="${_parentdir_path}/.."
-    _parentdir_depth=$((_parentdir_depth - 1))
-  done
-  printf '%s' "$(AbsDir "$_parentdir_path")"
-}
-export ParentDir
-readonly ParentDir
-
-# Require: FirstChar, AbsDir
-AbsPath(){
-  Usage $# -eq 1 'AbsPath <path>'
-  _fullpath_file="$1"
-  PanicIfEmpty "$_fullpath_file" "AbsPath <path>"
-  if [ "$(FirstChar "$_fullpath_file")" = '/' ]; then
-    printf '%s' "$_fullpath_file"
-    return 0
-  fi
-  _fullpath_dir=$(AbsDir "$_fullpath_file")
-  _fullpath_filename=$(basename "$_fullpath_file")
-  if [ -z "$_fullpath_filename" ] || [ "$_fullpath_filename" = '.' ]; then
-    printf '%s' "$_fullpath_dir"
-    return 0
-  fi
-
-  printf '%s/%s' "$_fullpath_dir" "$_fullpath_filename"
-}
-export AbsPath
-readonly AbsPath
-
-ExistGroup(){
-  Usage $# -eq 1 'ExistGroup <group>'
-  _existgroup_g="$1"
-
-  if [ -f "/etc/group" ]; then
-    InstallGrep
-    if ! grep -q "^${_existgroup_g}:" /etc/group; then
-      return 1
-    fi
-    return
-  fi
-
-  if command -v getent >/dev/null 2>&1; then
-    if ! getent group "$_existgroup_g" >/dev/null 2>&1; then
-      return 1
-    fi
-    return
-  fi
-  Panic "missing command getent or file /etc/group"
-}
-export ExistGroup
-readonly ExistGroup
-
-
-# Add a group if not exists
-AddGroupNx(){
-  _addgroupnx_usage="AddGroupNx [-r/--system] <group> [gid]"
-  Usage $# 1 3 "$_addgroupnx_usage"
-  _addgroupnx_r=''
-  if [ "$1" = "-r" ] || [ "$1" = "--system" ] || [ "$1" = "-S" ]; then
-    _addgroupnx_r="--system"
-    shift
-    Usage $# 1 2 "$_addgroupnx_usage"
-  fi
-  _addgroupnx_group="$1"
-  _addgroupnx_gid="${2-}"
-
-  # group exists
-  if ExistGroup "$_addgroupnx_group"; then
-    return
-  fi
-
-  if command -v addgroup >/dev/null 2>&1; then
-    if [ -z "$_addgroupnx_gid" ]; then
-      # @warn do not quote $_addgroupnx_r
-      $(SUDO) addgroup $_addgroupnx_r "$_addgroupnx_group"
-    else
-      # @warn do not quote $_addgroupnx_r
-      $(SUDO) addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
-    fi
-    return
-  fi
-
-  if [ -z "$_addgroupnx_gid" ]; then
-    # @warn do not quote $_addgroupnx_r
-    $(SUDO) groupadd $_addgroupnx_r "$_addgroupnx_group"
-  else
-    # @warn do not quote $_addgroupnx_r
-    $(SUDO) groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
-  fi
-}
-export addGroupx
-readonly addGroupx
-
-# add a non-login user if not exists
-AddUserNx(){
-  _addusernx_usage="AddUserNx [-r/--system] <user> [group=users|gid]"
-  Usage $# 1 3 "$_addusernx_usage"
-  _addusernx_r=''
-  if [ "$1" = "-r" ] || [ "$1" = "--system" ]; then
-    _addusernx_r="--system"
-    shift
-    Usage $# 1 2 "$_addusernx_usage"
-  fi
-  _addusernx_user="$1"
-  _addusernx_group="${2-}"
-
-  if ExistsUser "$_addusernx_user"; then
-    return
-  fi
-  _addusernx_sudo="$(SUDO)"
-
-  # --gid
-  if IsInt "$_addusernx_group"; then
-    if command -v adduser >/dev/null 2>&1; then
-      if [ -n "$_addusernx_group" ];then
-        # @warn do not quote $_addusernx_r
-        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gid "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
-      else
-        # @warn do not quote $_addusernx_r
-        $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
-      fi
-      return
-    fi
-
-    if [ -n "$_addusernx_group" ]; then
-      # @warn do not quote $_addusernx_r
-      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin --gid "$_addusernx_group" "$_addusernx_user"
-    else
-      # @warn do not quote $_addusernx_r
-      $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
-    fi
-
-    return
-  fi
-
-  # --group
-  if [ -n "$_addusernx_group" ]; then
-    # @warn do not quote $_addusernx_r
-    AddGroupNx $_addusernx_r "$_addusernx_group"
-  fi
-  if command -v adduser >/dev/null 2>&1; then
-    if [ -n "$_addusernx_group" ];then
-      # @warn do not quote $_addusernx_r
-      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --ingroup "$_addusernx_group" --gecos "$_addusernx_user" "$_addusernx_user"
-    else
-      # @warn do not quote $_addusernx_r
-      $_addusernx_sudo adduser $_addusernx_r --disabled-password --disabled-login --no-create-home --shell /sbin/nologin --gecos "$_addusernx_user" "$_addusernx_user"
-    fi
-    return
-  fi
-
-  if [ -n "$_addusernx_group" ]; then
-    # @warn do not quote $_addusernx_r
-    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  -g "$_addusernx_group" "$_addusernx_user"
-  else
-    # @warn do not quote $_addusernx_r
-    $_addusernx_sudo useradd $_addusernx_r --shell /sbin/nologin  "$_addusernx_user"
-  fi
-}
-export AddUserNx
-readonly AddUserNx
-
-# 递归修改目录及子目录用户。
-# Required: ReplaceSpaceToLF
-ChownR() {
-  Usage $# -ge 2 'ChownR <user> <dir> [dir...]'
-  _chownr_user="$1"
-  shift
-
-  if ! ExistsUser "$_chownr_user"; then
-    PanicD "$_chownr_user is not a valid user" "$_chownr_user 不是已存在的用户"
-  fi
-
-  for _chownr_dir in "$@"; do
-    if [ -z "$_chownr_dir" ]; then continue; fi
-    # 这样修改权限比 `chown -R` 性能更好
-    if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
-      continue
-    fi
-    $(SUDO) chown -R "$_chownr_user" "$_chownr_dir"
-  done
-}
-export ChownR
-readonly ChownR
-
-# 递归修改目录及子目录用户组。这样修改权限比 `chgrp -R` 性能更好
-# Required: ReplaceSpaceToLF
-ChgrpR() {
-  Usage $# -ge 2 'ChgrpR <group> <dir> [dir...]'
-  _chgrpr_group="$1"
-  shift
-
-  for _chgrpr_dir in "$@"; do
-    if [ -z "$_chgrpr_dir" ]; then continue; fi
-    if find "$_chgrpr_dir" \! -group "$_chgrpr_group" -exec chgrp "$_chgrpr_group" {} + >/dev/null 2>&1; then
-      continue
-    fi
-    $(SUDO) chgrp -R "$_chgrpr_group" "$_chgrpr_dir"
-  done
-}
-export ChgrpR
-readonly ChgrpR
-
-# Require: ReplaceSpaceToLF, Mkdir
-ChmodOrMkdir(){
-  Usage $# -ge 2 'ChmodOrMkdir <mod> <dir> [dir]...'
-  _chmodormkdir_mod="$1"
-  shift
-  for _chmodormkdir_dir in "$@"; do
-    if [ -z "$_chmodormkdir_dir" ]; then continue; fi
-    if [ ! -d "$_chmodormkdir_dir" ]; then MkdirsOrSudo "$_chmodormkdir_dir"; fi
-    ChmodOrSudo "$_chmodormkdir_mod" "$_chmodormkdir_dir"
-  done
-}
-export ChmodOrMkdir
-readonly ChmodOrMkdir
-
-# Change mode of files, create files if not exists
-ChmodOrCreate(){
-  Usage $# -ge 2 'ChmodOrCreate <mod> <file> [file]... => ChmodOrCreate a+rw file1 file 2; ChmodOrCreate 1777 file'
-  _chmodorcreate_mod="$1"
-  shift
-  for _chmodorcreate_file in "$@"; do
-    if [ -z "$_chmodorcreate_file" ]; then continue; fi
-    if [ ! -e "$_chmodorcreate_file" ]; then touch "$_chmodorcreate_file"; fi
-    ChmodOrSudo "$_chmodorcreate_mod" "$_chmodorcreate_file"
-  done
-}
-export ChmodOrCreate
-readonly ChmodOrCreate
-
-# Create dirs with a certain owner
-# Require: Split
-ChownOrMkdir(){
-  Usage $# -ge 2 'ChownOrMkdir <user|user:group> <dir> [dir...]'
-  _chownormkdir_ug="$1"
-  shift
-  _chownormkdir_user="$_chownormkdir_ug"
-  _chownormkdir_group=''
-  case "$_chownormkdir_user" in
-    *:*)
-      _chownormkdir_group="${_chownormkdir_ug#*:}"
-      _chownormkdir_user="${_chownormkdir_ug%:*}"
-      ;;
-  esac
-
-  if [ -z "$_chownormkdir_user" ]; then PanicUsage 'ChownOrMkdir <user|user:group> <dir> [dir...]'; fi
-  if ! ExistsUser "$_chownormkdir_user"; then
-    PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
-  fi
-
-  for _chownormkdir_dir in "$@"; do
-    if [ -z "$_chownormkdir_dir" ]; then continue; fi
-    if [ ! -d "$_chownormkdir_dir" ]; then MkdirsOrSudo "$_chownormkdir_dir"; fi
-    if [ -n "$_chownormkdir_group" ]; then
-      $(SUDO) chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
-      continue
-    fi
-    ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
-  done
-}
-export ChownOrMkdir
-readonly ChownOrMkdir
-
-CleanOrMkdir(){
-  Usage $# 1 2 'CleanOrMkdir <dir> [mod=0777]'
-  _cleanormkdir="$1"
-  _cleanormkdir_mod="${2:-0777}"
-  if [ ! -d "$_cleanormkdir" ]; then
-    ChmodOrMkdir "$_cleanormkdir_mod" "$_cleanormkdir"
-    return 0
-  fi
-  # Check is already empty
-  if [ -z "$(ls -A "$_cleanormkdir" 2>/dev/null)" ]; then
-    return 0
-  fi
-  RemoveDirsOrSudo "$_cleanormkdir/"*
-}
-export CleanOrMkdir
-readonly CleanOrMkdir
-
-# Create a temporary directory if not exists or clear this directory
-# Require: ChmodOrMkdir
-ClearTMPDIR(){
-  # shellcheck disable=SC2016
-  Usage $# -le 1 'ClearTMPDIR [dir=$TMPDIR]'
-  CleanOrMkdir "${1:-"$TMPDIR"}" 1777
-}
-export ClearTMPDIR
-readonly ClearTMPDIR
-
-AppendToFile(){
-  Usage $# -ge 2 'AppendToFile <file> <string>'
-  _appendtofile_file="$1"
-  shift
-  if [ ! -f "$_appendtofile_file" ]; then
-    printf '%s' "$@" > "$_appendtofile_file" || return 1
-    ChmodOrSudo 644 "$_appendtofile_file" || true
-    return 0
-  fi
-
-  _g_appendtofile_temp_file=$(mktemp) || return 1
-  trap 'rm -f "$_g_appendtofile_temp_file" 2>/dev/null' EXIT
-  trap 'rm -f "$_g_appendtofile_temp_file" 2>/dev/null; return 1' INT TERM
-
-  {
-    printf '%s' "$@"
-    cat "$_appendtofile_file"
-  } > "$_g_appendtofile_temp_file" || {
-    rm -f "$_g_appendtofile_temp_file"
-    return 1
-  }
-
-  MoveOrSudo "$_g_appendtofile_temp_file" "$_appendtofile_file"
-}
-export AppendToFile
-readonly AppendToFile
-
-CdOrPanic(){
-  Usage $# -eq 1 'CdOrPanic <path>'
-  _cdorpanic_dir="$1"
-  if [ -z "$_cdorpanic_dir" ] || [ "$_cdorpanic_dir" = ' ' ] || [ "$_cdorpanic_dir" = '*' ]; then
-    Panic "illegal directory name: '$_cdorpanic_dir'"
-  fi
-  PanicIfNotDir "$_cdorpanic_dir"
-  cd "$1" || Panic "failed to ${_NC_}cd $_cdorpanic_dir"
-}
-export CdOrPanic
-readonly CdOrPanic
-
-# Require: ChmodOrMkdir, CdOrPanic
-CdOrMkdir(){
-  Usage $# 1 2 'CdOrMkdir <dir> [mod=0777]'
-  _cdormkdir="$1"
-  _cdormkdir_mod="${2:-0777}"
-  if [ ! -d "$_cdormkdir" ]; then
-    ChmodOrMkdir "$_cdormkdir_mod" "$_cdormkdir"
-  fi
-  CdOrPanic "$_cdormkdir"
-}
-export CdOrMkdir
-readonly CdOrMkdir
-
-CheckDirs(){
-  Usage $# -ge 2 'CheckDirs <ignore_empty_dir 1|0> <dir>[<dir>...]'
-  _checkdirs_ignore="$1"
-  shift
-  for _checkdirs_dir in "$@"; do
-    if [ -z "$_checkdirs_dir" ]; then
-      if [ "$_checkdirs_ignore" -eq 1 ]; then
-        continue
-      fi
-      Panic "directory ${_checkdirs_dir} is not exists"
-    fi
-    CdOrPanic "$_checkdirs_dir"
-  done
-}
-export CheckDirs
-readonly CheckDirs
-
 # Format ,a,b,c or [,a,,'b',  "c"] to ['a', 'b', 'c'] or other format
 # It'll ignore empty value at head or at tail
 FormatArrayString(){
@@ -3745,9 +4031,9 @@ ReplaceYamlConfig(){
   PanicIfNotFile "$_replaceyamlconfig_src" "$_replaceyamlconfig_rep"
 
   _replaceyamlconfig_sep=$(SafeSedSeparator "$_replaceyamlconfig_tag")
-  _replaceyamlconfig_temp=$(mktemp)
-  trap 'rm -f "$_replaceyamlconfig_temp"' EXIT
-  trap 'rm -f "$_replaceyamlconfig_temp"; exit 1' INT TERM
+  _replaceyamlconfig_temp=$(mktemp) || PanicMktemp
+  trap 'rm -f "$_replaceyamlconfig_temp" 2>/dev/null' EXIT
+  trap 'rm -f "$_replaceyamlconfig_temp" 2>/dev/null; exit 1' INT TERM
 
   #  || [ -n "$_replaceyamlconfig_line" ]  防止尾部不是以换行符结尾
   while IFS= read -r _replaceyamlconfig_line || [ -n "$_replaceyamlconfig_line" ]; do
@@ -3911,9 +4197,9 @@ GenerateRSAKeys() {
   Install openssl
 
   # 创建临时文件，当接收到信号后，自动删除
-  _generatersakeys_tempdir=$(mktemp -d)
-  trap 'rm -rf "$_generatersakeys_tempdir"' EXIT
-  trap 'rm -rf "$_generatersakeys_tempdir"; exit 1' INT TERM
+  _generatersakeys_tempdir=$(mktemp -d) || PanicMktempD
+  trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null' EXIT
+  trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null; exit 1' INT TERM
 
   mkdir -p "$_generatersakeys_dir"
 

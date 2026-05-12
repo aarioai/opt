@@ -148,6 +148,34 @@ testUnquote(){
   assert "Unquote $str" "Hi!\"" "$(Unquote "$str")"
 }
 
+testExtractNumber(){
+  testing 'ExtractNumber'
+  str="100"
+  assert "ExtractNumber $str" "100" "$(ExtractNumber "$str")"
+  str="100.25"
+  assert "ExtractNumber $str" "100.25" "$(ExtractNumber "$str")"
+  str="100.25kB"
+  assert "ExtractNumber $str" "100.25" "$(ExtractNumber "$str")"
+  str="  100.25 kB  "
+  assert "ExtractNumber $str" "100.25" "$(ExtractNumber "$str")"
+  str="-  100.25 kB  -"
+  assert "ExtractNumber $str" "100.25" "$(ExtractNumber "$str")"
+}
+
+testExtractInt(){
+  testing 'ExtractInt'
+  str="100"
+  assert "ExtractInt $str" "100" "$(ExtractInt "$str")"
+  str="100.25"
+  assert "ExtractInt $str" "100" "$(ExtractInt "$str")"
+  str="100.25kB"
+  assert "ExtractInt $str" "100" "$(ExtractInt "$str")"
+  str="  100.25 kB  "
+  assert "ExtractInt $str" "100" "$(ExtractInt "$str")"
+  str="-  100.25 kB  -"
+  assert "ExtractInt $str" "100" "$(ExtractInt "$str")"
+}
+
 testIsInt(){
   testing 'IsInt'
   if ! IsInt '1230'; then Panic "1230 should be an interger"; fi
@@ -173,7 +201,7 @@ testIsPositiveInt(){
 
 
 testLog() {
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   tmp="${g_temp}/lib-test.log"
@@ -243,6 +271,17 @@ testIAmRoot() {
   assert 'IAmRoot' "$is_root" "$got"
 }
 
+testBytesToIEC(){
+  testing 'BytesToIEC'
+  bytes="107374182400"
+  assert "BytesToIEC $bytes 2" "100.00Gi" "$(BytesToIEC "$bytes" 2)"
+  assert "BytesToIEC $bytes 1" "100.0Gi" "$(BytesToIEC "$bytes" 1)"
+  assert "BytesToIEC $bytes 0" "100Gi" "$(BytesToIEC "$bytes")"
+
+  assert "BytesToIEC $bytes 2 ' '" "100.00 Gi" "$(BytesToIEC "$bytes" 2 ' ')"
+  assert "BytesToIEC $bytes 1 ' '" "100.0 Gi" "$(BytesToIEC "$bytes" 1 ' ')"
+}
+
 testCpuArch() {
   testing 'CpuArch'
   arc=$(CpuArch)
@@ -253,6 +292,7 @@ testCpuCores(){
   testing 'CpuCores'
   if ! IsPositiveInt "$(CpuCores)"; then Panic 'cant get cpu cores'; fi
 }
+
 
 testUlimitN(){
   testing 'UlimitN'
@@ -404,7 +444,7 @@ testChgrpR() {
 
 testChownOrMkdir(){
   testing 'ChownOrMkdir'
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
 
@@ -1044,7 +1084,7 @@ testDownload(){
   testing 'Download'
   url='https://www.baidu.com'
   filename='baidu.index'
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   cd "$g_temp"
@@ -1097,7 +1137,7 @@ testAbsPath() {
   testing 'AbsPath'
   cur=${PWD:-"$(pwd)"}
 
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   cd "$g_temp"
@@ -1325,7 +1365,7 @@ testGenerateRSAKeys() {
 
   # 测试stream模式
   prefix=$(Now -N)
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'stream' "$(whoami)" "$g_temp" "A$prefix-" 512
@@ -1341,7 +1381,7 @@ testGenerateRSAKeys() {
 
   # 测试full模式
   prefix=$(Now -N)
-  g_temp=$(mktemp -d) || return 1
+  g_temp=$(mktemp -d) || PanicMktempD
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'full' "$(whoami)" "$g_temp" "B$prefix-" 512
@@ -1430,6 +1470,9 @@ main() {
   testSafeSedSeparator
 
   testUnquote
+
+  testExtractNumber
+  testExtractInt
   testIsInt
   testIsPositiveInt
 
@@ -1442,6 +1485,8 @@ main() {
 
   testExistsUser
   testIAmRoot
+
+  testBytesToIEC
 
   testCpuArch
   testCpuCores

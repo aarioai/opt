@@ -109,12 +109,13 @@ k8sRenderTemplate(){
 export k8sRenderTemplate
 readonly k8sRenderTemplate
 
-k8sProcessTemplate(){
-  Usage $# 2 3 'k8sProcessTemplate <temp_file> <dst_dir> [cat_then_delete=|-d]'
-  local _k8s_temp_file="$1"
-  local _k8s_temp_dst="$2"
-  local _k8s_cat_then_delete="${3:-}"
-  PanicIfNotFile "$_k8s_temp_file"
+k8sRenderConfigmap(){
+  Usage $# 3 4 'k8sRenderConfigmap <env> <configmap_file> <dst_dir> [cat_then_delete=|-d]'
+  local _k8s_env="$1"
+  local _k8s_configmap_file="$2"
+  local _k8s_temp_dst="$3"
+  local _k8s_cat_then_delete="${4:-}"
+  PanicIfNotFile "$_k8s_configmap_file"
 
   if [ "$_k8s_temp_dst" = '-d' ]; then
     _k8s_temp_dst=''
@@ -122,42 +123,60 @@ k8sProcessTemplate(){
   fi
 
   local _k8s_temp_dir
-  _k8s_temp_dir=$(AbsDir "$_k8s_temp_file")
-  local _k8s_temp_filename
-  _k8s_temp_filename=$(basename "$_k8s_temp_file")
-  _k8s_temp_dst="${_k8s_temp_dst}/${K8S_GENERATED_PREFIX}${_k8s_temp_filename}"
+  _k8s_temp_dir=$(AbsDir "$_k8s_configmap_file")
+  local _k8s_configmap_filename
+  _k8s_configmap_filename=$(basename "$_k8s_configmap_file")
+  _k8s_temp_dst="${_k8s_temp_dst}/${K8S_GENERATED_PREFIX}${_k8s_configmap_filename}"
 
   # 下面 trap 需要用到全局变量，因此不能使用 local
-  _k8s_g_temp=$(mktemp)
-  trap 'rm -f "$_k8s_g_temp"' EXIT
-  trap 'rm -f "$_k8s_g_temp"; exit 1' INT TERM
+  _k8s_g_tempdir=$(mktemp -d) || PanicMktemp
+  trap 'rm -rf "$_k8s_g_tempdir" 2>/dev/null' EXIT
+  trap 'rm -rf "$_k8s_g_tempdir" 2>/dev/null; return 1' INT TERM
 
-  cat "$_k8s_temp_file" > "$_k8s_g_temp"
+  _k8s_g_temp="${_k8s_g_tempdir}/$(basename "$_k8s_configmap_file")"
+  _k8s_g_temp_include="${_k8s_g_temp}-configmap.yaml"
+  cat "$_k8s_configmap_file" > "$_k8s_g_temp"
 
-  local _k8s_temp_tag
-  local _k8s_data_file
+  local _k8s_include_tag
+  local _k8s_include_path
+  local _k8s_include_env_path
+    local _k8s_include_abs
+    local _k8s_include_env_abs
 
-  while IFS= read -r _k8s_temp_tag || [ -n "$_k8s_temp_tag" ]; do
-    [ -n "$_k8s_temp_tag" ] || continue
-    _k8s_data_file="${_k8s_temp_dir}/${_k8s_temp_tag#*#}"
-    PanicIfNotFile "$_k8s_data_file"
-    ReplaceYamlConfig "$_k8s_g_temp" "$_k8s_g_temp" "$_k8s_temp_tag" "$_k8s_data_file"
+  while IFS= read -r _k8s_include_tag || [ -n "$_k8s_include_tag" ]; do
+    [ -n "$_k8s_include_tag" ] || continue
+    _k8s_include_path="${_k8s_include_tag#@}"   # trim @
+    _k8s_include_env_path="${_k8s_include_path%.*}-${_k8s_env}.${_k8s_include_path##*.}"
+    _k8s_include_abs="${_k8s_temp_dir}/${_k8s_include_path}"
+    _k8s_include_env_abs="${_k8s_temp_dir}/${_k8s_include_env_path}"
+    if [ ! -f "$_k8s_include_abs" ] && [ ! -f "$_k8s_include_env_abs" ]; then
+      PanicD "missing configmap $_k8s_include_tag" "缺少 configmap $_k8s_include_tag"
+    fi
+
+    CopyOrTouchOrPanic "$_k8s_include_abs" "$_k8s_g_temp_include"
+
+    if [ -f "$_k8s_include_env_abs" ]; then
+      InfoD "merge #$_k8s_include_env_path into #$_k8s_include_path" "合并 $_k8s_include_env_path 到 $_k8s_include_path"
+      WriteFileOrSudo "$LF" '->>' "$_k8s_g_temp_include"
+      CatOrPanic "$_k8s_include_env_abs" '->>' "$_k8s_g_temp_include"
+      WriteFileOrSudo "$LF" '->>' "$_k8s_g_temp_include"
+    fi
+
+    ReplaceYamlConfig "$_k8s_g_temp" "$_k8s_g_temp" "$_k8s_include_tag" "$_k8s_g_temp_include"
   done < <(MatchedLines "$_k8s_g_temp" "$K8S_INCLUDE_PREFIX")
 
   if [ "$_k8s_cat_then_delete" = '-d' ]; then
     Lowlight "# Generated $_k8s_temp_dst"
-    cat "$_k8s_g_temp"
+    CatOrPanic "$_k8s_g_temp"
   else
     chmod a+r "$_k8s_g_temp"
-    rm -f "$_k8s_temp_dst"
-    mv "$_k8s_g_temp" "$_k8s_temp_dst"
-    Debug "convert $(LastN 2 '/' "$_k8s_temp_file") => $(LastN 2 '/' "$_k8s_temp_dst")"
+    MoveOrPanic "$_k8s_g_temp" "$_k8s_temp_dst"
+    Debug "convert $(LastN 2 '/' "$_k8s_configmap_file") => $(LastN 2 '/' "$_k8s_temp_dst")"
   fi
-  rm -f "$_k8s_g_temp"
-
+  rm -rf "$_k8s_g_tempdir"
 }
-export k8sProcessTemplate
-readonly k8sProcessTemplate
+export k8sRenderConfigmap
+readonly k8sRenderConfigmap
 
 k8sGetValue(){
   Usage $# -ge 4 'k8sGetValue <workdir> <key> <-f|-s> <yaml|str>'
@@ -174,17 +193,26 @@ k8sGetValue(){
 export k8sGetValue
 readonly k8sGetValue
 
-k8sProbeNamespacePrefix(){
-  Usage $# -eq 1 'k8sProbeNamespacePrefix <workdir>'
+k8sProbeEnv(){
+  Usage $# -ge 1 'k8sProbeEnv <workdir> [-v]'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_verbose="${2:-}"
 
   local _k8s_env_yaml
   _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" WITH_PANIC)
-  YqGet ".namespace.prefix" -f "$_k8s_env_yaml" WITH_PANIC
+
+  if [ "$_k8s_verbose" != '-v' ]; then
+    YqGet ".env" -f "$_k8s_env_yaml" WITH_PANIC
+    return 0
+  fi
+  Lowlight "# $_k8s_env_yaml"
+  cat "$_k8s_env_yaml"
+  echo ''
 }
-export k8sProbeNamespacePrefix
-readonly k8sProbeNamespacePrefix
+export k8sProbeEnv
+readonly k8sProbeEnv
+
 
 k8sProbeNamespace(){
   Usage $# -eq 1 'k8sProbeNamespace <workdir>'
@@ -253,9 +281,9 @@ k8sProbeValues(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_values_yaml="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
-  local _k8s_namespace_prefix
-  _k8s_namespace_prefix=$(k8sProbeNamespacePrefix "$_k8s_workdir")
-  local _k8s_values_override_yaml="$_k8s_workdir/${K8S_VALUES_YAML_NAME}-${_k8s_namespace_prefix}.yaml"
+  local _k8s_env
+  _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
+  local _k8s_values_override_yaml="$_k8s_workdir/${K8S_VALUES_YAML_NAME}-${_k8s_env}.yaml"
   if [ ! -f "$_k8s_values_override_yaml" ]; then
     cat "$_k8s_values_yaml"
     return 0
@@ -269,7 +297,7 @@ k8sProbeValues(){
   _k8s_values_namespace=$(YqGet '.namespace' -s "$_k8s_values")
 
   if [ -z "$_k8s_namespace" ] && [ -z "$_k8s_values_namespace" ]; then
-    PanicD 'missing namespace' '缺少namespace'
+    PanicD 'missing namespace' '缺少 namespace'
   fi
 
   if [ -z "$_k8s_values_namespace" ]; then

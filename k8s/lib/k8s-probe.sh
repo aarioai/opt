@@ -8,13 +8,13 @@ k8s probe <CMD> [.]
   -h|-help|help     Show help
   configmap         Show configmaps
   dry               Dry run 'k8s up', i.e. show all rendered yaml configurations
-  env               Cat $K8S_ENV_YAML
+  env               Get .env in $K8S_ENV_YAML
+    [-v]              Cat $K8S_ENV_YAML
   global            Render $K8S_GLOBAL_YAML
   images            List all images by .Values.image or .Values.images
   logs              Show logs of current service
   name              Show .Chart.name
   n|namespace       Show current namespace (by $K8S_GLOBAL_YAML)
-  prefix            Show namespace prefix, a.s. values-<prefix>.yaml (by $K8S_ENV_YAML)
   pvc               Show PVCs
   pvc-size|pvc-sizes  Show PVC sizes
     [name]          Show the specific PVC size
@@ -25,22 +25,9 @@ k8s probe <CMD> [.]
   status            Show status of current pods, services, and PVCs
   tls               Show TLS secrets of current service
     json              Show in JSON format
-  values            Render ${K8S_VALUES_YAML_NAME}-<.prefix>.yaml
+  values            Render ${K8S_VALUES_YAML_NAME}-<env>.yaml
 "
 
-k8sProbeEnv(){
-  Usage $# -eq 1 'k8sProbeEnv <workdir>'
-  local _k8s_workdir
-  _k8s_workdir="$(k8sWorkDir "$1")"
-
-  local _k8s_env_yaml
-  _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" WITH_PANIC)
-  Lowlight "# $_k8s_env_yaml"
-  cat "$_k8s_env_yaml"
-  echo ''
-}
-export k8sProbeEnv
-readonly k8sProbeEnv
 
 k8sProbeGlobalYaml(){
   Usage $# 1 2 'k8sProbeGlobalYaml <workdir> [WITH_PANIC]'
@@ -84,6 +71,9 @@ k8sProbeConfigMap(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   local _k8s_cat_then_delete="${2:-}"
 
+  local _k8s_env
+  _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
+
   local _k8s_configmap_dir="${_k8s_workdir}/configmap"
   PanicIfNotDir "$_k8s_configmap_dir"
   local _k8s_templates_dir="${_k8s_workdir}/templates"
@@ -95,7 +85,7 @@ k8sProbeConfigMap(){
   for _k8s_cfg in "$_k8s_configmap_dir"/*.yaml; do
     [ -f "$_k8s_cfg" ] || continue
     # shellcheck disable=SC2086
-    k8sProcessTemplate "$_k8s_cfg" "$_k8s_templates_dir" $_k8s_cat_then_delete
+    k8sRenderConfigmap "$_k8s_env" "$_k8s_cfg" "$_k8s_templates_dir" $_k8s_cat_then_delete
   done
 }
 export k8sProbeConfigMap
@@ -264,13 +254,12 @@ k8sProbe(){
   case "$_k8s_what" in
     configmap) k8sProbeConfigMap "$_k8s_workdir" -d ;;
     dry) k8sProbeDryRun "$_k8s_workdir" ;;
-    env) k8sProbeEnv "$_k8s_workdir" ;;
+    env) k8sProbeEnv "$_k8s_workdir" "$@";;
     global) k8sProbeGlobal "$_k8s_workdir" ;;
     images) k8sProbeImages "$_k8s_workdir" ;;
     logs) k8sProbeLogs "$_k8s_workdir" ;;
     name) k8sProbeName "$_k8s_workdir" ;;
     n|namespace) k8sProbeNamespace "$_k8s_workdir" ;;
-    prefix) k8sProbeNamespacePrefix "$_k8s_workdir" ;;
     pvc) k8sProbePVCs "$_k8s_workdir" ;;
     pvc-size|pvc-sizes) k8sProbePvcSizes "$_k8s_workdir" ;;
     pvc-byte|pvc-bytes) k8sProbePvcBytes "$_k8s_workdir" ;;

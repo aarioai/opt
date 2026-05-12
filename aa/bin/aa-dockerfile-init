@@ -103,7 +103,7 @@ preinstallPackages(){
 
       # ubi minimal: ~50MB, redhat 系列（ubi, centos, rockylinux）
       # ubi9/ubi-micro 没有 dnf/yum/microdnf 包管理器，安装需要通过其他镜像复制
-      g_temp=$(mktemp -d) || return 1
+      g_temp=$(mktemp -d) || PanicMktempD
       trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
       trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
 

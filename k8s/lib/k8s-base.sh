@@ -9,9 +9,8 @@ if [ -x "../../aa/lib/aa-posix-yq.sh" ]; then . ../../aa/lib/aa-posix-yq.sh; els
 export K8S_TEST_POD
 readonly K8S_TEST_POD='aa-temp-test'
 
-
 export K8S_INCLUDE_PREFIX
-readonly K8S_INCLUDE_PREFIX='#include/'
+readonly K8S_INCLUDE_PREFIX='@include/'
 
 export K8S_GENERATED_PREFIX
 readonly K8S_GENERATED_PREFIX='--generated--'
@@ -180,6 +179,7 @@ k8sStatus(){
 
   local _k8s_pvc_full
   for _k8s_pvc in "$@"; do
+    [ -n "$_k8s_pvc" ] || continue
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
       _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       Heading "[PVC] $_k8s_pvc_full"
@@ -203,8 +203,8 @@ k8sWaitReady(){
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  if [ $# -gt 0 ]; then
-    Heading "allocating PVC: $*"
+  if [ -n "$_k8s_pvc_total_bytes" ] && [ "$_k8s_pvc_total_bytes" -gt 0 ]; then
+    Heading "allocating $# PVC (total: $(BytesToIEC "$_k8s_pvc_total_bytes")): $*"
   fi
 
   while ! kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" --no-headers 2>/dev/null | grep -q .; do
@@ -212,19 +212,24 @@ k8sWaitReady(){
     sleep 2
   done
 
-  local _k8s_wait_timeout=600
   local _k8s_pvc_total_gi=$(( (_k8s_pvc_total_bytes + 1073741823) / 1073741824 ))
-
+  local _k8s_wait_timeout
   if [ "$_k8s_pvc_total_gi" -le 1 ]; then
     _k8s_wait_timeout=30
   elif [ "$_k8s_pvc_total_gi" -le 10 ]; then
     _k8s_wait_timeout=60
-  elif [ "$_k8s_pvc_total_gi" -le 50 ]; then
+  elif [ "$_k8s_pvc_total_gi" -le 40 ]; then
     _k8s_wait_timeout=120
-  elif [ "$_k8s_pvc_total_gi" -le 100 ]; then
+  elif [ "$_k8s_pvc_total_gi" -le 80 ]; then
     _k8s_wait_timeout=180
+  elif [ "$_k8s_pvc_total_gi" -le 200 ]; then
+    _k8s_wait_timeout=240
   elif [ "$_k8s_pvc_total_gi" -le 500 ]; then
     _k8s_wait_timeout=300
+  elif [ "$_k8s_pvc_total_gi" -le 1000 ]; then
+    _k8s_wait_timeout=600
+  else
+    _k8s_wait_timeout=1080
   fi
 
   Heading "kubectl wait --for=condition=Ready pods -n $_k8s_namespace -l $_k8s_selector --timeout=${_k8s_wait_timeout}s"
@@ -528,7 +533,7 @@ k8sAddYamlToGitIgnore(){
   fi
 
   Info "appending ${K8S_GITIGNORE_GENERATED_FILE} ==> $_k8s_gitignore"
-  AppendToFile "$_k8s_gitignore" "${K8S_GITIGNORE_GENERATED_FILE}${LF}"
+  PrependToFileOrSudo "$_k8s_gitignore" "${K8S_GITIGNORE_GENERATED_FILE}${LF}"
 }
 export k8sAddYamlToGitIgnore
 readonly k8sAddYamlToGitIgnore

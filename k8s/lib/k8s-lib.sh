@@ -278,6 +278,8 @@ k8sUp(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
 
+  Info "k8s up"
+
   local _k8s_dry_run=0
   for _k8s_arg in "$@"; do
     if [ "$_k8s_arg" = "--dry-run" ]; then
@@ -286,8 +288,8 @@ k8sUp(){
     fi
   done
 
-  local _k8s_prefix
-  _k8s_prefix=$(k8sProbeNamespacePrefix "$_k8s_workdir")
+  local _k8s_env
+  _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
   local _k8s_chart_name
   _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
   local _k8s_namespace
@@ -296,7 +298,7 @@ k8sUp(){
   k8sProbeConfigMap "$_k8s_workdir"
 
   if ! Yes "$_k8s_dry_run"; then k8sPullProbedImages "$_k8s_workdir"; fi
-  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_prefix}.yaml"
+  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_env}.yaml"
   if [ ! -f "$_k8s_helm_file" ]; then
     _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   fi
@@ -332,6 +334,8 @@ k8sDown(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
+
+  Info "k8s down"
 
   local _k8s_down_pvc=''
   local _k8s_down_tls=''
