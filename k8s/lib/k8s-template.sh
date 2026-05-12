@@ -290,19 +290,35 @@ k8sProbeValues(){
   fi
   local _k8s_values
   _k8s_values=$(yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$_k8s_values_yaml" "$_k8s_values_override_yaml")
+
+  # Try append .hostname
+  local _k8s_hostname
+  if command -v hostname >/dev/null 2>&1; then
+    _k8s_hostname=$(hostname)
+  fi
+  local _k8s_values_hostname
+  _k8s_values_hostname=$(YqGet '.hostname' -s "$_k8s_values")
+  if [ -n "$_k8s_hostname" ] && [ -n "$_k8s_values_hostname" ] && [ "$_k8s_hostname" != "$_k8s_values_hostname" ]; then
+    WarnD ".Values.hostname=$_k8s_values_hostname is not same as real hostname: $_k8s_hostname" \
+      ".Values.hostname=$_k8s_values_hostname 跟主机hostname（$_k8s_hostname）不一致"
+  fi
+
+  if [ -z "$_k8s_values_hostname" ] && [ -n "$_k8s_hostname" ] ; then
+    _k8s_values="hostname: ${_k8s_hostname}${LF}${_k8s_values}"
+  fi
+
+  # Try append .namespace
   local _k8s_namespace
   _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
-
   local _k8s_values_namespace
   _k8s_values_namespace=$(YqGet '.namespace' -s "$_k8s_values")
-
   if [ -z "$_k8s_namespace" ] && [ -z "$_k8s_values_namespace" ]; then
     PanicD 'missing namespace' '缺少 namespace'
   fi
-
   if [ -z "$_k8s_values_namespace" ]; then
     _k8s_values="namespace: ${_k8s_namespace}${LF}${_k8s_values}"
   fi
+
   echo "$_k8s_values"
 }
 export k8sProbeValues
