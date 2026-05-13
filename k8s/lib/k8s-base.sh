@@ -13,7 +13,7 @@ export K8S_INCLUDE_PREFIX
 readonly K8S_INCLUDE_PREFIX='@include/'
 
 export K8S_GENERATED_PREFIX
-readonly K8S_GENERATED_PREFIX='--generated--'
+readonly K8S_GENERATED_PREFIX='generated---'      # Do not start with _ or ., otherwise may ignored by helm
 
 export K8S_GITIGNORE_GENERATED_FILE
 readonly K8S_GITIGNORE_GENERATED_FILE="**/templates/${K8S_GENERATED_PREFIX}*.yaml"
@@ -523,8 +523,8 @@ k8sAddYamlToGitIgnore(){
   if [ -z "$_k8s_gitignore" ]; then
     # fallback: create a .gitignore
     Notice "creating $K8S_GITIGNORE_GENERATED_FILE ==> $_k8s_gitignore"
-    echo "$K8S_GITIGNORE_GENERATED_FILE" > "$_k8s_gitignore"
-    ChmodOrSudo 644 "$_k8s_gitignore"
+    WriteFileOrPanic "$K8S_GITIGNORE_GENERATED_FILE" '->' "$_k8s_gitignore"
+    ChmodOrSudo 644 "$_k8s_gitignore" || true
     return
   fi
 

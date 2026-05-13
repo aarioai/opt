@@ -24,7 +24,6 @@ k8sClearWorkDir(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
-  return 0
   PanicIfEmpty "$K8S_GENERATED_PREFIX" 'K8S_GENERATED_PREFIX'
   Debug "rm -f ${_k8s_workdir}/templates/${K8S_GENERATED_PREFIX}*"
   rm -f "${_k8s_workdir}/templates/${K8S_GENERATED_PREFIX}"*
@@ -51,7 +50,7 @@ k8sRenderTemplate(){
 
   while IFS= read -r _k8s_yaml_line || [ -n "$_k8s_yaml_line" ]; do
     # Match standard "{{ .Var }}" or "{{ .Var }}-key", i.e. helm template with quotes
-    while [[ $_k8s_yaml_line =~ \{\{[[:space:]]*([^}]+)[[:space:]]*\}\} ]]; do
+    while [[ $_k8s_yaml_line =~ \{\{[[:space:]]*(\.[^}]+)[[:space:]]*\}\} ]]; do
       local _k8s_var
       _k8s_var=$(Trim "${BASH_REMATCH[1]}")
       _k8s_vars["$_k8s_var"]=1
@@ -59,7 +58,7 @@ k8sRenderTemplate(){
     done
 
     # Match {? {.Var: ''} : ''}, i.e. helm template without quotes
-    while [[ $_k8s_yaml_line =~ \{\?[[:space:]]*\{[[:space:]]*([^:]+):[[:space:]]*'' ]]; do
+    while [[ $_k8s_yaml_line =~ \{\?[[:space:]]*\{[[:space:]]*(\.[^:]+):[[:space:]]*'' ]]; do
       local _k8s_var
       _k8s_var=$(Trim "${BASH_REMATCH[1]}")
       _k8s_vars["${BASH_REMATCH[1]}"]=1
@@ -109,12 +108,22 @@ k8sRenderTemplate(){
 export k8sRenderTemplate
 readonly k8sRenderTemplate
 
+k8sEscapeHelmTemplate(){
+  Usage $# -eq 1 'k8sEscapeHelmTemplate <str>'
+  # shellcheck disable=SC2016
+  printf '%s\n' "$1" | sed 's/{{[[:space:]]*\([^}][^}]*\)[[:space:]]*}}/{{`{{ \1 }}`}}/g'
+}
+export k8sEscapeHelmTemplate
+readonly k8sEscapeHelmTemplate
+
 k8sRenderConfigmap(){
-  Usage $# 3 4 'k8sRenderConfigmap <env> <configmap_file> <dst_dir> [cat_then_delete=|-d]'
-  local _k8s_env="$1"
-  local _k8s_configmap_file="$2"
-  local _k8s_temp_dst="$3"
-  local _k8s_cat_then_delete="${4:-}"
+  Usage $# 4 5 'k8sRenderConfigmap <workdir> <env> <configmap_file> <dst_dir> [cat_then_delete=|-d]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_env="$2"
+  local _k8s_configmap_file="$3"
+  local _k8s_temp_dst="$4"
+  local _k8s_cat_then_delete="${5:-}"
   PanicIfNotFile "$_k8s_configmap_file"
 
   if [ "$_k8s_temp_dst" = '-d' ]; then
@@ -153,14 +162,21 @@ k8sRenderConfigmap(){
       PanicD "missing configmap $_k8s_include_tag" "缺少 configmap $_k8s_include_tag"
     fi
 
-    CopyOrTouchOrPanic "$_k8s_include_abs" "$_k8s_g_temp_include"
+    local _k8s_inc_temp=''
+    if [ -f "$_k8s_include_abs" ]; then
+      _k8s_inc_temp=$(k8sRenderTemplate "$_k8s_workdir" "$(CatOrPanic "$_k8s_include_abs")")
+    fi
 
     if [ -f "$_k8s_include_env_abs" ]; then
       InfoD "merge #$_k8s_include_env_path into #$_k8s_include_path" "合并 $_k8s_include_env_path 到 $_k8s_include_path"
-      WriteFileOrSudo "$LF" '->>' "$_k8s_g_temp_include"
-      CatOrPanic "$_k8s_include_env_abs" '->>' "$_k8s_g_temp_include"
-      WriteFileOrSudo "$LF" '->>' "$_k8s_g_temp_include"
+      local _k8s_inc_env_temp
+      _k8s_inc_env_temp=$(k8sRenderTemplate "$_k8s_workdir" "$(CatOrPanic "$_k8s_include_env_abs")")
+      _k8s_inc_temp="${_k8s_inc_temp}${LF}${_k8s_inc_env_temp}"
     fi
+
+    _k8s_inc_temp=$(k8sEscapeHelmTemplate "$_k8s_inc_temp")
+
+    WriteFileOrPanic "$_k8s_inc_temp" '->' "$_k8s_g_temp_include"
 
     ReplaceYamlConfig "$_k8s_g_temp" "$_k8s_g_temp" "$_k8s_include_tag" "$_k8s_g_temp_include"
   done < <(MatchedLines "$_k8s_g_temp" "$K8S_INCLUDE_PREFIX")
@@ -213,7 +229,6 @@ k8sProbeEnv(){
 export k8sProbeEnv
 readonly k8sProbeEnv
 
-
 k8sProbeNamespace(){
   Usage $# -eq 1 'k8sProbeNamespace <workdir>'
   local _k8s_workdir
@@ -229,6 +244,24 @@ k8sProbeNamespace(){
 }
 export k8sProbeNamespace
 readonly k8sProbeNamespace
+
+k8sProbeProtectStatus(){
+  Usage $# -eq 1 'k8sProbeProtectStatus <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_global_yaml
+  _k8s_global_yaml=$(k8sProbeGlobalYaml "$_k8s_workdir" WITH_PANIC)
+  local _k8s_protected
+  _k8s_protected=$(yq 'select(.kind == "Namespace") | .metadata.labels.protect' "$_k8s_global_yaml")
+  if Yes "$_k8s_protected"; then
+    printf '%s' "yes"
+  else
+    printf '%s' 'no'
+  fi
+}
+export k8sProbeProtectStatus
+readonly k8sProbeProtectStatus
 
 k8sUpNamespaceNx(){
   Usage $# -eq 1 'k8sUpNamespaceNx <workdir>'

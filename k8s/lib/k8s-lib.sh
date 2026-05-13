@@ -160,6 +160,12 @@ k8sDestroyHere(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
+  local _k8s_protect
+  _k8s_protect=$(k8sProbeProtectStatus "$_k8s_workdir")
+
+  if Yes "$_k8s_protect"; then
+    PanicD "namespace is protected" "namespace 被保护，禁止销毁"
+  fi
 
   local _k8s_namespace
   _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
@@ -174,10 +180,10 @@ k8sNsenterHere(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
 
-  local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_chart_name
   _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
   local _k8s_container
@@ -302,7 +308,6 @@ k8sUp(){
   if [ ! -f "$_k8s_helm_file" ]; then
     _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   fi
-
   PanicIfNotFile "$_k8s_helm_file"
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
   helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"

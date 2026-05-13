@@ -160,7 +160,7 @@ main(){
     up) k8sUp "$g_workdir" "$@" ;;
     upd|updown) k8sUpDown "$g_workdir" "$@" ;;
     upg|upgrade) k8sUpgrade "$g_workdir" "$@" ;;
-    *) nerdctl "$cmd" "$@" ;;
+    *) $(SUDO) nerdctl "$cmd" "$@" ;;
   esac
 }
 

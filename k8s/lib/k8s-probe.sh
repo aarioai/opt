@@ -7,7 +7,7 @@ readonly k8s_probe_help="
 k8s probe <CMD> [.]
   -h|-help|help     Show help
   configmap         Show configmaps
-  dry               Dry run 'k8s up', i.e. show all rendered yaml configurations
+  debug|dry|dry-run Dry run 'k8s up', i.e. show all rendered yaml configurations
   env               Get .env in $K8S_ENV_YAML
     [-v]              Cat $K8S_ENV_YAML
   global            Render $K8S_GLOBAL_YAML
@@ -15,6 +15,7 @@ k8s probe <CMD> [.]
   logs              Show logs of current service
   name              Show .Chart.name
   n|namespace       Show current namespace (by $K8S_GLOBAL_YAML)
+  protect           Show namespace protect status, i.e. Namespace .metadata.labels.protect in $K8S_GLOBAL_YAML
   pvc               Show PVCs
   pvc-size|pvc-sizes  Show PVC sizes
     [name]          Show the specific PVC size
@@ -75,7 +76,10 @@ k8sProbeConfigMap(){
   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
 
   local _k8s_configmap_dir="${_k8s_workdir}/configmap"
-  PanicIfNotDir "$_k8s_configmap_dir"
+  if [ ! -d "$_k8s_configmap_dir" ]; then
+    return
+  fi
+
   local _k8s_templates_dir="${_k8s_workdir}/templates"
   local _k8s_cfg
 
@@ -85,7 +89,7 @@ k8sProbeConfigMap(){
   for _k8s_cfg in "$_k8s_configmap_dir"/*.yaml; do
     [ -f "$_k8s_cfg" ] || continue
     # shellcheck disable=SC2086
-    k8sRenderConfigmap "$_k8s_env" "$_k8s_cfg" "$_k8s_templates_dir" $_k8s_cat_then_delete
+    k8sRenderConfigmap "$_k8s_workdir" "$_k8s_env" "$_k8s_cfg" "$_k8s_templates_dir" $_k8s_cat_then_delete
   done
 }
 export k8sProbeConfigMap
@@ -253,13 +257,14 @@ k8sProbe(){
   shift
   case "$_k8s_what" in
     configmap) k8sProbeConfigMap "$_k8s_workdir" -d ;;
-    dry) k8sProbeDryRun "$_k8s_workdir" ;;
+    debug|dry|dry-run) k8sProbeDryRun "$_k8s_workdir" ;;
     env) k8sProbeEnv "$_k8s_workdir" "$@";;
     global) k8sProbeGlobal "$_k8s_workdir" ;;
     images) k8sProbeImages "$_k8s_workdir" ;;
     logs) k8sProbeLogs "$_k8s_workdir" ;;
     name) k8sProbeName "$_k8s_workdir" ;;
     n|namespace) k8sProbeNamespace "$_k8s_workdir" ;;
+    protect) k8sProbeProtectStatus "$_k8s_workdir" ;;
     pvc) k8sProbePVCs "$_k8s_workdir" ;;
     pvc-size|pvc-sizes) k8sProbePvcSizes "$_k8s_workdir" ;;
     pvc-byte|pvc-bytes) k8sProbePvcBytes "$_k8s_workdir" ;;
