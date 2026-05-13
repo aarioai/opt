@@ -177,14 +177,16 @@ k8sStatus(){
   Heading "[CONTAINER] crictl ps -a --name $_k8s_container"
   $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container"
 
-  local _k8s_pvc_full
   for _k8s_pvc in "$@"; do
     [ -n "$_k8s_pvc" ] || continue
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
-      _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
-      Heading "[PVC] $_k8s_pvc_full"
+      local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
-        ErrorD "PVC $_k8s_pvc_full bind failed" "PVC ${_k8s_pvc_full}绑定失败"
+        HeadingD "[PVC] $_k8s_pvc_full bind failed" "[PVC] $_k8s_pvc_full 绑定失败"
+      else
+        local _k8s_pvc_size
+        _k8s_pvc_size=$($_k8s_cmd_prefix kubectl get pvc "$_k8s_pvc_full" -n "$_k8s_namespace" -o jsonpath='{.status.capacity.storage}')
+        Heading "[PVC] $_k8s_pvc_full ($_k8s_pvc_size)"
       fi
     done
   done
@@ -204,7 +206,7 @@ k8sWaitReady(){
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
   if [ -n "$_k8s_pvc_total_bytes" ] && [ "$_k8s_pvc_total_bytes" -gt 0 ]; then
-    Heading "allocating $# PVC (total: $(BytesToIEC "$_k8s_pvc_total_bytes")): $*"
+    Info "allocating $# PVC (total: $(BytesToIEC "$_k8s_pvc_total_bytes")): $*"
   fi
 
   while ! kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" --no-headers 2>/dev/null | grep -q .; do
@@ -232,7 +234,7 @@ k8sWaitReady(){
     _k8s_wait_timeout=1080
   fi
 
-  Heading "kubectl wait --for=condition=Ready pods -n $_k8s_namespace -l $_k8s_selector --timeout=${_k8s_wait_timeout}s"
+  Debug "kubectl wait --for=condition=Ready pods -n $_k8s_namespace -l $_k8s_selector --timeout=${_k8s_wait_timeout}s"
   if ! $_k8s_cmd_prefix kubectl wait \
     --for=condition=Ready pods \
     -n "$_k8s_namespace" \
