@@ -92,6 +92,9 @@ k8sRenderTemplate(){
         _k8s_real_value="${_k8s_real_value,}"   # convert first character to lowercase
         _k8s_real_value=$(YqGet ".${_k8s_real_value}" -s "$_k8s_values" WITH_PANIC)
         ;;
+      ".Release.Namespace")
+          _k8s_real_value=$(k8sProbeNamespace "$_k8s_workdir")
+      ;;
       *) PanicD "invalid template pattern $_k8s_var" "错误的模板变量$_k8s_var" ;;
     esac
     _k8s_safe_sed_sep=$(SafeSedSeparator "{}${_k8s_var}${_k8s_real_value}")
@@ -340,17 +343,17 @@ k8sProbeValues(){
     _k8s_values="hostname: ${_k8s_hostname}${LF}${_k8s_values}"
   fi
 
-  # Try append .namespace
-  local _k8s_namespace
-  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
-  local _k8s_values_namespace
-  _k8s_values_namespace=$(YqGet '.namespace' -s "$_k8s_values")
-  if [ -z "$_k8s_namespace" ] && [ -z "$_k8s_values_namespace" ]; then
-    PanicD 'missing namespace' '缺少 namespace'
-  fi
-  if [ -z "$_k8s_values_namespace" ]; then
-    _k8s_values="namespace: ${_k8s_namespace}${LF}${_k8s_values}"
-  fi
+  # Try append .env
+   local _k8s_env
+   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
+   local _k8s_values_env
+   _k8s_values_env=$(YqGet '.env' -s "$_k8s_values")
+   if [ -z "$_k8s_env" ] && [ -z "$_k8s_values_env" ]; then
+     PanicD 'missing .env' '缺少 .env'
+   fi
+   if [ -z "$_k8s_values_env" ]; then
+     _k8s_values="env: ${_k8s_env}${LF}${_k8s_values}"
+   fi
 
   echo "$_k8s_values"
 }
@@ -377,7 +380,6 @@ k8sValuesExistsTLS(){
   Usage $# -eq 1 'k8sValuesExistsTLS <values>'
   local _k8s_values
   _k8s_values="$(AbsDir "$1")"
-
   YqIsNotEmptyArray ".${K8S_TLS_TAG}" -s "$_k8s_values"
 }
 export k8sValuesExistsTLS

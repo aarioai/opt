@@ -70,8 +70,9 @@ k8sUpTLS(){
 
   local _k8s_values
   _k8s_values=$(k8sProbeValues "$_k8s_workdir")
+
   if ! k8sValuesExistsTLS "$_k8s_values"; then
-    return
+    return 0
   fi
 
   # {} and [] break yq's JSON conversion. Use base64 to encode them.
@@ -151,6 +152,7 @@ k8sUpTLS(){
   done <<EOF
 $_k8s_tls_block
 EOF
+  return 0
 }
 export k8sUpTLS
 readonly k8sUpTLS
@@ -191,7 +193,7 @@ k8sNsenterHere(){
 
   if [ $# -gt 0 ]; then
     k8sNsenter "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_nsenter_cmd[@]}"
-    return $?
+    return
   fi
 
   local _k8s_values
@@ -303,12 +305,21 @@ k8sUp(){
   k8sUpNamespaceNx "$_k8s_workdir"
   k8sProbeConfigMap "$_k8s_workdir"
 
-  if ! Yes "$_k8s_dry_run"; then k8sPullProbedImages "$_k8s_workdir"; fi
+  if ! Yes "$_k8s_dry_run"; then
+    k8sPullProbedImages "$_k8s_workdir"
+    # Creating TLS secrets
+    if ! k8sUpTLS "$_k8s_workdir"; then
+      PanicD "generating TLS secrets failed" "无法创建TLS secrets"
+    fi
+  fi
   local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_env}.yaml"
   if [ ! -f "$_k8s_helm_file" ]; then
     _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   fi
   PanicIfNotFile "$_k8s_helm_file"
+
+  # .Release.Name => $_k8s_chart_name
+  # .Release.Namespace => $_k8s_namespace
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
   helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
 

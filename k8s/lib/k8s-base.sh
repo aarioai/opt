@@ -138,13 +138,10 @@ k8sPvcStatus(){
   local _k8s_namespace="$1"
   local _k8s_pvc="$2"
 
-  local _k8s_cmd_prefix
-  _k8s_cmd_prefix=$(k8sKubectlPrefix)
-
   local _k8s_i=0
   for _k8s_i in {1..30}; do
     local PVC_STATUS
-    PVC_STATUS=$($_k8s_cmd_prefix kubectl get pvc "$_k8s_pvc" -n "$_k8s_namespace" -o jsonpath='{.status.phase}' 2>/dev/null || true || echo "Pending")
+    PVC_STATUS=$($(k8sKubectlPrefix) kubectl get pvc "$_k8s_pvc" -n "$_k8s_namespace" -o jsonpath='{.status.phase}' 2>/dev/null || true || echo "Pending")
     if [ "$PVC_STATUS" = "Bound" ]; then
       return 0
     fi
@@ -174,12 +171,14 @@ k8sStatus(){
   Heading "[POD] kubectl get pods -n $_k8s_namespace -l $_k8s_selector"
   $_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector"
 
-  Heading "[CONTAINER] crictl ps -a --name $_k8s_container"
-  $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container"
-
   for _k8s_pvc in "$@"; do
     [ -n "$_k8s_pvc" ] || continue
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
+      # Show CPU and memory usage
+      Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
+      $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+
+      # Show PVC
       local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
         HeadingD "[PVC] $_k8s_pvc_full bind failed" "[PVC] $_k8s_pvc_full 绑定失败"
@@ -190,6 +189,16 @@ k8sStatus(){
       fi
     done
   done
+
+  Heading "[CONTAINER] crictl ps -a --name $_k8s_container"
+  $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container"
+
+  local _k8s_values
+  _k8s_values=$(k8sProbeValues "$_k8s_workdir")
+  if YqHas ".${K8S_TLS_TAG}" -s "$_k8s_values"; then
+    k8sTlsSecrets "$_k8s_workdir" "$_k8s_namespace" "$_k8s_values" "$@"
+  fi
+
 }
 export k8sStatus
 readonly k8sStatus
@@ -285,17 +294,19 @@ k8sCreateTlsSecret(){
     return 0
   fi
 
-  InfoD "Creating tls secret..." "创建tls secret中..."
+  InfoD "Creating TLS secret..." "创建 TLS secret中..."
   Debug "kubectl create secret tls $_k8s_service -n $_k8s_namespace --key=$_k8s_privkey --cert=$_k8s_cert"
   if ! $_k8s_cmd_prefix kubectl create secret tls "$_k8s_service" -n "$_k8s_namespace" --key="$_k8s_privkey" --cert="$_k8s_cert" >/dev/null; then
-    PanicD "create tls secret failed" "创建tls secret失败"
+    PanicD "create tls secret failed" "创建 TLS secret失败"
   fi
 
-  InfoD "Verifying tls secret..." "验证tls secret中..."
+  InfoD "Verifying TLS secret..." "验证 TLS secret中..."
   Debug "kubectl get secret $_k8s_service -n $_k8s_namespace -o yaml"
   if ! $_k8s_cmd_prefix kubectl get secret "$_k8s_service" -n "$_k8s_namespace" -o yaml >/dev/null; then
     PanicD "Verify kubectl secret failed" "验证 kubectl secret 失败"
   fi
+
+  return 0
 }
 export k8sCreateTlsSecret
 readonly k8sCreateTlsSecret
@@ -344,7 +355,7 @@ k8sTlsSecrets(){
     _k8s_tls_cn=$(YqGet ".${K8S_TLS_CN_TAG}" -s  "$_k8s_tls" WITH_PANIC)
     local _k8s_secret
     _k8s_secret=$(k8sDefaultTlsSecretName "$_k8s_tls_cn")
-    Highlight "${_H_LINE_}secret: $_k8s_secret${_H_LINE}"
+    Heading "[SECRET]: $_k8s_secret"
 
     if $_k8s_cmd_prefix kubectl get secret "$_k8s_secret" -n "$_k8s_namespace" >/dev/null 2>&1; then
       if [ -n "$_k8s_format" ]; then
@@ -479,7 +490,7 @@ k8sNsenter(){
   if [ "$_k8s_ns_cmd" != 'sh' ]; then
     # shellcheck disable=SC2086    # 不要加引号
     $_k8s_cmd_prefix kubectl exec "${_k8s_args[@]}" -- $_k8s_ns_cmd "${_k8s_ns_args[@]}"
-    return $?
+    return
   fi
 
   # 优先使用 /bin/bash

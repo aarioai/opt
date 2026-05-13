@@ -1462,8 +1462,8 @@ main() {
   if [ $# -eq 1 ]; then
     func="$1"
     case "$func" in
-      test*) "$func"; return $? ;;
-      *) "test$func"; return $? ;;
+      test*) "$func"; return ;;
+      *) "test$func"; return ;;
     esac
   fi
 

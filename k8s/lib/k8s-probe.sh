@@ -7,6 +7,7 @@ readonly k8s_probe_help="
 k8s probe <CMD> [.]
   -h|-help|help     Show help
   configmap         Show configmaps
+  cpu|memory|top    Show CPU/memory usage
   debug|dry|dry-run Dry run 'k8s up', i.e. show all rendered yaml configurations
   env               Get .env in $K8S_ENV_YAML
     [-v]              Cat $K8S_ENV_YAML
@@ -75,7 +76,13 @@ k8sProbeConfigMap(){
   local _k8s_env
   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
 
-  local _k8s_configmap_dir="${_k8s_workdir}/configmap"
+  # Try configmap-<env>
+  local _k8s_configmap_dir="${_k8s_workdir}/configmap-${_k8s_env}"
+  if [ ! -d "$_k8s_configmap_dir" ]; then
+    # Fallback to configmap
+    _k8s_configmap_dir="${_k8s_workdir}/configmap"
+  fi
+
   if [ ! -d "$_k8s_configmap_dir" ]; then
     return
   fi
@@ -250,6 +257,20 @@ k8sProbeSelector(){
 export k8sProbeSelector
 readonly k8sProbeSelector
 
+k8sProbeCpuUsage(){
+  Usage $# -eq 1 'k8sProbeCpuUsage <workdir> [--sort-by=cpu|memory]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  $(k8sKubectlPrefix) kubectl top pod -n "$_k8s_namespace" "$@"
+}
+export k8sProbeCpuUsage
+readonly k8sProbeCpuUsage
+
 k8sProbe(){
   local _k8s_workdir
   _k8s_workdir=$(k8sWorkDir)
@@ -257,6 +278,7 @@ k8sProbe(){
   shift
   case "$_k8s_what" in
     configmap) k8sProbeConfigMap "$_k8s_workdir" -d ;;
+    cpu|memory|top) k8sProbeCpuUsage "$_k8s_workdir" "$@";;
     debug|dry|dry-run) k8sProbeDryRun "$_k8s_workdir" ;;
     env) k8sProbeEnv "$_k8s_workdir" "$@";;
     global) k8sProbeGlobal "$_k8s_workdir" ;;

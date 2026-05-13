@@ -36,18 +36,18 @@ YqIsNotEmptyArray(){
   Usage $# -eq 3 'YqIsNotEmptyArray <key> <-f|-s> <file|str>'
   _yqisnotemptyarray_key="${1#.}"   # trim .
   _yqisnotemptyarray_type="$2"
-  _yqisnotemptyarray="$3"
+  _yqisnotemptyarray_input="$3"
 
   _yqisnotemptyarray_key="${_yqisnotemptyarray_key%\[\]}"   # trim []
   _yqisnotemptyarray_qs=".$_yqisnotemptyarray_key | type == \"!!seq\" and length > 0"
   case "$_yqisnotemptyarray_type" in
     -f)
-      yq -e "$_yqisnotemptyarray_qs" "$_yqisnotemptyarray" >/dev/null 2>&1
-      return $?
+      yq -e "$_yqisnotemptyarray_qs" "$_yqisnotemptyarray_input" >/dev/null 2>&1
+      return
       ;;
     -s)
-      printf '%s\n' "$_yqisnotemptyarray" | yq -e "$_yqisnotemptyarray_qs" >/dev/null 2>&1
-      return $?
+      printf '%s\n' "$_yqisnotemptyarray_input" | yq -e "$_yqisnotemptyarray_qs" >/dev/null 2>&1
+      return
       ;;
     *) PanicArg 2 "$_yqisnotemptyarray_type" '-f:file|-s:string';;
   esac
@@ -65,7 +65,7 @@ YqHas(){
   case "$_yqhas_key" in
     *'[]')
       YqIsNotEmptyArray "$_yqhas_key" "$_yqhas_type" "$_yqhas"
-      return $?
+      return
       ;;
   esac
 
@@ -73,11 +73,11 @@ YqHas(){
   case "$_yqhas_type" in
     -f)
       yq -e "$_yqhas_qs" "$_yqhas" >/dev/null 2>&1
-      return $?
+      return
       ;;
     -s)
       printf '%s\n' "$_yqhas" | yq -e "$_yqhas_qs" >/dev/null 2>&1
-      return $?
+      return
       ;;
     *) PanicArg 2 "$_yqhas_type" '-f:file|-s:string';;
   esac
@@ -156,19 +156,19 @@ readonly YqGet
 init(){
   if ! command -v yq >/dev/null 2>&1; then
     UpgradeYq
-    return $?
+    return
   fi
   _yq_version=$(yq --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   if [ -z "$_yq_version" ]; then
     UpgradeYq
-    return $?
+    return
   fi
 
   _yq_major=$(echo "$_yq_version" | cut -d. -f1)
   if [ "$_yq_major" -lt 4 ] 2>/dev/null; then
     Info "yq version $_yq_version (< 4), upgrading yq..."
     UpgradeYq
-    return $?
+    return
   fi
 }
 

@@ -11,11 +11,6 @@ set -eu
 # Optional:
 #   dpkg, awk/apk/rpm/yum/apt-get, openssl(auto install)
 
-# 要求兼容 Debian, Alpine, Redhat 等。
-# /bin/sh 是Unix标准默认shell，而alphin等没有默认安装bash。nginx/mysql等docker都使用 /bin/sh
-# @warn POSIX 不支持local变量，变量没有作用域，都是全局变量，这里统一加 _前后缀。本页内如果互相调用，也会导致相同变量名冲突，因此必须要带函数前缀
-#   本身shell脚本就很小，因此不要过度优化通用包，这里只保留少量全局变量
-
 # mktemp 依赖 $TMPDIR 文件夹
 export INTERACTABLE="${INTERACTABLE:-1}"
 export TMPDIR="${TMPDIR:-/tmp}"
@@ -1646,7 +1641,7 @@ CopyOrTouch(){
 
   if [ ! -f "$_copyortouch_src" ]; then
     TouchOrSudo "$_copyortouch_dst"
-    return $?
+    return
   fi
   CopyOrSudo "$_copyortouch_src" "$_copyortouch_dst"
 }
@@ -1660,7 +1655,7 @@ CopyOrTouchOrPanic(){
 
   if [ ! -f "$_copyortouchorpanic_src" ]; then
     TouchOrPanic "$_copyortouchorpanic_dst"
-    return $?
+    return
   fi
   CopyOrPanic "$_copyortouchorpanic_src" "$_copyortouchorpanic_dst"
 }
@@ -2278,7 +2273,7 @@ PrependToFileOrSudo(){
 
   if [ ! -f "$_prependtofileorsudo_file" ]; then
     WriteFileOrSudo "$_prependtofileorsudo_str" > "$_prependtofileorsudo_file"
-    return $?
+    return
   fi
 
   _g_appendtofileorsudotemp_file=$(mktemp) || return 1
@@ -2588,19 +2583,19 @@ Download(){
   # curl -f -L -o 的行为（-f 失败时返回非0退出码，-L 跟随重定向，-o 指定输出文件名）
   if command -v curl >/dev/null 2>&1; then
       curl -f -L -o "$_download_rename" "$_download_url"
-      return $?
+      return
   fi
 
   # busybox 系统无curl，也不好安装。但是一般会有wget
   if command -v wget >/dev/null 2>&1; then
     wget --tries=1 -O "$_download_rename" "$_download_url"
-    return $?
+    return
   fi
 
   if Install curl || Install wget || command -v wget >/dev/null 2>&1; then
     if command -v curl >/dev/null 2>&1; then
       _download_ "$_download_url"
-      return $?
+      return
     fi
   fi
 
@@ -4414,7 +4409,7 @@ GenerateLeafCert(){
 
   if [ -f "$_generateleafcert_ckf" ]; then
     SignLeafCert "$_generateleafcert_cn" "$_generateleafcert_cert_dir" "$_generateleafcert_san" "$_generateleafcert_subj" "$_generateleafcert_cert_key_filename" "$_generateleafcert_cert_filename" "$_generateleafcert_expire_days"
-    return $?
+    return
   fi
 
   if IsOsMingw; then
