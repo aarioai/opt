@@ -483,14 +483,14 @@ testChownOrMkdir(){
   echo "---->DEBUG: ChownOrMkdir "
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
-
+  echo "---->DEBUG2: ChownOrMkdir "
   me=$(whoami)
   if id nobody >/dev/null 2>&1; then
     me='nobody'
   fi
-
+  echo "---->DEBUG3: ChownOrMkdir "
   ChownOrMkdir "$me" "$g_temp/dir1" "$g_temp/dir2"
-
+  echo "---->DEBUG4: ChownOrMkdir "
   if [ ! -d "$g_temp/dir1" ]; then
     Panic "ChownOrMkdir $me $g_temp/dir1 $g_temp/dir2 failed: missing $g_temp/dir1"
   fi
