@@ -2206,7 +2206,12 @@ ChownR() {
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
       continue
     fi
-    $(SUDO) chown -R "$_chownr_user" "$_chownr_dir"
+    if chown -R "$_chownr_user" "$_chownr_dir" 2>/dev/null; then
+      continue
+    fi
+    if CanSudo; then
+      sudo chown -R "$_chownr_user" "$_chownr_dir"
+    fi
   done
 }
 export ChownR
@@ -2282,8 +2287,12 @@ ChownOrMkdir(){
     if [ -z "$_chownormkdir_dir" ]; then continue; fi
     if [ ! -d "$_chownormkdir_dir" ]; then MkdirsOrSudo "$_chownormkdir_dir"; fi
     if [ -n "$_chownormkdir_group" ]; then
-      $(SUDO) chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
-      continue
+      if chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir" 2>/dev/null; then
+        continue
+      fi
+      if CanSudo; then
+        sudo chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
+      fi
     fi
     ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
   done

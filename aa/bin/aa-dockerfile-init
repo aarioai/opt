@@ -27,7 +27,7 @@ ownDir(){
 
   if [ -z "${XUSER:-}" ]; then
     aa-chmod-or-mkdir "$mod_all" "$dir"
-    return 0
+    return
   fi
 
   aa-chmod-or-mkdir "$mod_owner" "$dir"
@@ -42,13 +42,17 @@ ownDir(){
 }
 
 initDirs(){
-  ownDir "${CONFDIR:-}" 1750
-  ownDir "${CONF_D:-}" 1750
-  ownDir "${MODULE_DIR:-}" 1750
-  ownDir "${RUNDIR:-}" 1750
-  ownDir "${LOGDIR:-}" 1750
-  ownDir "${HOME:-}" 1750
-  ownDir "${DATA_DIR:-}" 1750    # DATA_DIR 特殊情况下，使用 /var/lib/xxx/data 作为数据
+  Info "init dirs owner and modes"
+  for _init_dir in "${CONFDIR:-}" \
+    "${CONF_D:-}"     \
+    "${MODULE_DIR:-}" \
+    "${RUNDIR:-}"     \
+    "${LOGDIR:-}"     \
+    "${HOME:-}"       \
+    "${DATA_DIR:-}"; do
+    [ -n "$_init_dir" ] || continue
+    ownDir "$_init_dir" 1750 || true
+  done
 }
 
 initTimezone(){
