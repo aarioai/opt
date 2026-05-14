@@ -480,6 +480,7 @@ testChgrpR() {
 testChownOrMkdir(){
   testing 'ChownOrMkdir'
   g_temp=$(MktempDirOrPanic)
+  echo "---->DEBUG: ChownOrMkdir "
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
 
