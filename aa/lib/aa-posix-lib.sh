@@ -4586,13 +4586,14 @@ GenerateLeafCert(){
   mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
+  Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
   if ! openssl req -x509 -nodes -newkey rsa:2048 \
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
       -addext "subjectAltName=$_generateleafcert_san" >/dev/null; then
     ErrorD "Generate $_generateleafcert_cn TLS certs failed" "生成 $_generateleafcert_cn 的TLS证书失败"
-    Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
+
     return 1
   fi
 
@@ -4601,10 +4602,10 @@ GenerateLeafCert(){
   ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
   Info "Verifying leaf certificate..."
+  Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
   if ! openssl x509 -in "$_generateleafcert_ck" -text -noout; then
     RemoveDirsOrSudo "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
-    Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
     return 1
   fi
 
