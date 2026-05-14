@@ -2111,24 +2111,25 @@ AddGroupNx(){
   if ExistGroup "$_addgroupnx_group"; then
     return
   fi
+  _addgroupnx_sudo="$(SUDO)"
 
   if command -v addgroup >/dev/null 2>&1; then
     if [ -z "$_addgroupnx_gid" ]; then
       # @warn do not quote $_addgroupnx_r
-      $(SUDO) addgroup $_addgroupnx_r "$_addgroupnx_group"
+      $_addgroupnx_sudo addgroup $_addgroupnx_r "$_addgroupnx_group"
     else
       # @warn do not quote $_addgroupnx_r
-      $(SUDO) addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+      $_addgroupnx_sudo addgroup $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
     fi
     return
   fi
 
   if [ -z "$_addgroupnx_gid" ]; then
     # @warn do not quote $_addgroupnx_r
-    $(SUDO) groupadd $_addgroupnx_r "$_addgroupnx_group"
+    $_addgroupnx_sudo groupadd $_addgroupnx_r "$_addgroupnx_group"
   else
     # @warn do not quote $_addgroupnx_r
-    $(SUDO) groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
+    $_addgroupnx_sudo groupadd $_addgroupnx_r --gid "$_addgroupnx_gid" "$_addgroupnx_group"
   fi
 }
 export addGroupx
@@ -4405,8 +4406,8 @@ readonly FormatSubjectAltName
 # 由CA签发 fullchain.pem，CA 证书可签发子证书。自签名证书不可以签发子证书。
 # fullchain.pem 的本质是：服务器证书 + 中间证书（CA chain）拼接在一起。
 # 可以使用letsencrypt等第三方下发的CA证书。也可以临时自己签发一个CA证书：
-#   sudo openssl genrsa -out myCA.key 2048                                # 生成CA密钥文件
-#   sudo openssl req -new -x509 -key myCA.key -out myCA.cert -days 36500   # 创建CA证书 --> 一直留空按Enter即可，Common Name 必要要填要签名的域名
+#   openssl genrsa -out myCA.key 2048                                # 生成CA密钥文件
+#   openssl req -new -x509 -key myCA.key -out myCA.cert -days 36500   # 创建CA证书 --> 一直留空按Enter即可，Common Name 必要要填要签名的域名
 # E.g., SignCertByCA "$ca_key" "$ca_cert" 'x.x' 'DNS:x.x' ./
 SignCertByCA(){
   Usage $# 3 11 "SignCertByCA <ca_key_file> <ca_cert_file> <domain> [dir=/etc/cert/<domain>] [SAN=DNS:<domain>] [subj=/CN:<domain>] [key_filename=$CERT_KEY_FILE] [cert_filename=$CERT_FILE] [csr_filename=$CERT_CSR_FILE] [out_filename=$CERT_FULLCHAIN_FILE] [days=$CERT_EXPIRE_DAYS]"
@@ -4448,12 +4449,15 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "openssl genrsa -out $_signcertbyca_ckf 2048"
-      $(SUDO) openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
-      ChmodOrSudo 600 "$_signcertbyca_ckf"
+      if openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null; then
+        chmod 600 "$_signcertbyca_ckf"
+      else
+        return 1
+      fi
     fi
 
     Info "Generating CSR.."
-    if ! $(SUDO) openssl req -new            \
+    if ! openssl req -new            \
         -key "$_signcertbyca_ckf"         \
         -out "$_signcertbyca_server_csr"  \
         -subj "$_signcertbyca_subj"       \
@@ -4462,13 +4466,13 @@ SignCertByCA(){
       Debug "openssl req -new -key $_signcertbyca_ckf -out $_signcertbyca_server_csr -subj $_signcertbyca_subj -addext $_signcertbyca_addext"
       return 1
     fi
+
   fi
 
   # openssl req -x509 生成自签名证书（同时生成private key）
   # openssl x509 签发已有的证书（基于CA或private key）
   Info "Signing certificate with CA..."
-
-  if ! $(SUDO) openssl x509 -req             \
+  if ! openssl x509 -req             \
       -in "$_signcertbyca_server_csr"     \
       -CA "$_signcertbyca_ca_cert_file"   \
       -CAkey "$_signcertbyca_ca_key_file" \
@@ -4488,7 +4492,7 @@ SignCertByCA(){
   ChmodOrSudo 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
-  if ! $(SUDO) openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
+  if ! openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
     ErrorD "Certificate verification failed for $_signcertbyca_domain" "证书验证失败: $_signcertbyca_domain"
     Debug "openssl verify -CAfile $_signcertbyca_ca_cert_file $_signcertbyca_ck"
     RemoveDirsOrSudo "$_signcertbyca_cert_dir"
@@ -4527,7 +4531,7 @@ SignLeafCert(){
   fi
 
   Info "Sign leaf certificate..."
-  if ! $(SUDO) openssl req -x509 -new  \
+  if ! openssl req -x509 -new  \
       -key "$_signleafcert_ckf"   \
       -out "$_signleafcert_ck"    \
       -subj "$_signleafcert_subj" \
@@ -4542,7 +4546,7 @@ SignLeafCert(){
   ChmodOrSudo 644 "$_signleafcert_ck"
 
   Info "Verifying leaf certificate..."
-  if ! $(SUDO) openssl x509 -in "$_signleafcert_ck" -text -noout; then
+  if ! openssl x509 -in "$_signleafcert_ck" -text -noout; then
     RemoveDirsOrSudo "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
     Debug "openssl x509 -in $_signleafcert_ck -text -noout"
@@ -4582,7 +4586,7 @@ GenerateLeafCert(){
   mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
-  if ! $(SUDO) openssl req -x509 -nodes -newkey rsa:2048 \
+  if ! openssl req -x509 -nodes -newkey rsa:2048 \
       -days "$_generateleafcert_expire_days"  \
       -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
       -subj "$_generateleafcert_subj" \
@@ -4597,7 +4601,7 @@ GenerateLeafCert(){
   ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
 
   Info "Verifying leaf certificate..."
-  if ! $(SUDO) openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+  if ! openssl x509 -in "$_generateleafcert_ck" -text -noout; then
     RemoveDirsOrSudo "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
     Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
