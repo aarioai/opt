@@ -2299,21 +2299,29 @@ ChownOrMkdir(){
   if ! ExistsUser "$_chownormkdir_user"; then
     PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
   fi
-
+  echo "AAAA"
   for _chownormkdir_dir in "$@"; do
     [ -n "$_chownormkdir_dir" ] || continue
+      echo "BBBB"
+
     MkdirsOrSudo "$_chownormkdir_dir"
+
+    echo "CCCC"
+
     if [ -z "$_chownormkdir_group" ]; then
       ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
       continue
     fi
+      echo "DDDD"
     _chownormkdir_target="$_chownormkdir_user:$_chownormkdir_group"
     if chown -R "$_chownormkdir_target" "$_chownormkdir_dir" 2>/dev/null; then
       continue
     fi
+        echo "EEEE"
     if CanSudo; then
       sudo chown -R "$_chownormkdir_target" "$_chownormkdir_dir"
     fi
+         echo "FFFF"
   done
 }
 export ChownOrMkdir
