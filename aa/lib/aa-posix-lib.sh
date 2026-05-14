@@ -2212,11 +2212,14 @@ ChownR() {
   fi
 
   for _chownr_dir in "$@"; do
-    if [ -z "$_chownr_dir" ]; then continue; fi
+    [ -n "$_chownr_dir" ] || continue
     # 这样修改权限比 `chown -R` 性能更好
+    echo "find $_chownr_dir \! -user $_chownr_user -exec chown $_chownr_user {} +"
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
+      echo "FIND YES"
       continue
     fi
+    echo "FIND NO"
     if chown -R "$_chownr_user" "$_chownr_dir" 2>/dev/null; then
       continue
     fi
@@ -2283,6 +2286,9 @@ ChownOrMkdir(){
   _chownormkdir_user="$_chownormkdir_ug"
   _chownormkdir_group=''
   case "$_chownormkdir_user" in
+    *:*:*)
+      PanicD "invalid user:group format: $_chownormkdir_ug" "错误用户和群组：$_chownormkdir_ug"
+      ;;
     *:*)
       _chownormkdir_group="${_chownormkdir_ug#*:}"
       _chownormkdir_user="${_chownormkdir_ug%:*}"
@@ -2295,17 +2301,19 @@ ChownOrMkdir(){
   fi
 
   for _chownormkdir_dir in "$@"; do
-    if [ -z "$_chownormkdir_dir" ]; then continue; fi
-    if [ ! -d "$_chownormkdir_dir" ]; then MkdirsOrSudo "$_chownormkdir_dir"; fi
-    if [ -n "$_chownormkdir_group" ]; then
-      if chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir" 2>/dev/null; then
-        continue
-      fi
-      if CanSudo; then
-        sudo chown -R "$_chownormkdir_user":"$_chownormkdir_group" "$_chownormkdir_dir"
-      fi
+    [ -n "$_chownormkdir_dir" ] || continue
+    MkdirsOrSudo "$_chownormkdir_dir"
+    if [ -z "$_chownormkdir_group" ]; then
+      ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
+      continue
     fi
-    ChownR "$_chownormkdir_user" "$_chownormkdir_dir"
+    _chownormkdir_target="$_chownormkdir_user:$_chownormkdir_group"
+    if chown -R "$_chownormkdir_target" "$_chownormkdir_dir" 2>/dev/null; then
+      continue
+    fi
+    if CanSudo; then
+      sudo chown -R "$_chownormkdir_target" "$_chownormkdir_dir"
+    fi
   done
 }
 export ChownOrMkdir
