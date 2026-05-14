@@ -4449,11 +4449,9 @@ SignCertByCA(){
     if [ ! -f "$_signcertbyca_ckf" ]; then
       Info "Generating private key..."
       Debug "openssl genrsa -out $_signcertbyca_ckf 2048"
-      if openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null; then
-        chmod 600 "$_signcertbyca_ckf"
-      else
-        return 1
-      fi
+      openssl genrsa -out "$_signcertbyca_ckf" 2048 >/dev/null
+      Debug "chmod 600 $_signcertbyca_ckf"
+      chmod 600 "$_signcertbyca_ckf"
     fi
 
     Info "Generating CSR.."
@@ -4485,11 +4483,11 @@ SignCertByCA(){
     return 1
   fi
 
-  ChmodOrCreate 666 "$_signcertbyca_out"
   cat "$_signcertbyca_ck" "$_signcertbyca_ca_cert_file" > "$_signcertbyca_out"
+  chmod 666 "$_signcertbyca_out"
 
-  ChmodOrSudo 600 "$_signcertbyca_ckf"
-  ChmodOrSudo 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
+  chmod 600 "$_signcertbyca_ckf"
+  chmod 644 "$_signcertbyca_ca_cert_file" "$_signcertbyca_out"
 
   Info "Verifying certificate..."
   if ! openssl verify -CAfile "$_signcertbyca_ca_cert_file" "$_signcertbyca_ck" >/dev/null; then
@@ -4498,9 +4496,11 @@ SignCertByCA(){
     RemoveDirsOrSudo "$_signcertbyca_cert_dir"
     return 1
   fi
-
-  ChmodOrCreate 666  "${_signcertbyca_cert_dir}/change.log"
-  echo "$(Now)${TAB4}${_signcertbyca_domain}${TAB4}${_signcertbyca_san}${TAB4}${_signcertbyca_subj}${TAB4}+${_signcertbyca_expire_days} days (CA: $(basename "$_signcertbyca_ck"))" >> "${_signcertbyca_cert_dir}/change.log"
+  _signcertbyca_cert_changelog="${_signcertbyca_cert_dir}/change.log"
+  if [ ! -f "$_signcertbyca_cert_changelog" ]; then
+    touch "$_signcertbyca_cert_changelog"
+  fi
+  echo "$(Now)${TAB4}${_signcertbyca_domain}${TAB4}${_signcertbyca_san}${TAB4}${_signcertbyca_subj}${TAB4}+${_signcertbyca_expire_days} days (CA: $(basename "$_signcertbyca_ck"))" >> "$_signcertbyca_cert_changelog"
   return 0
 }
 export SignCertByCA
