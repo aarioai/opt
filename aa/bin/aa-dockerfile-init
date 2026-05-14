@@ -42,10 +42,6 @@ ownDir(){
 }
 
 initDirs(){
-  Info '[init directories]'
-  mkdir -p "$TMPDIR"
-  chmod 1777 "$TMPDIR"
-
   ownDir "${CONFDIR:-}" 1750
   ownDir "${CONF_D:-}" 1750
   ownDir "${MODULE_DIR:-}" 1750

@@ -2308,16 +2308,6 @@ CleanOrMkdir(){
 export CleanOrMkdir
 readonly CleanOrMkdir
 
-# Create a temporary directory if not exists or clear this directory
-# Require: ChmodOrMkdir
-ClearTMPDIR(){
-  # shellcheck disable=SC2016
-  Usage $# -le 1 'ClearTMPDIR [dir=$TMPDIR]'
-  CleanOrMkdir "${1:-"$TMPDIR"}" 1777
-}
-export ClearTMPDIR
-readonly ClearTMPDIR
-
 TouchOrSudo(){
   Usage $# -eq 1 'TouchOrSudo <file>'
   _touchorsudo_file="$1"
