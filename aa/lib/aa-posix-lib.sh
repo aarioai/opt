@@ -1137,12 +1137,14 @@ BytesToIEC() {
   if [ "$_bytestoiec_decimal" -le 0 ]; then
     printf '%s' "$(( _bytestoiec_bytes / _bytestoiec_div ))"
   else
-    awk -v decimal="$_bytestoiec_decimal" \
+    awk \
+      -v decimal="$_bytestoiec_decimal" \
       -v bytes="$_bytestoiec_bytes" \
-      -v divisor="$_bytestoiec_div" \
-    "BEGIN {
-      printf \"%.*f\", decimal, bytes / divisor
-    }"
+      -v divisor="$_bytestoiec_div" '
+    BEGIN {
+        fmt = "%." decimal "f"
+        printf fmt, bytes / divisor
+    }'
   fi
   printf '%s%s' "$_bytestoiec_separator" "$_bytestoiec_unit"
 }
