@@ -1858,9 +1858,7 @@ readonly MktempDir
 # shellcheck disable=SC2120
 MktempDirOrPanic(){
   Usage $# -le 1 "MktempDirOrPanic [base=${TMPDIR}|/tmp]"
-    echo "---->DEBUG: ChownOrMkdir AA"
   _mktempdirorpanic=$(MktempDir "$@" 2>/dev/null) || true
-  echo "---->DEBUG: ChownOrMkdir BB"
   if [ -z "$_mktempdirorpanic" ] || [ ! -d "$_mktempdirorpanic" ]; then
     PanicD "fail to create temp dir: $_mktempdirorpanic" "无法创建临时文件夹：$_mktempdirorpanic"
   fi
