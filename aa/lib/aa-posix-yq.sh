@@ -16,7 +16,7 @@ UpgradeYq(){
 
   _installyq_url="https://github.com/mikefarah/yq/releases/latest/download/yq_${_installyq_os}_${_installyq_arch}"
 
-  g_temp_file=$(MktempFileOrPanic
+  g_temp_file=$(MktempFileOrPanic)
   trap 'rm -f "$g_temp_file" 2>/dev/null' EXIT
   trap 'rm -f "$g_temp_file" 2>/dev/null; return 1' INT TERM
 
