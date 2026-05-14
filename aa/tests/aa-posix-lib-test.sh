@@ -486,8 +486,7 @@ testChownOrMkdir(){
   if id nobody >/dev/null 2>&1; then
     me='nobody'
   fi
-  echo "ChownOrMkdir $me $g_temp/dir1 $g_temp/dir2"
-  ChownOrMkdir "$me" "$g_temp/dir1" "$g_temp/dir2" 
+  ChownOrMkdir "$me" "$g_temp/dir1" "$g_temp/dir2"
 
   if [ ! -d "$g_temp/dir1" ]; then
     Panic "ChownOrMkdir $me $g_temp/dir1 $g_temp/dir2 failed: missing $g_temp/dir1"
