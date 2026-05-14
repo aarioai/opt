@@ -2217,12 +2217,9 @@ ChownR() {
   for _chownr_dir in "$@"; do
     [ -n "$_chownr_dir" ] || continue
     # 这样修改权限比 `chown -R` 性能更好
-    echo "find $_chownr_dir \! -user $_chownr_user -exec chown $_chownr_user {} +"
     if find "$_chownr_dir" \! -user "$_chownr_user" -exec chown "$_chownr_user" {} + >/dev/null 2>&1; then
-      echo "FIND YES"
       continue
     fi
-    echo "FIND NO"
     if chown -R "$_chownr_user" "$_chownr_dir" 2>/dev/null; then
       continue
     fi
