@@ -1858,7 +1858,10 @@ readonly MktempDir
 # shellcheck disable=SC2120
 MktempDirOrPanic(){
   Usage $# -le 1 "MktempDirOrPanic [base=${TMPDIR}|/tmp]"
-  _mktempdirorpanic=$(MktempDir "$@") || PanicD "fail to create temp dir" "无法创建临时文件夹"
+  _mktempdirorpanic=$(MktempDir "$@" 2>/dev/null) || true
+  if [ -z "$_mktempdirorpanic" ] || [ ! -d "$_mktempdirorpanic" ]; then
+    PanicD "fail to create temp dir: $_mktempdirorpanic" "无法创建临时文件夹：$_mktempdirorpanic"
+  fi
   printf '%s' "$_mktempdirorpanic"
 }
 export MktempDirOrPanic
@@ -1897,7 +1900,15 @@ readonly MktempFile
 # shellcheck disable=SC2120
 MktempFileOrPanic(){
   Usage $# -le 1 "MktempFileOrPanic [dir=${TMPDIR}|/tmp]"
-  _mktempfileorpanic=$(MktempFile "$@") || PanicD "fail to create temp file" "无法创建临时文件"
+  _mktempfileorpanic=$(MktempFile "$@" 2>/dev/null) || true
+  if [ -z "$_mktempfileorpanic" ] || [ ! -f "$_mktempfileorpanic" ]; then
+    PanicD "fail to create temp file: $_mktempfileorpanic" "无法创建临时文件: $_mktempfileorpanic"
+  fi
+
+  if [ ! -r "$_mktempfileorpanic" ] || [ ! -w "$_mktempfileorpanic" ]; then
+    PanicD "unreadable or unwritable temp file: $_mktempfileorpanic" "无法读写临时文件: $_mktempfileorpanic"
+  fi
+
   printf '%s' "$_mktempfileorpanic"
 }
 export MktempFileOrPanic
