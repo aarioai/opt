@@ -4587,29 +4587,28 @@ GenerateLeafCert(){
 
   Info "Generating leaf certificate..."
   Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
-  if ! openssl req -x509 -nodes -newkey rsa:2048 \
-      -days "$_generateleafcert_expire_days"  \
-      -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
-      -subj "$_generateleafcert_subj" \
-      -addext "subjectAltName=$_generateleafcert_san" >/dev/null; then
-    ErrorD "Generate $_generateleafcert_cn TLS certs failed" "生成 $_generateleafcert_cn 的TLS证书失败"
+  openssl req -x509 -nodes -newkey rsa:2048 \
+        -days "$_generateleafcert_expire_days"  \
+        -keyout "$_generateleafcert_ckf" -out "$_generateleafcert_ck" \
+        -subj "$_generateleafcert_subj" \
+        -addext "subjectAltName=$_generateleafcert_san" >/dev/null
 
-    return 1
-  fi
-
-  ChmodOrSudo 644 "$_generateleafcert_ckf"
-  ChmodOrSudo 644 "$_generateleafcert_ck"
-  ChmodOrCreate 666  "${_generateleafcert_cert_dir}/change.log"
+  Info "chmod $_generateleafcert_ckf(644) $_generateleafcert_ck(644) "
+  chmod 644 "$_generateleafcert_ckf"
+  chmod 644 "$_generateleafcert_ck"
 
   Info "Verifying leaf certificate..."
   Debug "openssl x509 -in $_generateleafcert_ck -text -noout"
-  if ! openssl x509 -in "$_generateleafcert_ck" -text -noout; then
+  if ! openssl x509 -in "$_generateleafcert_ck" -text -noout >/dev/null; then
     RemoveDirsOrSudo "$_generateleafcert_cert_dir"
     ErrorD "Verify $_generateleafcert_cn TLS certs failed" "验证 $_generateleafcert_cn 的TLS证书失败"
     return 1
   fi
-
-  echo "$(Now)${TAB4}${_generateleafcert_cn}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "${_generateleafcert_cert_dir}/change.log"
+  _generateleafcert_changelog="${_generateleafcert_cert_dir}/change.log"
+  if [ ! -f "" ]; then
+    touch "$_generateleafcert_changelog"
+  fi
+  echo "$(Now)${TAB4}${_generateleafcert_cn}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "$_generateleafcert_changelog"
 }
 export GenerateLeafCert
 readonly GenerateLeafCert
