@@ -202,7 +202,7 @@ k8sProbePVCs(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
-  PanicIfNotFile "$_k8s_set_yaml"
+  PanicIfNotFiles "$_k8s_set_yaml"
 
   local _k8s_pvcs
 
@@ -220,7 +220,7 @@ k8sProbePvcSizes(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
-  PanicIfNotFile "$_k8s_set_yaml"
+  PanicIfNotFiles "$_k8s_set_yaml"
 
   local _k8s_pvcs
 

@@ -11,9 +11,8 @@ set -eu
 # Optional:
 #   dpkg, awk/apk/rpm/yum/apt-get, openssl(auto install)
 
-# mktemp 依赖 $TMPDIR 文件夹
 export INTERACTABLE="${INTERACTABLE:-1}"
-export TMPDIR="${TMPDIR:-/tmp}"
+export TMPDIR="${TMPDIR:-/tmp}"       # mktemp 依赖 $TMPDIR 文件夹
 export QUITE_LOGS="${QUITE_LOGS:-0}"
 export LIB_LOG_FILE="${LIB_LOG_FILE:-}"
 export IN_CHINESE=0         # 如果将此设置为 -1，则强制输出英文；设为 1，强制输出中文；否则自动判断系统是否是中文
@@ -426,44 +425,34 @@ _isInt_(){
 }
 readonly _isInt_
 
-PanicMktemp(){
-  Panic '"mktemp" failed'
-}
-export PanicMktemp
-readonly PanicMktemp
-
-PanicMktempD(){
-  Panic '"mktemp -d" failed'
-}
-export PanicMktempD
-readonly PanicMktempD
-
-PanicIfNotNumber(){
-  Usage $# -ge 1 'PanicIfNotNumber <arg> [arg]...'
+PanicIfNotInts(){
+  Usage $# -ge 1 'PanicIfNotInts <arg> [arg]...'
   for _panicifnotumber in "$@"; do
-    if ! _isInt_ "$_panicifnotumber"; then Panic "'$_panicifnotumber' is not a valid number"; fi
+    if ! _isInt_ "$_panicifnotumber"; then
+    PanicD "wrong integer value: ${_panicifnotumber}" "错误的整数：${_panicifnotumber}"
+    fi
   done
 }
-export PanicIfNotNumber
-readonly PanicIfNotNumber
+export PanicIfNotInts
+readonly PanicIfNotInts
 
-PanicIfNotFile(){
-  Usage $# -ge 1 'PanicIfNotFile <path> [path]...'
+PanicIfNotFiles(){
+  Usage $# -ge 1 'PanicIfNotFiles <path> [path]...'
   for _panicifnotfile in "$@"; do
     if [ ! -f "$_panicifnotfile" ]; then Panic "not found file '$_panicifnotfile'"; fi
   done
 }
-export PanicIfNotFile
-readonly PanicIfNotFile
+export PanicIfNotFiles
+readonly PanicIfNotFiles
 
-PanicIfNotDir(){
-  Usage $# -ge 1 'PanicIfNotDir <path> [path]...'
+PanicIfNotDirs(){
+  Usage $# -ge 1 'PanicIfNotDirs <path> [path]...'
   for _panicifnotdir in "$@"; do
     if [ ! -d "$_panicifnotdir" ]; then Panic "not found directory '$_panicifnotdir'"; fi
   done
 }
-export PanicIfNotDir
-readonly PanicIfNotDir
+export PanicIfNotDirs
+readonly PanicIfNotDirs
 
 # Require: IsInChinese
 PanicUsage() {
@@ -936,19 +925,41 @@ PanicIfEmpty(){
 export PanicIfEmpty
 readonly PanicIfEmpty
 
+Nth(){
+  Usage $# -eq 1 'Nth <n>'
+  _nth="$1"
+  case $_nth in
+    ''|*[!0-9]*)
+      printf '%s' "$_nth"
+      return
+      ;;
+  esac
+
+  _nth_mod10=$((_nth % 10))
+  _nth_mod100=$((_nth % 100))
+
+  if [ "$_nth_mod100" -ge 11 ] && [ "$_nth_mod100" -le 13 ]; then
+    printf '%sth' "$_nth"
+    return
+  fi
+
+  case "$_nth_mod10" in
+    1) printf '%sst' "$_nth" ;;
+    2) printf '%snd' "$_nth" ;;
+    3) printf '%srd' "$_nth" ;;
+    *) printf '%sth' "$_nth" ;;
+  esac
+}
+export Nth
+readonly Nth
+
 PanicArg(){
   Usage $# 2 3 'PanicArg <n> <value> [options]'
   _panicarg_n="$1"
   _panicarg_value="$2"
   _panicarg_options="${3:-}"
 
-  case "$_panicarg_n" in
-    1) _panicarg_nth='1st' ;;
-    2) _panicarg_nth='2nd' ;;
-    3) _panicarg_nth='3rd' ;;
-    *) _panicarg_nth="${_panicarg_n}th"
-  esac
-
+  _panicarg_nth="$(Nth "$_panicarg_n")"
   _panicarg_en="the ${_panicarg_nth} argument (value: ${_panicarg_value}) is wrong"
   _panicarg_cn="第${_panicarg_n}个参数（值为：${_panicarg_value}）错误"
 
@@ -1726,9 +1737,18 @@ ChmodOrSudo(){
   Usage $# -ge 2 'ChmodOrSudo <mode> <path> [path...]'
   _chmodorsudo_mode="$1"
   shift 1
-  if chmod "$_chmodorsudo_mode" "$@" 2>/dev/null; then return 0; fi
-  if ! CanSudo; then return 1; fi
-  sudo chmod "$_chmodorsudo_mode" "$@"
+  _chmodorsudo_ok=1
+  for _chmodorsudo_path in "$@"; do
+    [ -n "$_chmodorsudo_path" ] || continue
+    if chmod "$_chmodorsudo_mode" "$_chmodorsudo_path" 2>/dev/null; then
+      continue
+    fi
+    if ! CanSudo || ! sudo chmod "$_chmodorsudo_mode" "$_chmodorsudo_path" 2>/dev/null; then
+      _chmodorsudo_ok=0
+    fi
+  done
+
+  return $_chmodorsudo_ok
 }
 export ChmodOrSudo
 readonly ChmodOrSudo
@@ -1742,11 +1762,57 @@ ChmodOrPanic(){
 export ChmodOrPanic
 readonly ChmodOrPanic
 
+Random(){
+  _random_len=${1:-0}
+  PanicIfNotInts "$_random_len"
+  if [ "$_random_len" -lt 1 ]; then
+    _random_len=6
+  fi
+
+  if command -v dd >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
+    if command -v openssl >/dev/null 2>&1; then
+      # base64 may contain + / =
+      if openssl rand -base64 $((_random_len * 2)) 2>/dev/null | tr -dc 'A-Za-z0-9' |
+        dd bs=1 count="$_random_len" 2>/dev/null; then
+          return
+      fi
+    fi
+
+    if [ -r "/dev/urandom" ]; then
+      if dd if=/dev/urandom _random_bs=$((_random_len * 2)) _random_count=1 2>/dev/null |
+        tr -dc 'A-Za-z0-9' | dd _random_bs=1 _random_count="$_random_len" 2>/dev/null; then
+          return
+      fi
+    fi
+  fi
+
+  # shellcheck disable=SC3028
+  _random="${RANDOM:-"$(date +%s%N)"}"
+  PanicIfEmpty "$_random" 'date +%s%N'
+
+  _random_strlen=${#_random}
+  while [ "$_random_len" -gt "$_random_strlen" ]; do
+    # shellcheck disable=SC3028
+    _random="${_random}${RANDOM:-"$(date +%s%N)"}"
+    _random_strlen=${#_random}
+  done
+
+  _random_trim_start=$((_random_strlen - _random_len))
+  # shellcheck disable=SC2295
+  printf '%s' "${_random#$(printf '%*s' "$_random_trim_start" "" | tr ' ' '?')}"
+}
+export Random
+readonly Random
+
 MkdirsOrSudo(){
   Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
   if ! mkdir -p "$@" 2>/dev/null; then return 0; fi
   if ! CanSudo; then return 1; fi
-  sudo mkdir -p "$@"
+  for _mkdirsorsudo_dir in "$@"; do
+    [ -n "$_mkdirsorsudo_dir" ] || continue
+    sudo mkdir -p "$_mkdirsorsudo_dir"
+    sudo chmod 1777 "$_mkdirsorsudo_dir" 2>/dev/null || true
+  done
 }
 export MkdirsOrSudo
 readonly MkdirsOrSudo
@@ -1760,6 +1826,82 @@ MkdirsOrPanic(){
 export MkdirsOrPanic
 readonly MkdirsOrPanic
 
+# shellcheck disable=SC2120
+MktempDir(){
+  Usage $# -le 1 "MktempDir [base=${TMPDIR}|/tmp]"
+  _mktempdir_base="${1:-"$TMPDIR"}"
+
+  if [ -n "$_mktempdir_base" ]; then
+    _mktempdir="${_mktempdir_base}/tmp.$(Random 10)"
+    # do not use sudo
+    if mkdir -p "$_mktempdir" 2>/dev/null; then
+      printf '%s' "$_mktempdir"
+      return 0
+    fi
+  fi
+
+  if command -v mktemp >/dev/null 2>&1; then
+    mktemp -d
+    return
+  fi
+
+  if [ -z "$_mktempdir_base" ] || [ "$_mktempdir_base" != "/tmp" ]; then
+    MktempDir "/tmp"
+    return
+  fi
+
+  return 1
+}
+export MktempDir
+readonly MktempDir
+
+# shellcheck disable=SC2120
+MktempDirOrPanic(){
+  Usage $# -le 1 "MktempDirOrPanic [base=${TMPDIR}|/tmp]"
+  _mktempdirorpanic=$(MktempDir "$@") || PanicD "fail to create temp dir" "无法创建临时文件夹"
+  printf '%s' "$_mktempdirorpanic"
+}
+export MktempDirOrPanic
+readonly MktempDirOrPanic
+
+# shellcheck disable=SC2120
+MktempFile(){
+  Usage $# -le 1 "MktempFile [dir=${TMPDIR}|/tmp]"
+  _mktempfile_dir="${1:-"$TMPDIR"}"
+
+  if [ -n "$_mktempfile_dir" ]; then
+    # do not use sudo
+    mkdir -p "$_mktempfile_dir" 2>/dev/null || true
+    _mktempfile="${_mktempfile_dir}/tmp.$(Random 10)"
+    if touch "$_mktempfile" 2>/dev/null; then
+      printf '%s' "$_mktempfile"
+      return 0
+    fi
+  fi
+
+  if command -v mktemp >/dev/null 2>&1; then
+    mktemp
+    return
+  fi
+
+  if [ -z "$_mktempfile_dir" ] || [ "$_mktempfile_dir" != "/tmp" ]; then
+    MktempFile "/tmp"
+    return
+  fi
+
+  return 1
+}
+export MktempFile
+readonly MktempFile
+
+# shellcheck disable=SC2120
+MktempFileOrPanic(){
+  Usage $# -le 1 "MktempFileOrPanic [dir=${TMPDIR}|/tmp]"
+  _mktempfileorpanic=$(MktempFile "$@") || PanicD "fail to create temp file" "无法创建临时文件"
+  printf '%s' "$_mktempfileorpanic"
+}
+export MktempFileOrPanic
+readonly MktempFileOrPanic
 
 Filename(){
   Usage $# 1 2 'Filename <path> [with_ext]'
@@ -2311,7 +2453,7 @@ CdOrPanic(){
   if [ -z "$_cdorpanic_dir" ] || [ "$_cdorpanic_dir" = ' ' ] || [ "$_cdorpanic_dir" = '*' ]; then
     Panic "illegal directory name: '$_cdorpanic_dir'"
   fi
-  PanicIfNotDir "$_cdorpanic_dir"
+  PanicIfNotDirs "$_cdorpanic_dir"
   cd "$1" || Panic "fail to ${_NC_}cd $_cdorpanic_dir"
 }
 export CdOrPanic
@@ -2647,7 +2789,7 @@ LastN(){
   shift 2
   _lastn_s="$*"
 
-  PanicIfNotNumber "$_lastn"
+  PanicIfNotInts "$_lastn"
 
   if [ -z "$_lastn_sep" ] || [ -z "$_lastn_s" ]; then
     printf '%s' "$_lastn_s"
@@ -3987,7 +4129,7 @@ MatchedLines(){
   _matchedlines_file="$1"
   _matchedlines_pattern="$2"
   _matchedlines_trim="${3:-1}"
-  PanicIfNotFile "$_matchedlines_file"
+  PanicIfNotFiles "$_matchedlines_file"
 
   _matchedlines_matched=0
   _matchedlines_result="$TAB"
@@ -4025,10 +4167,10 @@ ReplaceYamlConfig(){
   _replaceyamlconfig_tag="$3"
   _replaceyamlconfig_rep="${4:-"${_replaceyamlconfig_tag#@}"}"
 
-  PanicIfNotFile "$_replaceyamlconfig_src" "$_replaceyamlconfig_rep"
+  PanicIfNotFiles "$_replaceyamlconfig_src" "$_replaceyamlconfig_rep"
 
   _replaceyamlconfig_sep=$(SafeSedSeparator "$_replaceyamlconfig_tag")
-  _replaceyamlconfig_temp=$(mktemp) || PanicMktemp
+  _replaceyamlconfig_temp=$(MktempFileOrPanic)
   trap 'rm -f "$_replaceyamlconfig_temp" 2>/dev/null' EXIT
   trap 'rm -f "$_replaceyamlconfig_temp" 2>/dev/null; exit 1' INT TERM
 
@@ -4194,7 +4336,7 @@ GenerateRSAKeys() {
   Install openssl
 
   # 创建临时文件，当接收到信号后，自动删除
-  _generatersakeys_tempdir=$(mktemp -d) || PanicMktempD
+  _generatersakeys_tempdir=$(MktempDirOrPanic)
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null' EXIT
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null; exit 1' INT TERM
 

@@ -16,7 +16,7 @@ UpgradeYq(){
 
   _installyq_url="https://github.com/mikefarah/yq/releases/latest/download/yq_${_installyq_os}_${_installyq_arch}"
 
-  g_temp_file=$(mktemp) || PanicMktemp
+  g_temp_file=$(MktempFileOrPanic
   trap 'rm -f "$g_temp_file" 2>/dev/null' EXIT
   trap 'rm -f "$g_temp_file" 2>/dev/null; return 1' INT TERM
 
@@ -98,7 +98,7 @@ YqGetFromFile(){
     _yqgetfromfile_with_panic=WITH_PANIC
   fi
 
-  PanicIfNotFile "$_yqgetfromfile_yaml"
+  PanicIfNotFiles "$_yqgetfromfile_yaml"
 
   _yqgetfromfile_value=$(yq -r "$_yqgetfromfile_key" "$_yqgetfromfile_yaml")
   if [ -z "$_yqgetfromfile_value" ] || [ "$_yqgetfromfile_value" = "null" ]; then

@@ -127,7 +127,7 @@ k8sRenderConfigmap(){
   local _k8s_configmap_file="$3"
   local _k8s_temp_dst="$4"
   local _k8s_cat_then_delete="${5:-}"
-  PanicIfNotFile "$_k8s_configmap_file"
+  PanicIfNotFiles "$_k8s_configmap_file"
 
   if [ "$_k8s_temp_dst" = '-d' ]; then
     _k8s_temp_dst=''
@@ -141,7 +141,7 @@ k8sRenderConfigmap(){
   _k8s_temp_dst="${_k8s_temp_dst}/${K8S_GENERATED_PREFIX}${_k8s_configmap_filename}"
 
   # 下面 trap 需要用到全局变量，因此不能使用 local
-  _k8s_g_tempdir=$(mktemp -d) || PanicMktemp
+  _k8s_g_tempdir=$(MktempDirOrPanic)
   trap 'rm -rf "$_k8s_g_tempdir" 2>/dev/null' EXIT
   trap 'rm -rf "$_k8s_g_tempdir" 2>/dev/null; return 1' INT TERM
 
@@ -366,7 +366,7 @@ k8sProbeSetName(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
-  PanicIfNotFile "$_k8s_set_yaml"
+  PanicIfNotFiles "$_k8s_set_yaml"
   local _k8s_kind
   _k8s_kind=$(YqGet '.kind' -f "$_k8s_set_yaml" WITH_PANIC)
   local _k8s_set

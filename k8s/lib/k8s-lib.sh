@@ -316,7 +316,7 @@ k8sUp(){
   if [ ! -f "$_k8s_helm_file" ]; then
     _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   fi
-  PanicIfNotFile "$_k8s_helm_file"
+  PanicIfNotFiles "$_k8s_helm_file"
 
   # .Release.Name => $_k8s_chart_name
   # .Release.Namespace => $_k8s_namespace
@@ -447,7 +447,7 @@ k8sUpgrade(){
   if [ ! -f "$_k8s_helm_file" ]; then
     _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   fi
-  PanicIfNotFile "$_k8s_helm_file"
+  PanicIfNotFiles "$_k8s_helm_file"
 
   local _k8s_backup_dir="${_k8s_workdir}/${K8S_BACKUP_DIR}"
   local _k8s_backup_file

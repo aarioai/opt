@@ -45,14 +45,6 @@ testing(){
   _saveToLogFile "" "$*"
 }
 
-init(){
-  # mktemp 依赖 $TMPDIR 文件夹
-  if [ ! -d "$TMPDIR" ]; then
-    mkdir -p "$TMPDIR"
-    chmod -R 1777 "$TMPDIR"
-  fi
-}
-
 fail() {
   if Yes "$AA_LOG_NO_COLOR"; then
     printf "[error] %s\n  want: (%s)    len:%d\n  got: (%s)    len:%d\n" "$1" "$2" "${#2}" "$3" "${#3}"
@@ -105,6 +97,50 @@ testYes(){
   if ! Yes 'Enabled'; then Panic 'Enabled is yes'; fi
   if ! Yes 'ENABLED'; then Panic 'ENABLED is yes'; fi
 }
+
+testMktemp(){
+  testing 'MktempFile and MktempDir'
+  g_tempdir=$(MktempDirOrPanic)
+  trap 'rm -rf "$g_tempdir" 2>/dev/null' EXIT
+  trap 'rm -rf "$g_tempdir" 2>/dev/null; exit 1' INT TERM
+
+  if [ ! -d "$g_tempdir" ]; then
+    Panic "MktempDir failed, not found dir: $g_tempdir"
+  fi
+
+  g_temp=$(MktempFileOrPanic)
+  trap 'rm -f "$g_temp" 2>/dev/null' EXIT
+  trap 'rm -f "$g_temp" 2>/dev/null; exit 1' INT TERM
+  if [ ! -f "$g_temp" ]; then
+    Panic "MktempFile failed, not found file: $g_temp"
+  fi
+
+  rm -rf "$g_tempdir"
+  rm -f "$g_temp"
+}
+
+testNth(){
+  testing 'Nth'
+  assert "Nth 1" "1st" "$(Nth 1)"
+  assert "Nth 2" "2nd" "$(Nth 2)"
+  assert "Nth 3" "3rd" "$(Nth 3)"
+  assert "Nth 4" "4th" "$(Nth 4)"
+  assert "Nth 11" "11th" "$(Nth 11)"
+  assert "Nth 101" "101st" "$(Nth 101)"
+}
+
+testRandom(){
+  testing 'Random'
+  random="$(Random 6)"
+  if [ "${#random}" -ne 6 ]; then Panic "Random 6 got ${random}"; fi
+
+  random="$(Random 4)"
+  if [ "${#random}" -ne 4 ]; then Panic "Random 4 got ${random}"; fi
+
+  random="$(Random 10)"
+  if [ "${#random}" -ne 10 ]; then Panic "Random 10 got ${random}"; fi
+}
+
 testSafeSedSeparator(){
   testing 'SafeSedSeparator'
   pattern='Aario'
@@ -125,7 +161,6 @@ testSafeSedSeparator(){
    pattern='/@Aario|Hi|:Name,:name|#'
    assert "SafeSedSeparator $pattern" ";" "$(SafeSedSeparator "$pattern")"
 }
-
 
 testUnquote(){
   testing 'Unquote'
@@ -201,7 +236,7 @@ testIsPositiveInt(){
 
 
 testLog() {
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   tmp="${g_temp}/lib-test.log"
@@ -444,7 +479,7 @@ testChgrpR() {
 
 testChownOrMkdir(){
   testing 'ChownOrMkdir'
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
 
@@ -1084,7 +1119,7 @@ testDownload(){
   testing 'Download'
   url='https://www.baidu.com'
   filename='baidu.index'
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   cd "$g_temp"
@@ -1137,7 +1172,7 @@ testAbsPath() {
   testing 'AbsPath'
   cur=${PWD:-"$(pwd)"}
 
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   cd "$g_temp"
@@ -1365,7 +1400,7 @@ testGenerateRSAKeys() {
 
   # 测试stream模式
   prefix=$(Now -N)
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'stream' "$(whoami)" "$g_temp" "A$prefix-" 512
@@ -1381,7 +1416,7 @@ testGenerateRSAKeys() {
 
   # 测试full模式
   prefix=$(Now -N)
-  g_temp=$(mktemp -d) || PanicMktempD
+  g_temp=$(MktempDirOrPanic)
   trap 'rm -rf "$g_temp" 2>/dev/null' EXIT
   trap 'rm -rf "$g_temp" 2>/dev/null; return 1' INT TERM
   GenerateRSAKeys 'full' "$(whoami)" "$g_temp" "B$prefix-" 512
@@ -1466,6 +1501,10 @@ main() {
       *) "test$func"; return ;;
     esac
   fi
+
+  testMktemp
+
+  testNth
 
   testSafeSedSeparator
 
