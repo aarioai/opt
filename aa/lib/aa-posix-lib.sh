@@ -1806,13 +1806,16 @@ readonly Random
 
 MkdirsOrSudo(){
   Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
-  if ! mkdir -p "$@" 2>/dev/null; then return 0; fi
+  if mkdir -p "$@" 2>/dev/null; then return 0; fi
   if ! CanSudo; then return 1; fi
   for _mkdirsorsudo_dir in "$@"; do
     [ -n "$_mkdirsorsudo_dir" ] || continue
     sudo mkdir -p "$_mkdirsorsudo_dir"
     sudo chmod 1777 "$_mkdirsorsudo_dir" 2>/dev/null || true
+    return
   done
+
+  return 1
 }
 export MkdirsOrSudo
 readonly MkdirsOrSudo
@@ -2299,11 +2302,11 @@ ChownOrMkdir(){
   if ! ExistsUser "$_chownormkdir_user"; then
     PanicD "$_chownormkdir_user is not a valid user" "$_chownormkdir_user 不是已存在的用户"
   fi
-  echo "AAAA"
+
   for _chownormkdir_dir in "$@"; do
     [ -n "$_chownormkdir_dir" ] || continue
-      echo "BBBB"
 
+    echo "MkdirsOrSudo $_chownormkdir_dir"
     MkdirsOrSudo "$_chownormkdir_dir"
 
     echo "CCCC"
