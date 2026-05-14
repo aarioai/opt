@@ -1737,18 +1737,18 @@ ChmodOrSudo(){
   Usage $# -ge 2 'ChmodOrSudo <mode> <path> [path...]'
   _chmodorsudo_mode="$1"
   shift 1
-  _chmodorsudo_ok=1
+  _chmodorsudo_fail=0
   for _chmodorsudo_path in "$@"; do
     [ -n "$_chmodorsudo_path" ] || continue
     if chmod "$_chmodorsudo_mode" "$_chmodorsudo_path" 2>/dev/null; then
       continue
     fi
     if ! CanSudo || ! sudo chmod "$_chmodorsudo_mode" "$_chmodorsudo_path" 2>/dev/null; then
-      _chmodorsudo_ok=0
+      _chmodorsudo_fail=1
     fi
   done
 
-  return $_chmodorsudo_ok
+  return $_chmodorsudo_fail
 }
 export ChmodOrSudo
 readonly ChmodOrSudo
@@ -4498,9 +4498,9 @@ SignCertByCA(){
   fi
   _signcertbyca_cert_changelog="${_signcertbyca_cert_dir}/change.log"
   if [ ! -f "$_signcertbyca_cert_changelog" ]; then
-    touch "$_signcertbyca_cert_changelog"
+    touch "$_signcertbyca_cert_changelog" || true
   fi
-  echo "$(Now)${TAB4}${_signcertbyca_domain}${TAB4}${_signcertbyca_san}${TAB4}${_signcertbyca_subj}${TAB4}+${_signcertbyca_expire_days} days (CA: $(basename "$_signcertbyca_ck"))" >> "$_signcertbyca_cert_changelog"
+  echo "$(Now)${TAB4}${_signcertbyca_domain}${TAB4}${_signcertbyca_san}${TAB4}${_signcertbyca_subj}${TAB4}+${_signcertbyca_expire_days} days (CA: $(basename "$_signcertbyca_ck"))" >> "$_signcertbyca_cert_changelog" || true
   return 0
 }
 export SignCertByCA
@@ -4531,6 +4531,7 @@ SignLeafCert(){
   fi
 
   Info "Sign leaf certificate..."
+  Debug "openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
   if ! openssl req -x509 -new  \
       -key "$_signleafcert_ckf"   \
       -out "$_signleafcert_ck"    \
@@ -4538,23 +4539,25 @@ SignLeafCert(){
       -addext "subjectAltName=$_signleafcert_san" \
       -days "$_signleafcert_expire_days" >/dev/null; then
     ErrorD "Create $_signleafcert_domain TLS certs failed (private key:$_signleafcert_ckf)" "创建 $_signleafcert_domain 的TLS证书失败（密钥：$_signleafcert_ckf)"
-    Debug "openssl req -x509 -new -key $_signleafcert_ckf -out $_signleafcert_ck -subj $_signleafcert_subj -addext subjectAltName=$_signleafcert_san -days $_signleafcert_expire_days"
     return 1
   fi
 
-  ChmodOrSudo 600 "$_signleafcert_ckf"
-  ChmodOrSudo 644 "$_signleafcert_ck"
+  chmod 600 "$_signleafcert_ckf"
+  chmod 644 "$_signleafcert_ck"
 
   Info "Verifying leaf certificate..."
+  Debug "openssl x509 -in $_signleafcert_ck -text -noout"
   if ! openssl x509 -in "$_signleafcert_ck" -text -noout; then
     RemoveDirsOrSudo "$_signleafcert_cert_dir"
     ErrorD "Verify $_signleafcert_domain TLS certs failed" "验证 $_signleafcert_domain 的TLS证书失败"
-    Debug "openssl x509 -in $_signleafcert_ck -text -noout"
     return 1
   fi
 
-  ChmodOrCreate 666  "${_signleafcert_cert_dir}/change.log"
-  echo "$(Now)${TAB4}${_signleafcert_domain}${TAB4}${_signleafcert_san}${TAB4}${_signleafcert_subj}${TAB4}by ${_signleafcert_ckf}${TAB4}+${_signleafcert_expire_days} days" >> "${_signleafcert_cert_dir}/change.log"
+  _signleafcert_changelog="${_signleafcert_cert_dir}/change.log"
+  if [ ! -f "$_signleafcert_changelog" ]; then
+    touch "$_signleafcert_changelog" || true
+  fi
+  echo "$(Now)${TAB4}${_signleafcert_domain}${TAB4}${_signleafcert_san}${TAB4}${_signleafcert_subj}${TAB4}by ${_signleafcert_ckf}${TAB4}+${_signleafcert_expire_days} days" >> "$_signleafcert_changelog" || true
   return 0
 }
 export SignLeafCert
@@ -4606,9 +4609,9 @@ GenerateLeafCert(){
   fi
   _generateleafcert_changelog="${_generateleafcert_cert_dir}/change.log"
   if [ ! -f "" ]; then
-    touch "$_generateleafcert_changelog"
+    touch "$_generateleafcert_changelog" || true
   fi
-  echo "$(Now)${TAB4}${_generateleafcert_cn}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "$_generateleafcert_changelog"
+  echo "$(Now)${TAB4}${_generateleafcert_cn}${TAB4}${_generateleafcert_san}${TAB4}${_generateleafcert_subj}${TAB4}+${_generateleafcert_expire_days} days" >> "$_generateleafcert_changelog" || true
 }
 export GenerateLeafCert
 readonly GenerateLeafCert
