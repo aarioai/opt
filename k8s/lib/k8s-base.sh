@@ -200,10 +200,18 @@ k8sStatus(){
   fi
 
   # Show CPU and memory usage
-  for _k8s_pod in "${_k8s_pods[@]}"; do
-    Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
-    $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
-  done
+  local _k8s_i=0
+    for _k8s_pod in "${_k8s_pods[@]}"; do
+      for _k8s_i in {1..30}; do
+        if kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
+          break
+        fi
+        Debug "waiting top metrics..."
+        sleep 2
+      done
+      Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
+      $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+    done
 }
 export k8sStatus
 readonly k8sStatus
