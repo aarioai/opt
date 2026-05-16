@@ -171,13 +171,13 @@ k8sStatus(){
   Heading "[POD] kubectl get pods -n $_k8s_namespace -l $_k8s_selector"
   $_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector"
 
+  _k8s_pods=()
+
   for _k8s_pvc in "$@"; do
     [ -n "$_k8s_pvc" ] || continue
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
-      # Show CPU and memory usage
-      Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
-      $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
-
+      [ -n "$_k8s_pod" ] || continue
+      _k8s_pods+=("$_k8s_pod")
       # Show PVC
       local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
@@ -199,6 +199,11 @@ k8sStatus(){
     k8sTlsSecrets "$_k8s_workdir" "$_k8s_namespace" "$_k8s_values" "$@"
   fi
 
+  # Show CPU and memory usage
+  for _k8s_pod in "${_k8s_pods[@]}"; do
+    Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
+    $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+  done
 }
 export k8sStatus
 readonly k8sStatus
