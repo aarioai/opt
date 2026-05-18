@@ -138,56 +138,15 @@ _pgCreateSchemaSQL(){
   _options="$*"
 
   cat <<-EOSQL
-    \c $_database;
-    CREATE USER $_user WITH PASSWORD '$_password' $_options;
     CREATE SCHEMA IF NOT EXISTS $_schema;
-
-    -- 设置用户默认schema
     ALTER USER $_user SET search_path TO $_schema;
 EOSQL
 }
 export _pgCreateSchemaSQL
 readonly _pgCreateSchemaSQL
 
-pgCreateSchemaOwnerSQL(){
-  Usage $# -ge 4 'pgCreateSchemaOwnerSQL <user> <password> <database> <schema> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema="$4"
-
-  # schema 角色以下划线开头
-  _role_prefix="_${_schema}"
-
-  _pgCreateSchemaSQL "$@" >/dev/null
-  printf '\n\n'
-  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" "$_role_prefix" >/dev/null
-  printf '\n\n'
-  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix" >/dev/null
-}
-export pgCreateSchemaOwnerSQL
-readonly pgCreateSchemaOwnerSQL
-
-pgCreateSchemaOwner(){
-  Usage $# -ge 4 'pgCreateSchemaOwner <user> <password> <database> <schema> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema="$4"
-
-  Info "create schema ${_database}.${_schema} and its owner $_user"
-  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
-
-  # schema 角色以下划线开头
-  _role_prefix="_${_schema}"
-  pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
-}
-export pgCreateSchemaOwner
-readonly pgCreateSchemaOwner
-
-
-_pgCreateDatabaseOwnerSQL(){
-  Usage $# -ge 3 '_pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
+_pgCreateDatabase(){
+  Usage $# -ge 3 '_pgCreateDatabase <user> <password> <database> [options]...'
   _user="$1"
   _password="$2"
   _database="$3"
@@ -195,12 +154,11 @@ _pgCreateDatabaseOwnerSQL(){
   _options="$*"
   #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
   cat <<-EOSQL
-    CREATE USER $_user WITH PASSWORD '$_password' $_options;
     CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
     GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
 EOSQL
 }
-readonly _pgCreateDatabaseOwnerSQL
+readonly _pgCreateDatabase
 
 _pgCreateDatabaseToExitsUser(){
   Usage $# -ge 3 '_pgCreateDatabaseToExitsUser <user> <password> <database> [options]...'
@@ -217,21 +175,32 @@ EOSQL
 }
 readonly _pgCreateDatabaseWithExitsUser
 
-pgCreateDatabaseOwnerSQL(){
-  Usage $# -ge 3 'pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
+pgCreateSchemaOwner(){
+  Usage $# -ge 4 'pgCreateSchemaOwner <user> <password> <database> <schema> [options]...'
   _user="$1"
   _password="$2"
   _database="$3"
-  _schema='public'
+  _schema="$4"
 
-  _pgCreateDatabaseOwnerSQL "$@" >/dev/null
-  printf '\n\n'
-  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" >/dev/null
-  printf '\n\n'
-  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" >/dev/null
+  if psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_user';" \
+  | grep -q 1; then
+    Info "user $_user exists"
+  else
+    Info "create user $_user"
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password' $_options;" >/dev/null
+  fi
+
+  Info "create schema ${_database}.${_schema} and its owner $_user"
+  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
+
+  # schema 角色以下划线开头
+  _role_prefix="_${_schema}"
+  pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
 }
-export pgCreateDatabaseOwnerSQL
-readonly pgCreateDatabaseOwnerSQL
+export pgCreateSchemaOwner
+readonly pgCreateSchemaOwner
+
 
 # 创建用户和 owner, reader, writer 角色
 pgCreateDatabaseOwner(){
@@ -241,23 +210,17 @@ pgCreateDatabaseOwner(){
   _database="$3"
   _schema='public'
 
-  Info "create database $_database and its owner $_user"
-  _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
+  if psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_user';" \
+  | grep -q 1; then
+    Info "user $_user exists"
+  else
+    Info "create user $_user"
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password' $_options;" >/dev/null
+  fi
+
+  _pgCreateDatabase "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
   pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
 export pgCreateDatabaseOwner
 readonly pgCreateDatabaseOwner
-
-pgCreateDatabaseToExistsUser(){
-  Usage $# -ge 3 'pgCreateDatabaseToExistsUser <user> <password> <database> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema='public'
-
-  Info "create database $_database and bind to user $_user"
-  _pgCreateDatabaseToExitsUser "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
-  pgGrantAllOnSchema "$_database" "$_schema" "$_user"
-}
-export pgCreateDatabaseToExistsUser
-readonly pgCreateDatabaseToExistsUser
