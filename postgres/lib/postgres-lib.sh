@@ -41,19 +41,19 @@ _pgCreateSchemaRolesSQL(){
   _writer="${_role_prefix}_writer"
 
   cat <<-EOSQL
-        -- 需要重新连接到数据库 a_gateway
-        \c $_database;
-        CREATE SCHEMA IF NOT EXISTS $_schema;
+    -- 需要重新连接到数据库 a_gateway
+    \c $_database;
+    CREATE SCHEMA IF NOT EXISTS $_schema;
 
-        CREATE ROLE $_owner NOLOGIN;
-        CREATE ROLE $_reader NOLOGIN;
-        CREATE ROLE $_writer NOLOGIN;
+    CREATE ROLE $_owner NOLOGIN;
+    CREATE ROLE $_reader NOLOGIN;
+    CREATE ROLE $_writer NOLOGIN;
 
-        GRANT CONNECT, TEMPORARY ON DATABASE $_database TO $_owner, $_reader, $_writer;
-        GRANT ALL PRIVILEGES ON SCHEMA $_schema TO $_owner;
+    GRANT CONNECT, TEMPORARY ON DATABASE $_database TO $_owner, $_reader, $_writer;
+    GRANT ALL PRIVILEGES ON SCHEMA $_schema TO $_owner;
 
-        -- 继承角色，后面改动角色权限，user 也自动获取
-        GRANT $_owner TO $_user
+    -- 继承角色，后面改动角色权限，user 也自动获取
+    GRANT $_owner TO $_user;
 EOSQL
 }
 export _pgCreateSchemaRolesSQL
@@ -138,21 +138,12 @@ _pgCreateSchemaSQL(){
   _options="$*"
 
   cat <<-EOSQL
-    -- 需要重新连接到数据库 a_gateway
     \c $_database;
+    CREATE USER $_user WITH PASSWORD '$_password' $_options;
+    CREATE SCHEMA IF NOT EXISTS $_schema;
 
-    DO \$\$
-    BEGIN
-      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
-        EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
-      ELSE
-        EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$_user', '$_password');
-      END IF;
-    END
-    \$\$;
-
-    CREATE SCHEMA IF NOT EXISTS $_schema AUTHORIZATION $_user;
-    ALTER ROLE  $_user SET search_path TO $_schema, public;
+    -- 设置用户默认schema
+    ALTER USER $_user SET search_path TO $_schema;
 EOSQL
 }
 export _pgCreateSchemaSQL
@@ -202,29 +193,29 @@ _pgCreateDatabaseOwnerSQL(){
   _database="$3"
   shift 3
   _options="$*"
-
+  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
   cat <<-EOSQL
-    DO \$\$
-    BEGIN
-       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
-          EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
-       ELSE
-          EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$_user', '$_password');
-       END IF;
-
-       IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '$_database') THEN
-          EXECUTE format('CREATE DATABASE %I OWNER %I ENCODING ''UTF8''', '$_database', '$_user');
-       ELSE
-          EXECUTE format('ALTER DATABASE %I OWNER TO %I', '$_database', '$_user');
-       END IF;
-    END
-    \$\$;
-
+    CREATE USER $_user WITH PASSWORD '$_password' $_options;
+    CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
     GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
 EOSQL
 }
-export _pgCreateDatabaseOwnerSQL
 readonly _pgCreateDatabaseOwnerSQL
+
+_pgCreateDatabaseToExitsUser(){
+  Usage $# -ge 3 '_pgCreateDatabaseToExitsUser <user> <password> <database> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  shift 3
+  _options="$*"
+  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
+  cat <<-EOSQL
+    CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
+    GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
+EOSQL
+}
+readonly _pgCreateDatabaseWithExitsUser
 
 pgCreateDatabaseOwnerSQL(){
   Usage $# -ge 3 'pgCreateDatabaseOwnerSQL <user> <password> <database> [options]...'
@@ -256,3 +247,17 @@ pgCreateDatabaseOwner(){
 }
 export pgCreateDatabaseOwner
 readonly pgCreateDatabaseOwner
+
+pgCreateDatabaseToExistsUser(){
+  Usage $# -ge 3 'pgCreateDatabaseToExistsUser <user> <password> <database> [options]...'
+  _user="$1"
+  _password="$2"
+  _database="$3"
+  _schema='public'
+
+  Info "create database $_database and bind to user $_user"
+  _pgCreateDatabaseToExitsUser "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
+  pgGrantAllOnSchema "$_database" "$_schema" "$_user"
+}
+export pgCreateDatabaseToExistsUser
+readonly pgCreateDatabaseToExistsUser
