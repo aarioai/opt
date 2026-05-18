@@ -188,7 +188,7 @@ pgCreateSchemaOwner(){
     Info "user $_user exists"
   else
     Info "create user $_user"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password' $_options;" >/dev/null
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password';" >/dev/null
   fi
 
   Info "create schema ${_database}.${_schema} and its owner $_user"
@@ -216,7 +216,7 @@ pgCreateDatabaseOwner(){
     Info "user $_user exists"
   else
     Info "create user $_user"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password' $_options;" >/dev/null
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password';" >/dev/null
   fi
 
   _pgCreateDatabase "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
