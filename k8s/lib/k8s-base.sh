@@ -133,20 +133,76 @@ k8sRmiNoneImages(){
 export k8sRmiNoneImages
 readonly k8sRmiNoneImages
 
+k8sPS2(){
+  printf "${_GREEN_}%s%s%s%s%s%s${_NC_}\n" "$(StrPad "CONTAINER ID" 14)" "$(StrPad "NAME" 16)" "$(StrPad "STATUS" 9)" "$(StrPad "CREATED AT" 13)" "$(StrPad "PORTS" 20)"  "NAMES"
+  $(SUDO) nerdctl ps -a --format '{{json .}}' | while IFS= read -r _k8s_line; do
+    local _k8s_c_id
+    _k8s_c_id=$(echo "$_k8s_line" | jq -r '.ID')
+
+    local _k8s_created_at
+    _k8s_created_at=$(date -d "$(echo "$_k8s_line" | jq -r '.CreatedAt')" '+%m-%d %H:%M')
+    local _k8s_names
+    _k8s_names=$(echo "$_k8s_line" | jq -r '.Names')
+    local _k8s_clean_names="${_k8s_names#k8s://}"
+    _k8s_namespace=$(echo "$_k8s_clean_names" | cut -d/ -f1)
+    _k8s_pod=$(echo "$_k8s_clean_names" | cut -d/ -f2)
+
+    local _k8s_name="${_k8s_clean_names##*/}"
+    case "$_k8s_name" in
+      aa-*) ;;
+      *) continue;;
+    esac
+
+    printf "${_BLUE_}%s${_NC_}%s%s" "$(StrPad "$_k8s_c_id" 14)" "$(StrPad "$_k8s_name" 16)"
+
+    local _k8s_c_status
+    _k8s_c_status=$(echo "$_k8s_line" | jq -r '.Status')
+    local _k8s_c_sts
+    _k8s_c_sts="$(StrPad "$_k8s_c_status" 9)"
+
+    case "$_k8s_c_status" in
+      Created) printf "${_MAGENTA_}%s${_NC_}" "$_k8s_c_sts" ;;     # created but not running
+      Existed*) printf "${_RED_}%s${_NC_}" "$_k8s_c_sts" ;;    # Exited (0)  normal exited;   Exited (1) abnormal exited;
+      Restarting) printf "${_CYAN_}%s${_NC_}" "$_k8s_c_sts" ;;
+      Paused) printf "${_BLUE_}%s${_NC_}" "$_k8s_c_sts"  ;;
+      *) printf '%s' "$_k8s_c_sts" ;;     # Up = running
+    esac
+
+    local _k8s_ports
+    _k8s_ports=$(printf "%s" "$(
+      kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o json \
+      | jq -r '
+          .spec.containers[]
+          | .ports // []
+          | map(
+              if (.protocol // "TCP") == "TCP" then
+                ":\(.containerPort)"
+              else
+                ":\(.containerPort)/\(.protocol)"
+              end
+            )
+          | join(",")
+        '
+    )")
+
+    printf "${_GRAY_}%s${_YELLOW_}%s${_GRAY_}%s${_NC_}\n" "$(StrPad "$_k8s_created_at" 13)" "$(StrPad "$_k8s_ports" 20)" "$_k8s_names"
+done
+}
+
 k8sPvcStatus(){
   Usage $# -eq 2 'k8sPvcStatus <namespace> <pvc name>'
   local _k8s_namespace="$1"
   local _k8s_pvc="$2"
 
   local _k8s_i=0
-  for _k8s_i in {1..30}; do
+  for _k8s_i in {1..12}; do
     local PVC_STATUS
     PVC_STATUS=$($(k8sKubectlPrefix) kubectl get pvc "$_k8s_pvc" -n "$_k8s_namespace" -o jsonpath='{.status.phase}' 2>/dev/null || true || echo "Pending")
     if [ "$PVC_STATUS" = "Bound" ]; then
       return 0
     fi
-    Debug "kubectl get pvc $_k8s_pvc -n $_k8s_namespace -o jsonpath='{.status.phase}' ($_k8s_i/30)"
-    sleep 2
+    Debug "kubectl get pvc $_k8s_pvc -n $_k8s_namespace -o jsonpath='{.status.phase}' ($_k8s_i/12)"
+    sleep 5
   done
 
   $_k8s_cmd_prefix kubectl describe pvc "$_k8s_pvc" -n "$_k8s_namespace"
@@ -200,10 +256,59 @@ k8sStatus(){
   fi
 
   # Show CPU and memory usage
+  local _k8s_pod_status
+  local _k8s_pod_reason
   local _k8s_i=0
     for _k8s_pod in "${_k8s_pods[@]}"; do
+      _k8s_pod_status=$($_k8s_cmd_prefix kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o jsonpath='{.status.phase}')
+      case "$_k8s_pod_status" in
+        "Pending")
+          Debug "Pod $_k8s_pod is Pending, skipping top metrics"
+          continue
+          ;;
+        "Failed")
+          continue
+          ;;
+        "Unknown")
+          continue
+          ;;
+      esac
+
+      # Ignore crashed pod
+      _k8s_pod_reason=$(
+        $_k8s_cmd_prefix kubectl get pod "$_k8s_pod" \
+          -n "$_k8s_namespace" \
+          -o json \
+        | jq -r '
+            [
+              .status.containerStatuses[]?
+              | (
+                  .state.waiting.reason //
+                  .state.terminated.reason //
+                  ""
+                )
+            ]
+            | join(",")
+          ' 2>/dev/null
+      )
+       # Ignore unhealthy pods
+      case "$_k8s_pod_status,$_k8s_pod_reason" in
+        Failed,*|\
+        Unknown,*|\
+        *,CrashLoopBackOff*|\
+        *,ImagePullBackOff*|\
+        *,ErrImagePull*|\
+        *,CreateContainerConfigError*|\
+        *,CreateContainerError*|\
+        *,RunContainerError*|\
+        *,ContainerCannotRun*|\
+        *,Error*|\
+        *,OOMKilled*)
+          continue
+        ;;
+      esac
       for _k8s_i in {1..30}; do
-        if kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
+        if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
           break
         fi
         Debug "waiting top metrics..."
@@ -236,24 +341,39 @@ k8sWaitReady(){
     sleep 2
   done
 
-  local _k8s_pvc_total_gi=$(( (_k8s_pvc_total_bytes + 1073741823) / 1073741824 ))
-  local _k8s_wait_timeout
-  if [ "$_k8s_pvc_total_gi" -le 1 ]; then
-    _k8s_wait_timeout=30
-  elif [ "$_k8s_pvc_total_gi" -le 10 ]; then
-    _k8s_wait_timeout=60
-  elif [ "$_k8s_pvc_total_gi" -le 40 ]; then
-    _k8s_wait_timeout=120
-  elif [ "$_k8s_pvc_total_gi" -le 80 ]; then
-    _k8s_wait_timeout=180
-  elif [ "$_k8s_pvc_total_gi" -le 200 ]; then
-    _k8s_wait_timeout=240
-  elif [ "$_k8s_pvc_total_gi" -le 500 ]; then
-    _k8s_wait_timeout=300
-  elif [ "$_k8s_pvc_total_gi" -le 1000 ]; then
-    _k8s_wait_timeout=600
-  else
-    _k8s_wait_timeout=1080
+  local _k8s_pvc_bind_fail=0
+  for _k8s_pvc in "$@"; do
+    [ -n "$_k8s_pvc" ] || continue
+    for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
+      [ -n "$_k8s_pod" ] || continue
+      _k8s_pods+=("$_k8s_pod")
+      local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
+      if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
+        _k8s_pvc_bind_fail=1
+      fi
+    done
+  done
+
+  local _k8s_wait_timeout=15
+  if [ "$_k8s_pvc_bind_fail" -eq 1 ]; then
+    local _k8s_pvc_total_gi=$(( (_k8s_pvc_total_bytes + 1073741823) / 1073741824 ))
+    if [ "$_k8s_pvc_total_gi" -le 1 ]; then
+      _k8s_wait_timeout=30
+    elif [ "$_k8s_pvc_total_gi" -le 10 ]; then
+      _k8s_wait_timeout=60
+    elif [ "$_k8s_pvc_total_gi" -le 40 ]; then
+      _k8s_wait_timeout=120
+    elif [ "$_k8s_pvc_total_gi" -le 80 ]; then
+      _k8s_wait_timeout=180
+    elif [ "$_k8s_pvc_total_gi" -le 200 ]; then
+      _k8s_wait_timeout=240
+    elif [ "$_k8s_pvc_total_gi" -le 500 ]; then
+      _k8s_wait_timeout=300
+    elif [ "$_k8s_pvc_total_gi" -le 1000 ]; then
+      _k8s_wait_timeout=600
+    else
+      _k8s_wait_timeout=1080
+    fi
   fi
 
   Debug "kubectl wait --for=condition=Ready pods -n $_k8s_namespace -l $_k8s_selector --timeout=${_k8s_wait_timeout}s"
@@ -303,8 +423,12 @@ k8sDestroy(){
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  Warn "kubectl delete namespace $_k8s_namespace"
-  $_k8s_cmd_prefix kubectl delete namespace "$_k8s_namespace" -v=6
+  if k8sExistsNamespaces "$_k8s_namespace"; then
+    Warn "kubectl delete namespace $_k8s_namespace"
+    $_k8s_cmd_prefix kubectl delete namespace "$_k8s_namespace"  -v=6
+  fi
+
+  k8sPS2
 }
 export k8sDestroy
 readonly k8sDestroy

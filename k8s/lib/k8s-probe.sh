@@ -106,15 +106,14 @@ k8sProbeImages(){
   Usage $# -eq 1 'k8sProbeDryRun <workdir>'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
-
   local _k8s_values
   _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
 
+
   local _k8s_image
-  if echo "$_k8s_values" | yq -e 'has("images")' - | grep -q true; then
+  if echo "$_k8s_values" | yq 'has("images")' | grep -q true; then
     yq -e '.images[]' <<< "$_k8s_values"
   fi
-
   YqGet ".image" -s "$_k8s_values"
 }
 export k8sProbeImages

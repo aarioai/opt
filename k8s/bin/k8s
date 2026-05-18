@@ -168,6 +168,11 @@ k8sNsenterOrDebug(){
   esac
 }
 
+k8sImage(){
+  k8sProbeImages "$g_workdir"
+  echo ''
+}
+
 main(){
   Usage $# -ge 1 "$help"
   local cmd="$1"
@@ -182,9 +187,11 @@ main(){
     destroy) k8sDestroyHere "$g_workdir" "$@" ;;
     down) k8sDown "$g_workdir" "$@" ;;
     history) history "$@" ;;
+    image) k8sImage ;;
     logs) k8sProbeLogs "$g_workdir" "$@" ;;
     ns|nsenter) k8sNsenterOrDebug "$@" ;;
     probe) k8sProbe "$@" ;;
+    ps2) k8sPS2 ;;
     pull) pull "$@" ;;
     restart) restart "$@" ;;
     status) status "$@" ;;

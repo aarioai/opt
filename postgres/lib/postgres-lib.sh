@@ -119,10 +119,10 @@ pgGrantAllOnSchema(){
   _writer="${_role_prefix}_writer"
 
   Info "create roles: $_owner, $_reader, $_writer"
-  _pgCreateSchemaRolesSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  _pgCreateSchemaRolesSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
 
   Info "grant all privileges on ${_database}.${_schema} to roles: $_owner, $_reader, $_writer"
-  _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
 }
 
 export pgGrantAllOnSchema
@@ -159,11 +159,11 @@ pgCreateSchemaOwnerSQL(){
   # schema 角色以下划线开头
   _role_prefix="_${_schema}"
 
-  _pgCreateSchemaSQL "$@"
+  _pgCreateSchemaSQL "$@" >/dev/null
   printf '\n\n'
-  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" "$_role_prefix"
+  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" "$_role_prefix" >/dev/null
   printf '\n\n'
-  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
+  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix" >/dev/null
 }
 export pgCreateSchemaOwnerSQL
 readonly pgCreateSchemaOwnerSQL
@@ -176,7 +176,7 @@ pgCreateSchemaOwner(){
   _schema="$4"
 
   Info "create schema ${_database}.${_schema} and its owner $_user"
-  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database"
+  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
 
   # schema 角色以下划线开头
   _role_prefix="_${_schema}"
@@ -210,11 +210,11 @@ pgCreateDatabaseOwnerSQL(){
   _database="$3"
   _schema='public'
 
-  _pgCreateDatabaseOwnerSQL "$@"
+  _pgCreateDatabaseOwnerSQL "$@" >/dev/null
   printf '\n\n'
-  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user"
+  _pgCreateSchemaRolesSQL "$_database" "$_schema" "$_user" >/dev/null
   printf '\n\n'
-  _pgGrantAllOnSchema "$_database" "$_schema" "$_user"
+  _pgGrantAllOnSchema "$_database" "$_schema" "$_user" >/dev/null
 }
 export pgCreateDatabaseOwnerSQL
 readonly pgCreateDatabaseOwnerSQL
@@ -228,7 +228,7 @@ pgCreateDatabaseOwner(){
   _schema='public'
 
   Info "create database $_database and its owner $_user"
-  _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"
+  _pgCreateDatabaseOwnerSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
   pgGrantAllOnSchema "$_database" "$_schema" "$_user"
 }
 export pgCreateDatabaseOwner
