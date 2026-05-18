@@ -138,8 +138,7 @@ _pgCreateSchemaSQL(){
   _options="$*"
 
   cat <<-EOSQL
-    \c $_database;
-    DO $$
+    DO \$\$
     BEGIN
       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
         EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
@@ -147,10 +146,10 @@ _pgCreateSchemaSQL(){
         EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$_user', '$_password');
       END IF;
     END
-    $$;
+    \$\$;
 
-    CREATE SCHEMA IF NOT EXISTS $_schema;
-    ALTER USER $_user SET search_path TO $_schema;
+    CREATE SCHEMA IF NOT EXISTS $_schema AUTHORIZATION $_user;
+    ALTER ROLE  $_user SET search_path TO $_schema, public;
 EOSQL
 }
 export _pgCreateSchemaSQL
@@ -202,7 +201,7 @@ _pgCreateDatabaseOwnerSQL(){
   _options="$*"
 
   cat <<-EOSQL
-    DO $$
+    DO \$\$
     BEGIN
        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
           EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
@@ -216,7 +215,7 @@ _pgCreateDatabaseOwnerSQL(){
           EXECUTE format('ALTER DATABASE %I OWNER TO %I', '$_database', '$_user');
        END IF;
     END
-    $$;
+    \$\$;
 
     GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
 EOSQL
