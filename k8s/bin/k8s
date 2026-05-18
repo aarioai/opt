@@ -20,6 +20,10 @@ $g_fn <CMD> [.]
   image inspect, image prune, images, kill, login, logout, logs, network, pause, pull, push,
   rename, restart, rm, rmi, save, start, stats, stop, system prune, tag, top, unpause, update, volume, wait
 
+  nodes:        kubectl get nodes
+  pod:          kubectl get pods -n <current>
+  pods:         kubectl get pods -A (--all-namespaces)
+
   destroy			  Destroy current namespace
     -y:           Skip confirmation prompt
   down     			Down current service
@@ -147,6 +151,9 @@ main(){
   case "$cmd" in
     -h) Lowlight "$help" ;;
     --help|help) Lowlight "$help_detail" ;;
+    nodes) kubectl get nodes ;;
+    pod) k8sProbePods "$g_workdir" "$@" ;;
+    pods) kubectl get pods -A ;;
     destroy) k8sDestroyHere "$g_workdir" "$@" ;;
     down) k8sDown "$g_workdir" "$@" ;;
     history) history "$@" ;;

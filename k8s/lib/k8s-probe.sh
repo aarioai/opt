@@ -258,7 +258,7 @@ export k8sProbeSelector
 readonly k8sProbeSelector
 
 k8sProbeCpuUsage(){
-  Usage $# -eq 1 'k8sProbeCpuUsage <workdir> [--sort-by=cpu|memory]'
+  Usage $# -ge 1 'k8sProbeCpuUsage <workdir> [--sort-by=cpu|memory]'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
@@ -270,6 +270,17 @@ k8sProbeCpuUsage(){
 }
 export k8sProbeCpuUsage
 readonly k8sProbeCpuUsage
+
+k8sProbePods(){
+  Usage $# -ge 1 'k8sProbePods <workdir> [--args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  shift
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+  $(k8sKubectlPrefix) kubectl get pods -n "$_k8s_namespace" "$@"
+}
 
 k8sProbe(){
   local _k8s_workdir
@@ -286,6 +297,7 @@ k8sProbe(){
     logs) k8sProbeLogs "$_k8s_workdir" ;;
     name) k8sProbeName "$_k8s_workdir" ;;
     n|namespace) k8sProbeNamespace "$_k8s_workdir" ;;
+    pod|pods) k8sProbePods "$_k8s_workdir" "$@" ;;
     protect) k8sProbeProtectStatus "$_k8s_workdir" ;;
     pvc) k8sProbePVCs "$_k8s_workdir" ;;
     pvc-size|pvc-sizes) k8sProbePvcSizes "$_k8s_workdir" ;;
