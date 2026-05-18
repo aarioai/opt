@@ -71,37 +71,37 @@ _pgGrantAllOnSchema(){
   _writer="${_role_prefix}_writer"
 
   cat <<-EOSQL
-        -- 需要重新连接到数据库 $_database
-        \c $_database;
+    -- 需要重新连接到数据库 $_database
+    \c $_database;
 
-        -- schema 级别权限
-        GRANT USAGE ON SCHEMA $_schema TO $_owner, $_reader, $_writer;
-        GRANT CREATE ON SCHEMA $_schema TO $_owner;
+    -- schema 级别权限
+    GRANT USAGE ON SCHEMA $_schema TO $_owner, $_reader, $_writer;
+    GRANT CREATE ON SCHEMA $_schema TO $_owner;
 
-        -- table 级别权限
-        GRANT SELECT ON ALL TABLES IN SCHEMA $_schema TO $_reader;
-        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA $_schema TO $_writer;
-        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $_schema TO $_owner;
+    -- table 级别权限
+    GRANT SELECT ON ALL TABLES IN SCHEMA $_schema TO $_reader;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA $_schema TO $_writer;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $_schema TO $_owner;
 
-        -- 自增ID权限
-        GRANT USAGE ON ALL SEQUENCES IN SCHEMA $_schema TO $_writer, $_owner;
-        GRANT SELECT ON ALL SEQUENCES IN SCHEMA $_schema TO $_reader;
+    -- 自增ID权限
+    GRANT USAGE ON ALL SEQUENCES IN SCHEMA $_schema TO $_writer, $_owner;
+    GRANT SELECT ON ALL SEQUENCES IN SCHEMA $_schema TO $_reader;
 
-        -- 存储过程、触发器等函数权限
-        GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_writer, $_owner;
-        GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_reader;
+    -- 存储过程、触发器等函数权限
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_writer, $_owner;
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_reader;
 
-        -- 默认权限（对未来对象生效）
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON TABLES TO $_reader;
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $_writer;
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT ALL PRIVILEGES ON TABLES TO $_owner;
+    -- 默认权限（对未来对象生效）
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON TABLES TO $_reader;
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $_writer;
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT ALL PRIVILEGES ON TABLES TO $_owner;
 
-        -- 自增ID默认权限
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT USAGE ON SEQUENCES TO $_writer, $_owner;
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON SEQUENCES TO $_reader;
+    -- 自增ID默认权限
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT USAGE ON SEQUENCES TO $_writer, $_owner;
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON SEQUENCES TO $_reader;
 
-        -- 函数的默认权限
-        ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT EXECUTE ON FUNCTIONS TO $_reader, $_writer, $_owner;
+    -- 函数的默认权限
+    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT EXECUTE ON FUNCTIONS TO $_reader, $_writer, $_owner;
 EOSQL
 }
 export _pgGrantAllOnSchema
@@ -138,6 +138,9 @@ _pgCreateSchemaSQL(){
   _options="$*"
 
   cat <<-EOSQL
+    -- 需要重新连接到数据库 a_gateway
+    \c $_database;
+
     DO \$\$
     BEGIN
       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
