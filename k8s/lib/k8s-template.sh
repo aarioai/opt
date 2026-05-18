@@ -24,6 +24,14 @@ k8sClearWorkDir(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  Debug "kubectl delete pod $K8S_DEBUG_POD -n $_k8s_namespace --ignore-not-found"
+  $_k8s_cmd_prefix kubectl delete pod "$K8S_DEBUG_POD" -n "$_k8s_namespace" --ignore-not-found >/dev/null 2>&1
+
   PanicIfEmpty "$K8S_GENERATED_PREFIX" 'K8S_GENERATED_PREFIX'
   Debug "rm -f ${_k8s_workdir}/templates/${K8S_GENERATED_PREFIX}*"
   rm -f "${_k8s_workdir}/templates/${K8S_GENERATED_PREFIX}"*
@@ -277,7 +285,7 @@ k8sUpNamespaceNx(){
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  if $_k8s_cmd_prefix kubectl get namespace "$_k8s_namespace" &>/dev/null; then
+  if k8sExistsNamespaces "$_k8s_namespace"; then
     return
   fi
 

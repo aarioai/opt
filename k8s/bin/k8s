@@ -32,8 +32,9 @@ $g_fn <CMD> [.]
 	tls:		  	  Down with TLS secrets
   logs 				  Show logs of current service
     [CTN|POD]		  Show logs of a specific container or pod
-  ns|nsenter 		Nsetner current container
-    [CMD] [ARGS]  Run with another command
+  ns|nsenter <image=.> 		Nsetner container from this image
+    .            Nsetner current container
+      [CMD] [ARGS]  Run with another command
   probe <CMD>		Probe current service
     -h|configmap|dry|env|global|images|logs|name|n|namespace|prefix|pvc|selector|setname|status|tls [ARGS]|values>
   pull 				  Pull all images in current service
@@ -143,6 +144,30 @@ tls(){
   esac
 }
 
+k8sNsenterOrDebug(){
+  # Handle `k8s ns`
+  if [ $# -eq 0 ]; then
+    k8sNsenterHere "$g_workdir"
+    return
+  fi
+  _k8s_image="$1"
+  # Handle `k8s ns . [command]`
+  if [ "$_k8s_image" = '.' ]; then
+    k8sNsenterHere "$g_workdir" "$@"
+    return
+  fi
+
+  case "$_k8s_image" in
+    *:*)
+      # Handle `k8s ns <image> [command]`
+      k8sDebugImageHere "$g_workdir" "$@"
+      ;;
+    *)
+      PanicD "specified $_k8s_image (<image>:<tag>) missing :<tag>" "指定的镜像 $_k8s_image 缺少 :<tag>"
+    ;;
+  esac
+}
+
 main(){
   Usage $# -ge 1 "$help"
   local cmd="$1"
@@ -158,7 +183,7 @@ main(){
     down) k8sDown "$g_workdir" "$@" ;;
     history) history "$@" ;;
     logs) k8sProbeLogs "$g_workdir" "$@" ;;
-    ns|nsenter) k8sNsenterHere "$g_workdir" "$@" ;;
+    ns|nsenter) k8sNsenterOrDebug "$@" ;;
     probe) k8sProbe "$@" ;;
     pull) pull "$@" ;;
     restart) restart "$@" ;;

@@ -6,8 +6,8 @@ set -euo pipefail
 # https://github.com/aarioai/opt
 if [ -x "../../aa/lib/aa-posix-yq.sh" ]; then . ../../aa/lib/aa-posix-yq.sh; else . /opt/aa/lib/aa-posix-yq.sh; fi
 
-export K8S_TEST_POD
-readonly K8S_TEST_POD='aa-temp-test'
+export K8S_DEBUG_POD
+readonly K8S_DEBUG_POD='aa-debug-pod'
 
 export K8S_INCLUDE_PREFIX
 readonly K8S_INCLUDE_PREFIX='@include/'
@@ -270,6 +270,22 @@ k8sWaitReady(){
 }
 export k8sWaitReady
 readonly k8sWaitReady
+
+k8sExistsNamespaces(){
+  Usage $# -ge 1 'k8sExistsNamespaces <namespace> [namespace]...'
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+
+  local _k8s_namespace
+  for _k8s_namespace in "$@"; do
+    if ! $_k8s_cmd_prefix kubectl get ns "$_k8s_namespace" >/dev/null 2>&1; then
+      return 1
+    fi
+  done
+  return 0
+}
+export k8sNamespaceExists
+readonly k8sNamespaceExists
 
 k8sDestroy(){
   Usage $# 1 2 'k8sDestroy <namespace> [no_confirmation:|-y]'
@@ -563,3 +579,29 @@ k8sAddYamlToGitIgnore(){
 }
 export k8sAddYamlToGitIgnore
 readonly k8sAddYamlToGitIgnore
+
+k8sDebugImage(){
+  Usage $# -ge 2 "k8sDebugImage <image> <namespace> [command=/bin/sh] [command_args...]"
+  local _k8s_image="$1"
+  local _k8s_namespace="$2"
+  local _k8s_command="${3:-"/bin/sh"}"
+  shift 3 2>/dev/null || shift $#
+
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+
+  if ! k8sExistsNamespaces "$_k8s_namespace"; then
+    Warn "namespace $_k8s_namespace is not exists. use default"
+    _k8s_namespace="default"
+  fi
+
+  Debug "kubectl delete pod $K8S_DEBUG_POD -n $_k8s_namespace --ignore-not-found"
+  $_k8s_cmd_prefix kubectl delete pod "$K8S_DEBUG_POD" -n "$_k8s_namespace" --ignore-not-found >/dev/null 2>&1
+
+  InfoD "interactive terminal mode requires manual execution, please copy and run the command below" \
+    "交互行为不可通过脚本发起，因此需要手动复制下面命令去运行"
+
+  Highlight "kubectl run $K8S_DEBUG_POD -n $_k8s_namespace -it --rm --restart=Never --image-pull-policy=IfNotPresent --image=$_k8s_image -- $_k8s_command $*"
+}
+export k8sDebugImage
+readonly k8sDebugImage

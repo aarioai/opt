@@ -207,6 +207,22 @@ k8sNsenterHere(){
 export k8sNsenterHere
 readonly k8sNsenterHere
 
+k8sDebugImageHere(){
+  Usage $# -ge 2 "k8sDebugImage <workdir> <image> [command...]"
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_image="$2"
+  shift 2
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  Info "$*"
+  k8sDebugImage "$_k8s_image" "$_k8s_namespace" "$@"
+}
+export k8sDebugImageHere
+readonly k8sDebugImageHere
+
 k8sRestartHere(){
   Usage $# -ge 1 'k8sRestartHere <workdir> [no_confirmation:|-y]'
   local _k8s_workdir
