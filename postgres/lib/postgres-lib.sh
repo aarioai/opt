@@ -138,12 +138,19 @@ _pgCreateSchemaSQL(){
   _options="$*"
 
   cat <<-EOSQL
-        \c $_database;
-        CREATE USER $_user WITH PASSWORD '$_password' $_options;
-        CREATE SCHEMA IF NOT EXISTS $_schema;
+    \c $_database;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
+        EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
+      ELSE
+        EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$_user', '$_password');
+      END IF;
+    END
+    $$;
 
-        -- 设置用户默认schema
-        ALTER USER $_user SET search_path TO $_schema;
+    CREATE SCHEMA IF NOT EXISTS $_schema;
+    ALTER USER $_user SET search_path TO $_schema;
 EOSQL
 }
 export _pgCreateSchemaSQL
@@ -193,11 +200,25 @@ _pgCreateDatabaseOwnerSQL(){
   _database="$3"
   shift 3
   _options="$*"
-  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
+
   cat <<-EOSQL
-        CREATE USER $_user WITH PASSWORD '$_password' $_options;
-        CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
-        GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
+    DO $$
+    BEGIN
+       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$_user') THEN
+          EXECUTE format('CREATE USER %I WITH PASSWORD %L $_options', '$_user', '$_password');
+       ELSE
+          EXECUTE format('ALTER USER %I WITH PASSWORD %L', '$_user', '$_password');
+       END IF;
+
+       IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '$_database') THEN
+          EXECUTE format('CREATE DATABASE %I OWNER %I ENCODING ''UTF8''', '$_database', '$_user');
+       ELSE
+          EXECUTE format('ALTER DATABASE %I OWNER TO %I', '$_database', '$_user');
+       END IF;
+    END
+    $$;
+
+    GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
 EOSQL
 }
 export _pgCreateDatabaseOwnerSQL
