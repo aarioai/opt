@@ -141,7 +141,7 @@ k8sProbeStatus(){
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
   local _k8s_container
-  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
+  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
 
   local _k8s_pvcs
   _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
@@ -188,7 +188,7 @@ k8sProbeLogs(){
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
   local _k8s_container
-  _k8s_container=$(k8sDefaultContainerName "$_k8s_chart_name")
+  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
 
   k8sLogs "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "$@"
 }
@@ -287,6 +287,7 @@ k8sProbe(){
   local _k8s_what="${1:-}"
   shift
   case "$_k8s_what" in
+    cname|container) k8sProbeContainerName "$_k8s_workdir" ;;
     configmap) k8sProbeConfigMap "$_k8s_workdir" -d ;;
     cpu|memory|top) k8sProbeCpuUsage "$_k8s_workdir" "$@";;
     debug|dry|dry-run) k8sProbeDryRun "$_k8s_workdir" ;;

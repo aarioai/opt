@@ -90,14 +90,6 @@ readonly K8S_TLS_SUBJ_TAG='subj'
 export K8S_TLS_SAN_TAG
 readonly K8S_TLS_SAN_TAG='subjectAltName'  # subjectAltName
 
-k8sDefaultContainerName(){
-  Usage $# -eq 1 'k8sDefaultTlsSecretName <chart_name>'
-  PanicIfEmpty "$1" 'chart_name'
-  printf 'aa-%s' "$1"
-}
-export k8sDefaultContainerName
-readonly k8sDefaultContainerName
-
 k8sDefaultTlsSecretName(){
   Usage $# -eq 1 'k8sDefaultTlsSecretName <common_name>'
   PanicIfEmpty "$1" 'common_name'

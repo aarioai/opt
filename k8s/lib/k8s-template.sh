@@ -384,6 +384,19 @@ k8sProbeSetName(){
 export k8sProbeLogs
 readonly k8sProbeLogs
 
+k8sProbeContainerName(){
+  Usage $# -ge 1 'k8sProbeContainerName <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+  PanicIfNotFiles "$_k8s_set_yaml"
+
+  local _k8s_container
+  k8sGetValue "$_k8s_workdir" '.spec.template.spec.containers[].name' -f "$_k8s_set_yaml"
+}
+export k8sProbeContainerName
+readonly k8sProbeContainerName
+
 k8sValuesExistsTLS(){
   Usage $# -eq 1 'k8sValuesExistsTLS <values>'
   local _k8s_values
