@@ -126,7 +126,7 @@ export k8sRmiNoneImages
 readonly k8sRmiNoneImages
 
 k8sPS2(){
-  printf "${_GREEN_}%s%s%s%s%s%s${_NC_}\n" "$(StrPad "CONTAINER ID" 14)" "$(StrPad "NAME" 16)" "$(StrPad "STATUS" 9)" "$(StrPad "CREATED AT" 13)" "$(StrPad "PORTS" 20)"  "NAMES"
+  printf "${_GREEN_}%s%s%s%s%s%s${_NC_}\n" "$(StrPad "CONTAINER ID" 14)" "$(StrPad "NAME" 18)" "$(StrPad "STATUS" 9)" "$(StrPad "CREATED AT" 13)" "$(StrPad "PORTS" 20)"  "NAMES"
   $(SUDO) nerdctl ps -a --format '{{json .}}' | while IFS= read -r _k8s_line; do
     local _k8s_c_id
     _k8s_c_id=$(echo "$_k8s_line" | jq -r '.ID')
@@ -145,7 +145,7 @@ k8sPS2(){
       *) continue;;
     esac
 
-    printf "${_BLUE_}%s${_NC_}%s%s" "$(StrPad "$_k8s_c_id" 14)" "$(StrPad "$_k8s_name" 16)"
+    printf "${_BLUE_}%s${_NC_}%s%s" "$(StrPad "$_k8s_c_id" 14)" "$(StrPad "$_k8s_name" 18)"
 
     local _k8s_c_status
     _k8s_c_status=$(echo "$_k8s_line" | jq -r '.Status')
