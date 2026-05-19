@@ -124,7 +124,7 @@ k8sProbeDryRun(){
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
-  k8sUp "$_k8s_workdir" --dry-run
+  k8sUp "$_k8s_workdir" --dry-run=client
 }
 export k8sProbeImages
 readonly k8sProbeImages
