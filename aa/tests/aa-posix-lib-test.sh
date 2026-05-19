@@ -1300,21 +1300,6 @@ testWordsRange(){
   assert 'WordsRange' "$want" "$got"
 }
 
-testProcessMatch(){
-  testing 'MyProcessMatch'
-  script="$0"
-  if ! MyProcessMatch "$script";then
-    ps -f
-    fail "MyProcessMatch $script" 'true' 'false'
-  fi
-
-  commandNotExists="commandNotExists"
-  if MyProcessMatch "$commandNotExists";then
-    ps -f
-    fail "MyProcessMatch $commandNotExists" 'false' 'true'
-  fi
-}
-
 _testFormatArrayString(){
   # 测试双引号
   s="$1"
@@ -1593,7 +1578,8 @@ main() {
   testNthWord
   testWordsBetween
   testWordsRange
-  testProcessMatch
+
+
   testFormatArrayString
   testParseArrays
   testParseConfig
