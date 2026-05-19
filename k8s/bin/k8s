@@ -185,7 +185,7 @@ main(){
     pod) k8sProbePods "$g_workdir" "$@" ;;
     pods) kubectl get pods -A ;;
     destroy) k8sDestroyHere "$g_workdir" "$@" ;;
-    down) k8sDown "$g_workdir" "$@" ;;
+    down) k8sDown "$g_workdir" "$@" && k8sPS2 ;;
     history) history "$@" ;;
     image) k8sImage ;;
     logs) k8sProbeLogs "$g_workdir" "$@" ;;
