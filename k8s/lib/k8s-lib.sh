@@ -389,14 +389,20 @@ k8sDown(){
   local _k8s_namespace
   _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
 
-  if helm status "$_k8s_chart_name" -n "$_k8s_namespace" >/dev/null 2>&1; then
-    Debug "helm uninstall $_k8s_chart_name -n $_k8s_namespace"
-    helm uninstall "$_k8s_chart_name" -n "$_k8s_namespace"
-  fi
+  Debug "helm uninstall $_k8s_chart_name -n $_k8s_namespace"
+  helm uninstall "$_k8s_chart_name" -n "$_k8s_namespace" 2>/dev/null || true
 
   k8sClearWorkDir "$_k8s_workdir"
 
   k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
+
+  local _k8s_setname
+  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
+  local _k8s_sn0="${_k8s_setname%%/*}"
+  local _k8s_sn1="${_k8s_setname#*/}"
+
+  Debug "kubectl delete $_k8s_sn0 $_k8s_sn1 -n $_k8s_namespace"
+  $_k8s_cmd_prefix kubectl delete "$_k8s_sn0" "$_k8s_sn1" -n "$_k8s_namespace" --ignore-not-found
 
   local _k8s_has_pvc=0
   if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1

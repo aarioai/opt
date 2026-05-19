@@ -246,8 +246,8 @@ k8sStatus(){
     done
   done
 
-  Heading "[CONTAINER] crictl ps -a --name $_k8s_container"
-  $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container"
+  Heading "[CONTAINER] crictl ps -a --name $_k8s_container --namespace $_k8s_namespace"
+  $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container" --namespace "$_k8s_namespace"
 
   local _k8s_values
   _k8s_values=$(k8sProbeValues "$_k8s_workdir")
