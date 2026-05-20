@@ -304,7 +304,7 @@ k8sStatus(){
         if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
           break
         fi
-        Debug "waiting top metrics..."
+        Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace"
         sleep 2
       done
       Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
@@ -723,3 +723,19 @@ k8sDebugImage(){
 }
 export k8sDebugImage
 readonly k8sDebugImage
+
+k8sDownJobs(){
+  Usage $# -eq 2 'k8sDownJobs <namespace> <selector>'
+  _k8s_namespace="$1"
+  _k8s_selector="$2"
+
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+
+  for _k8s_job in $($_k8s_cmd_prefix kubectl get jobs -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
+    Debug "kubectl delete job $_k8s_job -n $_k8s_namespace"
+    $_k8s_cmd_prefix kubectl delete job "$_k8s_job" -n "$_k8s_namespace"
+  done
+}
+export k8sDownJobs
+readonly k8sDownJobs

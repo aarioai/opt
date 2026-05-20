@@ -380,6 +380,9 @@ k8sDown(){
     esac
   done
 
+  local _k8s_selector
+  _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
@@ -396,6 +399,7 @@ k8sDown(){
   k8sClearWorkDir "$_k8s_workdir"
 
   k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
+  k8sDownJobs "$_k8s_namespace" "$_k8s_selector"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
   if [ -f "$_k8s_set_yaml" ]; then
@@ -408,7 +412,7 @@ k8sDown(){
   fi
 
   local _k8s_has_pvc=0
-  if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
+  if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "$_k8s_selector" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
   then
     _k8s_has_pvc=1
   else
@@ -420,8 +424,8 @@ k8sDown(){
     return 0
   fi
 
-  Notice "kubectl delete pvc -n $_k8s_namespace -l app=$_k8s_chart_name"
-  $_k8s_cmd_prefix kubectl delete pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name"
+  Notice "kubectl delete pvc -n $_k8s_namespace -l $_k8s_selector"
+  $_k8s_cmd_prefix kubectl delete pvc -n "$_k8s_namespace" -l "$_k8s_selector"
 }
 export k8sDown
 readonly k8sDown
