@@ -402,6 +402,7 @@ k8sDown(){
   k8sDownJobs "$_k8s_namespace" "$_k8s_selector"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+
   if [ -f "$_k8s_set_yaml" ]; then
     local _k8s_setname
     _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")

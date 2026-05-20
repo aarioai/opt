@@ -140,12 +140,14 @@ k8sProbeStatus(){
   _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
-  local _k8s_container
-  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
-
   local _k8s_pvcs
   _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
 
+  local _k8s_container=''
+  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+  if [ -f "$_k8s_set_yaml" ]; then
+    _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
+  fi
   k8sStatus "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_pvcs[@]}"
 }
 export k8sProbeStatus

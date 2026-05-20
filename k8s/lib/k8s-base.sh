@@ -207,7 +207,7 @@ k8sStatus(){
   Usage $# -ge 3 'k8sStatus <namespace> <selector> <container> [pvcs]...'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
-  local _k8s_container="$3"
+  local _k8s_container="$3"   # 可以为空
   shift 3
 
   local _k8s_cmd_prefix
@@ -239,9 +239,10 @@ k8sStatus(){
     done
   done
 
-  Heading "[CONTAINER] crictl ps -a --name $_k8s_container --namespace $_k8s_namespace"
-  $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container" --namespace "$_k8s_namespace"
-
+  if [ -n "$_k8s_container" ]; then
+    Heading "[CONTAINER] crictl ps -a --name $_k8s_container --namespace $_k8s_namespace"
+    $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container" --namespace "$_k8s_namespace"
+  fi
   local _k8s_values
   _k8s_values=$(k8sProbeValues "$_k8s_workdir")
   if YqHas ".${K8S_TLS_TAG}" -s "$_k8s_values"; then
