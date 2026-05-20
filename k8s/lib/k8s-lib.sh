@@ -296,6 +296,35 @@ k8sProbePvcBytesTotal(){
 export k8sProbePvcBytesTotal
 readonly k8sProbePvcBytesTotal
 
+
+k8sCreateLogDir(){
+  Usage $# -ge 1 'k8sUp <workdir> [helm args]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_values
+  _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
+
+  local _k8s_log_dir
+  _k8s_log_dir=$(YqGet ".hostPath.log" -s "$_k8s_values")
+  if [ -n "$_k8s_log_dir" ] && [ ! -d "$_k8s_log_dir" ]; then
+    Info "creating log dir: $_k8s_log_dir"
+    MkdirsOrPanic $_k8s_log_dir
+    ChmodOrPanic 777 "$_k8s_log_dir"
+  fi
+
+  local _k8s_data_dir
+  _k8s_data_dir=$(YqGet ".hostPath.data" -s "$_k8s_values")
+  if [ -n "$_k8s_data_dir" ] && [ ! -d "$_k8s_data_dir" ]; then
+    Info "creating data dir: $_k8s_log_dir"
+    MkdirsOrPanic $_k8s_log_dir
+    mkdir -p "$_k8s_data_dir"
+    ChmodOrPanic 777 "$_k8s_log_dir"
+  fi
+}
+export k8sCreateLogDir
+readonly k8sCreateLogDir
+
 k8sUp(){
   Usage $# -ge 1 'k8sUp <workdir> [helm args]'
   local _k8s_workdir
@@ -311,6 +340,8 @@ k8sUp(){
       break
     fi
   done
+
+  k8sCreateLogDir "$_k8s_workdir"
 
   local _k8s_env
   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
