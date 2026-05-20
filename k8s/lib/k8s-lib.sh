@@ -306,7 +306,7 @@ k8sUp(){
 
   local _k8s_dry_run=0
   for _k8s_arg in "$@"; do
-    if [ "$_k8s_arg" = "--dry-run" ]; then
+    if [ "$_k8s_arg" = "--dry-run" ] || [ "$_k8s_arg" = "--dry-run=client" ]; then
       _k8s_dry_run=1
       break
     fi
@@ -339,7 +339,8 @@ k8sUp(){
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
   helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
 
-  if Yes "$_k8s_dry_run"; then
+  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+  if Yes "$_k8s_dry_run" || [ ! -f "$_k8s_set_yaml" ]; then
     return 0
   fi
 
@@ -396,13 +397,15 @@ k8sDown(){
 
   k8sDownTLS "$_k8s_workdir" $_k8s_down_tls
 
-  local _k8s_setname
-  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
-  local _k8s_sn0="${_k8s_setname%%/*}"
-  local _k8s_sn1="${_k8s_setname#*/}"
-
-  Debug "kubectl delete $_k8s_sn0 $_k8s_sn1 -n $_k8s_namespace"
-  $_k8s_cmd_prefix kubectl delete "$_k8s_sn0" "$_k8s_sn1" -n "$_k8s_namespace" --ignore-not-found
+  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+  if [ -f "$_k8s_set_yaml" ]; then
+    local _k8s_setname
+    _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
+    local _k8s_sn0="${_k8s_setname%%/*}"
+    local _k8s_sn1="${_k8s_setname#*/}"
+    Debug "kubectl delete $_k8s_sn0 $_k8s_sn1 -n $_k8s_namespace"
+    $_k8s_cmd_prefix kubectl delete "$_k8s_sn0" "$_k8s_sn1" -n "$_k8s_namespace" --ignore-not-found
+  fi
 
   local _k8s_has_pvc=0
   if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "app=$_k8s_chart_name" --no-headers 2>/dev/null | grep . >/dev/null 2>&1

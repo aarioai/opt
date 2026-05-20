@@ -226,6 +226,7 @@ k8sStatus(){
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
       [ -n "$_k8s_pod" ] || continue
       _k8s_pods+=("$_k8s_pod")
+      [[ $_k8s_pod =~ -[0-9]+$ ]] || continue
       # Show PVC
       local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
@@ -339,6 +340,7 @@ k8sWaitReady(){
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
       [ -n "$_k8s_pod" ] || continue
       _k8s_pods+=("$_k8s_pod")
+      [[ $_k8s_pod =~ -[0-9]+$ ]] || continue
       local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"
       if ! k8sPvcStatus "$_k8s_namespace" "$_k8s_pvc_full"; then
         _k8s_pvc_bind_fail=1

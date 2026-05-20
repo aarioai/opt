@@ -772,19 +772,19 @@ _saveToLogFile(){
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
       if ! mkdir -p "$_savetologfile_dir" 2>/dev/null; then
-        sudo mkdir -p "$_savetologfile_dir"
+        $(SUDO) mkdir -p "$_savetologfile_dir"
       fi
       if ! chmod 777 "$_savetologfile_dir" 2>/dev/null; then
-        sudo chmod 777 "$_savetologfile_dir"
+        $(SUDO) chmod 777 "$_savetologfile_dir"
       fi
     fi
 
     _log_ "" "$_BLUE_" "creating lib log file: $_savetologfile"
     if ! touch "$_savetologfile" 2>/dev/null; then
-      sudo touch "$_savetologfile"
+      $(SUDO) touch "$_savetologfile"
     fi
     if ! chmod 777 "$_savetologfile" 2>/dev/null; then
-      sudo chmod 777 "$_savetologfile"
+      $(SUDO) chmod 777 "$_savetologfile"
     fi
   fi
   printf '%s %s%s\n' "$(Now)" "$_saveToLogFileLevel" "$_savetologfile_msg" >> "$_savetologfile"

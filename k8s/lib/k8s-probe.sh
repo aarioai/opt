@@ -201,7 +201,9 @@ k8sProbePVCs(){
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
-  PanicIfNotFiles "$_k8s_set_yaml"
+  if [ ! -f "$_k8s_set_yaml" ]; then
+    return
+  fi
 
   local _k8s_pvcs
 
@@ -296,7 +298,7 @@ k8sProbe(){
     images) k8sProbeImages "$_k8s_workdir" ;;
     logs) k8sProbeLogs "$_k8s_workdir" ;;
     name) k8sProbeName "$_k8s_workdir" ;;
-    n|namespace) k8sProbeNamespace "$_k8s_workdir" ;;
+    n|ns|namespace) k8sProbeNamespace "$_k8s_workdir" ;;
     pod|pods) k8sProbePods "$_k8s_workdir" "$@" ;;
     protect) k8sProbeProtectStatus "$_k8s_workdir" ;;
     pvc) k8sProbePVCs "$_k8s_workdir" ;;
