@@ -219,12 +219,14 @@ k8sStatus(){
   $_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector"
 
   _k8s_pods=()
+  for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
+    [ -n "$_k8s_pod" ] || continue
+    _k8s_pods+=("$_k8s_pod")
+  done
 
   for _k8s_pvc in "$@"; do
     [ -n "$_k8s_pvc" ] || continue
     for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
-      [ -n "$_k8s_pod" ] || continue
-      _k8s_pods+=("$_k8s_pod")
       [[ $_k8s_pod =~ -[0-9]+$ ]] || continue
       # Show PVC
       local _k8s_pvc_full="${_k8s_pvc}-${_k8s_pod}"

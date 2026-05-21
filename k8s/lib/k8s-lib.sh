@@ -188,6 +188,8 @@ k8sNsenterHere(){
   _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+  local _k8s_container
+  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
 
   if [ $# -gt 0 ]; then
     k8sNsenter "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_nsenter_cmd[@]}"
