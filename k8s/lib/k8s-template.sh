@@ -391,7 +391,6 @@ k8sProbeContainerName(){
   local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
   PanicIfNotFiles "$_k8s_set_yaml"
 
-  local _k8s_container
   k8sGetValue "$_k8s_workdir" '.spec.template.spec.containers[0].name' -f "$_k8s_set_yaml"
 }
 export k8sProbeContainerName

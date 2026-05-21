@@ -188,8 +188,6 @@ k8sNsenterHere(){
   _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
-  local _k8s_container
-  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
 
   if [ $# -gt 0 ]; then
     k8sNsenter "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "${_k8s_nsenter_cmd[@]}"
@@ -369,16 +367,17 @@ k8sUp(){
   # .Release.Namespace => $_k8s_namespace
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
   helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
-
-  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
-  if Yes "$_k8s_dry_run" || [ ! -f "$_k8s_set_yaml" ]; then
-    return 0
-  fi
-
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
-  local _k8s_container
-  _k8s_container=$(k8sProbeContainerName "$_k8s_workdir")
+
+  local _k8s_set_yaml="${_k8s_workdir}/${K8S_SET_YAML_REL}"
+  if Yes "$_k8s_dry_run" ; then
+    return 0
+  fi
+  if [ ! -f "$_k8s_set_yaml" ]; then
+    k8sStatus "$_k8s_namespace" "$_k8s_selector" "$@"
+    return 0
+  fi
 
   local _k8s_pvc_total_bytes
   _k8s_pvc_total_bytes=$(k8sProbePvcBytesTotal "$_k8s_workdir")
@@ -386,7 +385,7 @@ k8sUp(){
   local _k8s_pvcs
   _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
 
-  k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "$_k8s_pvc_total_bytes" "${_k8s_pvcs[@]}"
+  k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_pvc_total_bytes" "${_k8s_pvcs[@]}"
 
   k8sClearWorkDir "$_k8s_workdir"
 }

@@ -204,11 +204,10 @@ export k8sPvcStatus
 readonly k8sPvcStatus
 
 k8sStatus(){
-  Usage $# -ge 3 'k8sStatus <namespace> <selector> <container> [pvcs]...'
+  Usage $# -ge 2 'k8sStatus <namespace> <selector> [pvcs]...'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
-  local _k8s_container="$3"   # 可以为空
-  shift 3
+  shift 2
 
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
@@ -239,10 +238,16 @@ k8sStatus(){
     done
   done
 
-  if [ -n "$_k8s_container" ]; then
-    Heading "[CONTAINER] crictl ps -a --name $_k8s_container --namespace $_k8s_namespace"
-    $_k8s_cmd_prefix crictl ps -a --name "$_k8s_container" --namespace "$_k8s_namespace"
-  fi
+  local _k8s_pod_ids
+  local _k8s_pod_id
+  for _k8s_pod in "${_k8s_pods[@]}"; do
+    _k8s_pod_ids=$()
+    $_k8s_cmd_prefix crictl pods --name "$_k8s_pod" --namespace "$_k8s_namespace" -q | while IFS= read -r _k8s_pod_id || [[ -n "$_k8s_pod_id" ]]; do
+      Heading "[CONTAINER] crictl ps -a --pod $_k8s_pod_id --namespace $_k8s_namespace"
+      $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" --namespace "$_k8s_namespace"
+    done
+  done
+
   local _k8s_values
   _k8s_values=$(k8sProbeValues "$_k8s_workdir")
   if YqHas ".${K8S_TLS_TAG}" -s "$_k8s_values"; then
@@ -253,75 +258,74 @@ k8sStatus(){
   local _k8s_pod_status
   local _k8s_pod_reason
   local _k8s_i=0
-    for _k8s_pod in "${_k8s_pods[@]}"; do
-      _k8s_pod_status=$($_k8s_cmd_prefix kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o jsonpath='{.status.phase}')
-      case "$_k8s_pod_status" in
-        "Pending")
-          Debug "Pod $_k8s_pod is Pending, skipping top metrics"
-          continue
-          ;;
-        "Failed")
-          continue
-          ;;
-        "Unknown")
-          continue
-          ;;
-      esac
-
-      # Ignore crashed pod
-      _k8s_pod_reason=$(
-        $_k8s_cmd_prefix kubectl get pod "$_k8s_pod" \
-          -n "$_k8s_namespace" \
-          -o json \
-        | jq -r '
-            [
-              .status.containerStatuses[]?
-              | (
-                  .state.waiting.reason //
-                  .state.terminated.reason //
-                  ""
-                )
-            ]
-            | join(",")
-          ' 2>/dev/null
-      )
-       # Ignore unhealthy pods
-      case "$_k8s_pod_status,$_k8s_pod_reason" in
-        Failed,*|\
-        Unknown,*|\
-        *,CrashLoopBackOff*|\
-        *,ImagePullBackOff*|\
-        *,ErrImagePull*|\
-        *,CreateContainerConfigError*|\
-        *,CreateContainerError*|\
-        *,RunContainerError*|\
-        *,ContainerCannotRun*|\
-        *,Error*|\
-        *,OOMKilled*)
-          continue
+  for _k8s_pod in "${_k8s_pods[@]}"; do
+    _k8s_pod_status=$($_k8s_cmd_prefix kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o jsonpath='{.status.phase}')
+    case "$_k8s_pod_status" in
+      "Pending")
+        Debug "Pod $_k8s_pod is Pending, skipping top metrics"
+        continue
         ;;
-      esac
-      for _k8s_i in {1..30}; do
-        if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
-          break
-        fi
-        Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace"
-        sleep 2
-      done
-      Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
-      $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+      "Failed")
+        continue
+        ;;
+      "Unknown")
+        continue
+        ;;
+    esac
+
+    # Ignore crashed pod
+    _k8s_pod_reason=$(
+      $_k8s_cmd_prefix kubectl get pod "$_k8s_pod" \
+        -n "$_k8s_namespace" \
+        -o json \
+      | jq -r '
+          [
+            .status.containerStatuses[]?
+            | (
+                .state.waiting.reason //
+                .state.terminated.reason //
+                ""
+              )
+          ]
+          | join(",")
+        ' 2>/dev/null
+    )
+     # Ignore unhealthy pods
+    case "$_k8s_pod_status,$_k8s_pod_reason" in
+      Failed,*|\
+      Unknown,*|\
+      *,CrashLoopBackOff*|\
+      *,ImagePullBackOff*|\
+      *,ErrImagePull*|\
+      *,CreateContainerConfigError*|\
+      *,CreateContainerError*|\
+      *,RunContainerError*|\
+      *,ContainerCannotRun*|\
+      *,Error*|\
+      *,OOMKilled*)
+        continue
+      ;;
+    esac
+    for _k8s_i in {1..30}; do
+      if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
+        break
+      fi
+      Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace"
+      sleep 2
     done
+    Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
+    $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+  done
 }
 export k8sStatus
 readonly k8sStatus
 
 k8sWaitReady(){
-  Usage $# -ge 3 'k8sWaitReady <namespace> <selector> <container_name> [pvc_total_bytes=0] [pvcs]...'
+  Usage $# -ge 2 'k8sWaitReady <namespace> <selector> [pvc_total_bytes=0] [pvcs]...'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
-  local _k8s_container="$3"
-  local _k8s_pvc_total_bytes="${4:-0}"
-  shift 4 2>/dev/null || shift $#
+  local _k8s_pvc_total_bytes="${3:-0}"
+  shift 3 2>/dev/null || shift $#
 
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
@@ -377,11 +381,11 @@ k8sWaitReady(){
     -n "$_k8s_namespace" \
     -l "$_k8s_selector" \
     --timeout="${_k8s_wait_timeout}s" 2>/dev/null; then
-    k8sLogs "$_k8s_namespace" "$_k8s_selector" "$_k8s_container"
+    k8sLogs "$_k8s_namespace" "$_k8s_selector"
     return 1
   fi
 
-  k8sStatus "$_k8s_namespace" "$_k8s_selector" "$_k8s_container" "$@"
+  k8sStatus "$_k8s_namespace" "$_k8s_selector" "$@"
 }
 export k8sWaitReady
 readonly k8sWaitReady
@@ -560,11 +564,10 @@ export k8sFindCertDir
 readonly k8sFindCertDir
 
 k8sLogs(){
-  Usage $# 3 4 'k8sLogs <namespace> <selector> <container_name> [container|pod]'
+  Usage $# 2 3 'k8sLogs <namespace> <selector> [container|pod]'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
-  local _k8s_container_name="$3"
-  local _k8s_id="${4:-}"
+  local _k8s_id="${3:-}"
 
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
@@ -574,20 +577,13 @@ k8sLogs(){
     if $_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector"; then
       local _k8s_err
       _k8s_err=$($_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector" 2>&1)
-      if [ "$_k8s_err" != "No resources found in $_k8s_namespace namespace." ]; then
-        return 0
-      fi
+      case "$_k8s_err" in
+        *"net/http: TLS handshake timeout") ;;
+        *"No resources found in $_k8s_namespace namespace."*) return 0;;
+      esac
       k8sJournalCtrlError
     fi
 
-    _k8s_id=$($_k8s_cmd_prefix crictl ps -a --name "$_k8s_container_name" --quiet)
-    if [ -n "$_k8s_id" ]; then
-      Debug "crictl logs $_k8s_id (container name: $_k8s_container_name)"
-      if $_k8s_cmd_prefix crictl logs "$_k8s_id" 2>/dev/null; then
-        return 0
-      fi
-    fi
-    Error "container $_k8s_container_name is dead"
     local _k8s_pod
     _k8s_pod=$($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[0].metadata.name}')
     if [ -z "$_k8s_pod" ]; then
@@ -595,6 +591,21 @@ k8sLogs(){
       k8sJournalCtrlError
       return 1
     fi
+
+    local _k8s_pod_id
+    local _k8s_container_id
+    local _k8s_logs
+    $_k8s_cmd_prefix crictl pods --name "$_k8s_pod" --namespace "$_k8s_namespace" -q | while IFS= read -r _k8s_pod_id || [[ -n "$_k8s_pod_id" ]]; do
+      $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" -q  | while IFS= read -r _k8s_container_id || [[ -n "$_k8s_container_id" ]]; do
+        Debug "crictl logs $_k8s_container_id"
+        _k8s_logs=$($_k8s_cmd_prefix crictl logs "$_k8s_container_id" 2>/dev/null)
+        if [ -n "$_k8s_logs" ]; then
+          echo "$_k8s_logs"
+          return 0
+        fi
+      done
+    done
+
     Debug "kubectl describe pod $_k8s_pod -n $_k8s_namespace"
     $_k8s_cmd_prefix kubectl describe pod "$_k8s_pod" -n "$_k8s_namespace"
     local _k8s_error
