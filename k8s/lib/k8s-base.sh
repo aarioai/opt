@@ -218,7 +218,7 @@ k8sStatus(){
   Heading "[POD] kubectl get pods -n $_k8s_namespace -l $_k8s_selector"
   $_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector"
 
-  _k8s_pods=()
+  local _k8s_pods=()
   for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
     [ -n "$_k8s_pod" ] || continue
     _k8s_pods+=("$_k8s_pod")
@@ -240,13 +240,16 @@ k8sStatus(){
     done
   done
 
-  local _k8s_pod_ids
-  local _k8s_pod_id
+  Heading "[CONTAINER] crictl ps -a --pod <POD ID>  --namespace $_k8s_namespace"
+  $_k8s_cmd_prefix crictl ps -a --pod ONLY_HEADER --namespace dev-state
   for _k8s_pod in "${_k8s_pods[@]}"; do
-    _k8s_pod_ids=$()
     $_k8s_cmd_prefix crictl pods --name "$_k8s_pod" --namespace "$_k8s_namespace" -q | while IFS= read -r _k8s_pod_id || [[ -n "$_k8s_pod_id" ]]; do
-      Heading "[CONTAINER] crictl ps -a --pod $_k8s_pod_id --namespace $_k8s_namespace"
-      $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" --namespace "$_k8s_namespace"
+      $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" --namespace "$_k8s_namespace"  | while IFS= read -r _k8s_ps || [[ -n "$_k8s_ps" ]]; do
+        case "$_k8s_ps" in
+          CONTAINER*) continue ;;
+          *) echo "$_k8s_ps" ;;
+        esac
+      done
     done
   done
 
@@ -257,6 +260,7 @@ k8sStatus(){
   fi
 
   # Show CPU and memory usage
+  Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace      "
   local _k8s_pod_status
   local _k8s_pod_reason
   local _k8s_i=0
@@ -315,8 +319,13 @@ k8sStatus(){
       Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace"
       sleep 2
     done
-    Heading "[TOP] kubectl top pod $_k8s_pod -n $_k8s_namespace"
-    $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace"
+
+    $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" | while IFS= read -r _k8s_top || [[ -n "$_k8s_top" ]]; do
+      case "$_k8s_top" in
+        NAME*);;
+        *) echo "$_k8s_top" ;;
+      esac
+    done
   done
 }
 export k8sStatus
@@ -608,12 +617,8 @@ k8sLogs(){
       done
     done
 
-    Debug "kubectl describe pod $_k8s_pod -n $_k8s_namespace"
-    $_k8s_cmd_prefix kubectl describe pod "$_k8s_pod" -n "$_k8s_namespace"
-    local _k8s_error
     _k8s_error="$($_k8s_cmd_prefix kubectl describe pod "$_k8s_pod" -n "$_k8s_namespace" | grep -Ei "Error|Failed|Warning" )"
-    if [ -n "$_k8s_error" ]; then echo ''; Panic "${_k8s_error}"; fi
-
+    if [ -n "$_k8s_error" ]; then Debug "kubectl describe pod $_k8s_pod -n $_k8s_namespace${LF}"; Panic "${_k8s_error}"; fi
   elif [ "$_k8s_id" = 'pod' ]; then
     Debug "kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
     $_k8s_cmd_prefix kubectl describe pod -n "$_k8s_namespace" -l "$_k8s_selector"
