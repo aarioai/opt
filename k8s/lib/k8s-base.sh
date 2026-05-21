@@ -260,21 +260,13 @@ k8sStatus(){
   fi
 
   # Show CPU and memory usage
-  Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace      "
   local _k8s_pod_status
   local _k8s_pod_reason
   local _k8s_i=0
   for _k8s_pod in "${_k8s_pods[@]}"; do
     _k8s_pod_status=$($_k8s_cmd_prefix kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o jsonpath='{.status.phase}')
     case "$_k8s_pod_status" in
-      "Pending")
-        Debug "Pod $_k8s_pod is Pending, skipping top metrics"
-        continue
-        ;;
-      "Failed")
-        continue
-        ;;
-      "Unknown")
+      Pending|Failed|Completed|Unknown|Succeeded)
         continue
         ;;
     esac
@@ -300,6 +292,7 @@ k8sStatus(){
     case "$_k8s_pod_status,$_k8s_pod_reason" in
       Failed,*|\
       Unknown,*|\
+      Succeeded,*|\
       *,CrashLoopBackOff*|\
       *,ImagePullBackOff*|\
       *,ErrImagePull*|\
@@ -308,18 +301,29 @@ k8sStatus(){
       *,RunContainerError*|\
       *,ContainerCannotRun*|\
       *,Error*|\
+      *,Exited*|\
       *,OOMKilled*)
         continue
       ;;
     esac
-    for _k8s_i in {1..30}; do
+    for _k8s_i in {1..5}; do
       if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
         break
       fi
-      Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace"
+
+      _k8s_pod_status=$($_k8s_cmd_prefix kubectl get pod "$_k8s_pod" -n "$_k8s_namespace" -o jsonpath='{.status.phase}')
+      case "$_k8s_pod_status" in
+        Pending|Failed|Completed|Unknown|Succeeded)
+          Info "pod $_k8s_pod is $_k8s_pod_status"
+          return 0
+          ;;
+      esac
+
+      Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace (status: $_k8s_pod_status)"
       sleep 2
     done
 
+    Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace      "
     $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" | while IFS= read -r _k8s_top || [[ -n "$_k8s_top" ]]; do
       case "$_k8s_top" in
         NAME*);;
