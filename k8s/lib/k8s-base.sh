@@ -306,7 +306,7 @@ k8sStatus(){
         continue
       ;;
     esac
-    for _k8s_i in {1..5}; do
+    for _k8s_i in {1..12}; do
       if $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" >/dev/null 2>&1; then
         break
       fi
@@ -320,7 +320,7 @@ k8sStatus(){
       esac
 
       Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace (status: $_k8s_pod_status)"
-      sleep 2
+      sleep 5
     done
 
     Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace      "

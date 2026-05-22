@@ -6,9 +6,12 @@ if [ -x "./k8s-template.sh" ]; then . ./k8s-template.sh; else . /opt/k8s/lib/k8s
 readonly k8s_probe_help="
 k8s probe <CMD> [.]
   -h|-help|help     Show help
+  cname|container   Show container name
   configmap         Show configmaps
   cpu|memory|top    Show CPU/memory usage
   debug|dry|dry-run Dry run 'k8s up', i.e. show all rendered yaml configurations
+  desc|describe     kubectl describe pods <pod> -n <namespace>
+    [pod]
   env               Get .env in $K8S_ENV_YAML
     [-v]              Cat $K8S_ENV_YAML
   global            Render $K8S_GLOBAL_YAML
@@ -278,6 +281,30 @@ k8sProbePods(){
   $(k8sKubectlPrefix) kubectl get pods -n "$_k8s_namespace" "$@"
 }
 
+k8sProbeDescribePod(){
+  Usage $# -ge 1 'k8sProbeDescribePod <workdir> [pod name]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_pod="${2:-}"
+
+  local _k8s_namespace
+  _k8s_namespace=$(k8sProbeNamespace "$_k8s_workdir")
+
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+
+  if [ -z "$_k8s_pod" ]; then
+    local _k8s_selector
+    _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
+    Debug "kubectl describe pods -n $_k8s_namespace -l $_k8s_selector"
+    $_k8s_cmd_prefix kubectl describe pods -n "$_k8s_namespace" -l "$_k8s_selector"
+    return
+  fi
+
+  Debug "kubectl describe pod $_k8s_pod -n $_k8s_namespace "
+  $_k8s_cmd_prefix kubectl describe pod "$_k8s_pod" -n "$_k8s_namespace"
+}
+
 k8sProbe(){
   local _k8s_workdir
   _k8s_workdir=$(k8sWorkDir)
@@ -288,6 +315,7 @@ k8sProbe(){
     configmap) k8sProbeConfigMap "$_k8s_workdir" -d ;;
     cpu|memory|top) k8sProbeCpuUsage "$_k8s_workdir" "$@";;
     debug|dry|dry-run) k8sProbeDryRun "$_k8s_workdir" ;;
+    desc|describe) k8sProbeDescribePod "$_k8s_workdir" "$@";;
     env) k8sProbeEnv "$_k8s_workdir" "$@";;
     global) k8sProbeGlobal "$_k8s_workdir" ;;
     images) k8sProbeImages "$_k8s_workdir" ;;

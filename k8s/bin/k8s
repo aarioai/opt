@@ -23,6 +23,8 @@ $g_fn <CMD> [.]
   nodes:        kubectl get nodes
   pod:          kubectl get pods -n <current>
   pods:         kubectl get pods -A (--all-namespaces)
+  desc|describe     kubectl describe pods <pod> -n <namespace>
+    [pod]
 
   destroy			  Destroy current namespace
     -y:           Skip confirmation prompt
@@ -184,6 +186,7 @@ main(){
     nodes) kubectl get nodes ;;
     pod) k8sProbePods "$g_workdir" "$@" ;;
     pods) kubectl get pods -A ;;
+    desc|describe) k8sProbeDescribePod "$g_workdir" "$@" ;;
     destroy) k8sDestroyHere "$g_workdir" "$@" ;;
     down) k8sDown "$g_workdir" "$@" && k8sProbe status && k8sPS2 ;;
     history) history "$@" ;;
