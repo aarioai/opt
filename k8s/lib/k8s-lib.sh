@@ -296,34 +296,29 @@ k8sProbePvcBytesTotal(){
 export k8sProbePvcBytesTotal
 readonly k8sProbePvcBytesTotal
 
-
-k8sCreateLogDir(){
-  Usage $# -ge 1 'k8sUp <workdir> [helm args]'
+k8sCreateHostPath(){
+  Usage $# -eq 1 'k8sCreateHostPath <workdir>'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
   local _k8s_values
   _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
 
-  local _k8s_log_dir
-  _k8s_log_dir=$(YqGet ".hostPath.log" -s "$_k8s_values")
-  if [ -n "$_k8s_log_dir" ] && [ ! -d "$_k8s_log_dir" ]; then
-    Info "creating log dir: $_k8s_log_dir"
-    MkdirsOrPanic $_k8s_log_dir
-    ChmodOrPanic 777 "$_k8s_log_dir"
+  if ! YqHas '.hostPath' -s "$_k8s_values"; then
+    return
   fi
 
-  local _k8s_data_dir
-  _k8s_data_dir=$(YqGet ".hostPath.data" -s "$_k8s_values")
-  if [ -n "$_k8s_data_dir" ] && [ ! -d "$_k8s_data_dir" ]; then
-    Info "creating data dir: $_k8s_log_dir"
-    MkdirsOrPanic $_k8s_log_dir
-    mkdir -p "$_k8s_data_dir"
-    ChmodOrPanic 777 "$_k8s_log_dir"
-  fi
+  yq -r '.hostPath | to_entries[] | "\(.key) \(.value)"' <<< "$_k8s_values" |
+  while IFS= read -r _k8s_host_path_name _k8s_host_path; do
+    if [ -n "$_k8s_host_path" ] && [ ! -d "$_k8s_host_path" ]; then
+      Info "creating host path $_k8s_host_path_name => $_k8s_host_path"
+      MkdirsOrPanic "$_k8s_host_path"
+      ChmodOrPanic 777 "$_k8s_host_path"
+    fi
+  done
 }
-export k8sCreateLogDir
-readonly k8sCreateLogDir
+export k8sCreateHostPath
+readonly k8sCreateHostPath
 
 k8sUp(){
   Usage $# -ge 1 'k8sUp <workdir> [helm args]'
@@ -341,7 +336,7 @@ k8sUp(){
     fi
   done
 
-  k8sCreateLogDir "$_k8s_workdir"
+  k8sCreateHostPath "$_k8s_workdir"
 
   local _k8s_env
   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")

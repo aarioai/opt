@@ -177,7 +177,7 @@ k8sPS2(){
         '
     )")
 
-    printf "${_GRAY_}%s${_YELLOW_}%s${_GRAY_}%s${_NC_}\n" "$(StrFix "$_k8s_created_at" 13)" "$(StrFix "$_k8s_ports" 20)" "$_k8s_names"
+    printf "${_GRAY_}%s${_YELLOW_}%s${_GRAY_}%s${_NC_}\n" "$(StrPad "$_k8s_created_at" 13)" "$(StrFix "$_k8s_ports" 20)" "$_k8s_names"
 done
 }
 

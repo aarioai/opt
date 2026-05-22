@@ -100,13 +100,16 @@ YqGetFromFile(){
 
   PanicIfNotFiles "$_yqgetfromfile_yaml"
 
-  _yqgetfromfile_value=$(yq -r "$_yqgetfromfile_key" "$_yqgetfromfile_yaml")
-  if [ -z "$_yqgetfromfile_value" ] || [ "$_yqgetfromfile_value" = "null" ]; then
+  # Handling missing key
+  if ! YqHas "$_yqgetfromfile_key" -f "$_yqgetfromfile_yaml"; then
     if [ -z "$_yqgetfromfile_default" ] && [ "$_yqgetfromfile_with_panic" = WITH_PANIC ]; then
       PanicD "missing key $_yqgetfromfile_key in $_yqgetfromfile_yaml" "$_yqgetfromfile_yaml 缺少键值 $_yqgetfromfile_key"
     fi
-    _yqgetfromfile_value="$_yqgetfromfile_default"
+    printf '%s' "$_yqgetfromfile_default"
+    return
   fi
+
+  _yqgetfromfile_value=$(yq -r "$_yqgetfromfile_key" "$_yqgetfromfile_yaml")
   printf '%s' "$_yqgetfromfile_value"
 }
 export YqGetFromFile
@@ -124,14 +127,16 @@ YqGetFromStr(){
     _yqgetfromstr_with_panic=WITH_PANIC
   fi
 
-  _yqgetfromstr_value=$(printf '%s\n' "$_yqgetfromstr_str" | yq -r "$_yqgetfromstr_key")
-
-  if [ -z "$_yqgetfromstr_value" ] || [ "$_yqgetfromstr_value" = "null" ]; then
+  # Handling missing key
+  if ! YqHas "$_yqgetfromstr_key" -s "$_yqgetfromstr_str"; then
     if [ -z "$_yqgetfromstr_default" ] && [ "$_yqgetfromstr_with_panic" = WITH_PANIC ]; then
       PanicD "missing key $_yqgetfromstr_key" "缺少键值 $_yqgetfromstr_key"
     fi
-    _yqgetfromstr_value="$_yqgetfromstr_default"
+    printf '%s' "$_yqgetfromstr_default"
+    return
   fi
+
+  _yqgetfromstr_value=$(printf '%s\n' "$_yqgetfromstr_str" | yq -r "$_yqgetfromstr_key")
   printf '%s' "$_yqgetfromstr_value"
 }
 export YqGetFromStr

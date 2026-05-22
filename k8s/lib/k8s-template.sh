@@ -85,19 +85,17 @@ k8sRenderTemplate(){
     case "$_k8s_var" in
       ".Chart."*)
         _k8s_real_value="${_k8s_var#.Chart.}";
-        _k8s_real_value="${_k8s_real_value,}"   # convert first character to lowercase
+        _k8s_real_value="${_k8s_real_value,}"   # convert first character to lowercase, coz helm does this
         _k8s_real_value=$(YqGet ".${_k8s_real_value}" -f "$_k8s_chart_yaml" WITH_PANIC)
         ;;
       ".Env."*)
         if [ -z "$_k8s_env_yaml" ]; then _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" WITH_PANIC); fi
         _k8s_real_value="${_k8s_var#.Env.}";
-        _k8s_real_value="${_k8s_real_value,}"   # convert first character to lowercase
         _k8s_real_value=$(YqGet ".${_k8s_real_value}" -f "$_k8s_env_yaml" WITH_PANIC)
         ;;
       ".Values."*)
         if [ -z "$_k8s_values" ]; then _k8s_values=$(k8sProbeValues "$_k8s_workdir"); fi
         _k8s_real_value="${_k8s_var#.Values.}";
-        _k8s_real_value="${_k8s_real_value,}"   # convert first character to lowercase
         _k8s_real_value=$(YqGet ".${_k8s_real_value}" -s "$_k8s_values" WITH_PANIC)
         ;;
       ".Release.Namespace")
