@@ -611,20 +611,30 @@ testStrRepeat() {
   assert 'StrRepeat' "$want" "$got"
 }
 
-testStrpad() {
+testStrPad() {
   testing 'StrPad'
   str='A'
   want='A    '
   got=$(StrPad "$str" ${#want})
   assert 'StrPad' "$want" "$got"
 }
-testStrpadLeft() {
+
+testStrPadLeft() {
   testing 'StrPadLeft'
   str='A'
   want='    A'
   got=$(StrPadLeft "$str" ${#want})
   assert 'StrPad' "$want" "$got"
 }
+
+testStrFix(){
+  testing 'StrFix'
+  assert 'StrFix Aario' "Aario" "$(StrFix Aario 5)"
+  assert 'StrFix Aario 3' "Aar" "$(StrFix Aario 3)"
+  assert 'StrFix Aario 7' "Aario  " "$(StrFix Aario 7)"
+  assert 'StrFix Aario-No-One 8' "Aario..." "$(StrFix "Aario-No-One" 8)"
+}
+
 testAlignKVPair(){
   testing 'AlignKVPair'
   want='name    =  Aario'
@@ -1527,8 +1537,10 @@ main() {
   testChownOrMkdir
 
   testStrRepeat
-  testStrpad
-  testStrpadLeft
+  testStrPad
+  testStrPadLeft
+  testStrFix
+
   testAlignKVPair
   testStrFirst
   testCutLeft

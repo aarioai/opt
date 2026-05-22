@@ -2915,6 +2915,36 @@ StrPadLeft(){
 export StrPadLeft
 readonly StrPadLeft
 
+StrFix(){
+  Usage $# 2 5 'StrFix <string> <length> [padding=" "] [pad_left=0] [dot_length=3]'
+  _strfix_s="$1"
+  _strfix_n="$2"
+  _strfix_padding="${3:-" "}"
+  _strfix_left="${4:-0}"
+  _strfix_dotlen="${5:-3}"
+
+  _strfix_sn=${#_strfix_s}
+  if [ "$_strfix_sn" -eq "$_strfix_n" ]; then
+    printf '%s' "$_strfix_s"
+    return
+  elif [ "$_strfix_sn" -lt "$_strfix_n" ]; then
+    StrPad "$_strfix_s" "$_strfix_n" "$_strfix_padding" "$_strfix_left"
+    return
+  else
+    if [ "$_strfix_n" -le "$_strfix_dotlen" ]; then
+      printf '%s' "$_strfix_s" | cut -c "-${_strfix_n}"
+      return
+    fi
+    _strfix_x=$(( _strfix_n - _strfix_dotlen ))
+    {
+      printf '%s' "$_strfix_s" | cut -c "-$_strfix_x" | tr -d '\n'
+      printf '%*s' "$_strfix_dotlen" '' | tr ' ' '.'
+    }
+  fi
+}
+export StrFix
+readonly StrFix
+
 # Convert all characters into a specific character
 ToPlaceholder(){
   Usage $# -ge 1 'ToPlaceholder [char=" "] <string>'
