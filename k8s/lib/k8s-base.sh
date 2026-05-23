@@ -260,6 +260,7 @@ k8sStatus(){
   fi
 
   # Show CPU and memory usage
+  local _k8s_top_header=0
   local _k8s_pod_status
   local _k8s_pod_reason
   local _k8s_i=0
@@ -322,8 +323,10 @@ k8sStatus(){
       Debug "waiting top metrics of pod $_k8s_pod -n $_k8s_namespace (status: $_k8s_pod_status)"
       sleep 5
     done
-
-    Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace      "
+    if [ "$_k8s_top_header" -eq 0 ]; then
+      _k8s_top_header=1
+      Heading "[NAME  CPU(cores)  MEMORY(bytes)] kubectl top pod <POD NAME> -n $_k8s_namespace"
+    fi
     $_k8s_cmd_prefix kubectl top pod "$_k8s_pod" -n "$_k8s_namespace" | while IFS= read -r _k8s_top || [[ -n "$_k8s_top" ]]; do
       case "$_k8s_top" in
         NAME*);;
