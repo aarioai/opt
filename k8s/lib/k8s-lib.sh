@@ -385,6 +385,10 @@ k8sUp(){
   k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_pvc_total_bytes" "${_k8s_pvcs[@]}"
 
   k8sClearWorkDir "$_k8s_workdir"
+
+  local _k8s_setname
+  _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
+  k8sJournalCtrlError "$_k8s_namespace" "$_k8s_setname"
 }
 export k8sUp
 readonly k8sUp
