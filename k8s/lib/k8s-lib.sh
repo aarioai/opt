@@ -305,16 +305,14 @@ k8sCreateHostPath(){
   _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
 
   if ! YqHas '.hostPath' -s "$_k8s_values"; then
+    Notice "NO hostPAth"
     return
   fi
-
-  yq -r '.hostPath | to_entries[] | "\(.key) \(.value)"' <<< "$_k8s_values" |
-  while IFS= read -r _k8s_host_path_name _k8s_host_path; do
-    if [ -n "$_k8s_host_path" ] && [ ! -d "$_k8s_host_path" ]; then
-      Info "creating host path $_k8s_host_path_name => $_k8s_host_path"
-      MkdirsOrPanic "$_k8s_host_path"
-      ChmodOrPanic 777 "$_k8s_host_path"
-    fi
+  yq -r '.hostPath | to_entries[] | [.key, .value] | @tsv' <<< "$_k8s_values" |
+  while IFS=$'\t' read -r _k8s_host_path_name _k8s_host_path; do
+    [ -n "$_k8s_host_path" ] || continue
+    Info "creating host path: $_k8s_host_path_name => $_k8s_host_path"
+    MkdirsOrPanic "$_k8s_host_path"
   done
 }
 export k8sCreateHostPath
@@ -326,8 +324,6 @@ k8sUp(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
 
-  Info "k8s up"
-
   local _k8s_dry_run=0
   for _k8s_arg in "$@"; do
     if [ "$_k8s_arg" = "--dry-run" ] || [ "$_k8s_arg" = "--dry-run=client" ]; then
@@ -335,6 +331,7 @@ k8sUp(){
       break
     fi
   done
+
 
   k8sCreateHostPath "$_k8s_workdir"
 

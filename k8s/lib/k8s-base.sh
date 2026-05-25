@@ -126,8 +126,8 @@ k8sJournalCtrlError(){
 
   for _k8s_pattern in "$@"; do
     [ -n "$_k8s_pattern" ] || continue
-    _k8s_sentence="$_k8s_sentence | grep '$_k8s_pattern'"
-    _k8s_jlog="$(printf '%s\n' "$_k8s_jlog" | grep -- "$_k8s_pattern")"
+    _k8s_sentence="$_k8s_sentence | grep -i '$_k8s_pattern'"
+    _k8s_jlog="$(printf '%s\n' "$_k8s_jlog" | grep -i -- "$_k8s_pattern")"
   done
 
   Debug "$_k8s_sentence"
@@ -232,6 +232,9 @@ k8sStatus(){
 
   Heading "[SERVICE] kubectl get service -n $_k8s_namespace -l $_k8s_selector -o wide"
   $_k8s_cmd_prefix kubectl get service -n "$_k8s_namespace" -l "$_k8s_selector" -o wide
+
+  Heading "[ENDPOINT] kubectl get endpointslice -n $_k8s_namespace -l $_k8s_selector"
+  $_k8s_cmd_prefix kubectl get endpointslice -n "$_k8s_namespace" -l "$_k8s_selector"
 
   Heading "[POD] kubectl get pods -n $_k8s_namespace -l $_k8s_selector"
   $_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector"

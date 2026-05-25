@@ -771,11 +771,10 @@ _saveToLogFile(){
   if [ ! -f "$_savetologfile" ]; then
     _savetologfile_dir=$(dirname "$_savetologfile")
     if [ ! -d "$_savetologfile_dir" ]; then
-      if ! mkdir -p "$_savetologfile_dir" 2>/dev/null; then
-        $(SUDO) mkdir -p "$_savetologfile_dir"
-      fi
-      if ! chmod 777 "$_savetologfile_dir" 2>/dev/null; then
-        $(SUDO) chmod 777 "$_savetologfile_dir"
+      # shellcheck disable=SC2174
+      if ! mkdir -m 0777 -p "$_savetologfile_dir" 2>/dev/null; then
+        # shellcheck disable=SC2174
+        $(SUDO) mkdir -m 0777 -p "$_savetologfile_dir"
       fi
     fi
 
@@ -1806,12 +1805,13 @@ readonly Random
 
 MkdirsOrSudo(){
   Usage $# 1 2 'MkdirsOrSudo <dir> [dir...]'
-  if mkdir -p "$@" 2>/dev/null; then return 0; fi
+  # shellcheck disable=SC2174
+  if mkdir -m 0777 -p "$@" 2>/dev/null; then return 0; fi
   if ! CanSudo; then return 1; fi
   for _mkdirsorsudo_dir in "$@"; do
     [ -n "$_mkdirsorsudo_dir" ] || continue
-    sudo mkdir -p "$_mkdirsorsudo_dir"
-    sudo chmod 1777 "$_mkdirsorsudo_dir" 2>/dev/null || true
+    # shellcheck disable=SC2174
+    sudo mkdir -m 0777 -p "$_mkdirsorsudo_dir"
     return
   done
 
@@ -1823,7 +1823,7 @@ readonly MkdirsOrSudo
 MkdirsOrPanic(){
   Usage $# 1 2 'MkdirsOrPanic <dir> [dir...]'
   if ! MkdirsOrSudo "$@"; then
-    PanicD "fail to mkdir -p $*" "无法创建文件夹 $*"
+    PanicD "fail to mkdir $*" "无法创建文件夹 $*"
   fi
 }
 export MkdirsOrPanic
@@ -1837,7 +1837,8 @@ MktempDir(){
   if [ -n "$_mktempdir_base" ]; then
     _mktempdir="${_mktempdir_base}/tmp.$(Random 10)"
     # do not use sudo
-    if mkdir -p "$_mktempdir" 2>/dev/null; then
+    # shellcheck disable=SC2174
+    if mkdir -m 0777 -p "$_mktempdir" 2>/dev/null; then
       printf '%s' "$_mktempdir"
       return 0
     fi
@@ -1877,7 +1878,8 @@ MktempFile(){
 
   if [ -n "$_mktempfile_dir" ]; then
     # do not use sudo
-    mkdir -p "$_mktempfile_dir" 2>/dev/null || true
+    # shellcheck disable=SC2174
+    mkdir -m 0777 -p "$_mktempfile_dir" 2>/dev/null || true
     _mktempfile="${_mktempfile_dir}/tmp.$(Random 10)"
     if touch "$_mktempfile" 2>/dev/null; then
       printf '%s' "$_mktempfile"
@@ -4267,7 +4269,8 @@ GenerateRSAKeys() {
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null' EXIT
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null; exit 1' INT TERM
 
-  mkdir -p "$_generatersakeys_dir"
+  # shellcheck disable=SC2174
+  mkdir -m 0777 -p "$_generatersakeys_dir"
 
   # ()& 并行操作
   Split "$5" | while IFS= read -r _generatersakeys_size || [ -n "$_generatersakeys_size" ]; do
@@ -4349,7 +4352,8 @@ SignCertByCA(){
     return 1
   fi
 
-  mkdir -p "$_signcertbyca_cert_dir"
+  # shellcheck disable=SC2174
+  mkdir -m 0777 -p "$_signcertbyca_cert_dir"
 
   # Create server.csr
   if [ ! -f "$_signcertbyca_server_csr" ]; then
@@ -4493,7 +4497,8 @@ GenerateLeafCert(){
     _generateleafcert_subj=$(printf '%s' "$_generateleafcert_subj" | sed 's|/|//|g')
   fi
 
-  mkdir -p "$_generateleafcert_cert_dir"
+  # shellcheck disable=SC2174
+  mkdir -m 0777 -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
   Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
