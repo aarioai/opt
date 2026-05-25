@@ -110,10 +110,36 @@ export k8sKubectlPrefix
 readonly k8sKubectlPrefix
 
 k8sJournalCtrlError(){
+  Usage $# 0 2 'k8sJournalCtrlError [namespace] [pod_name|service_name|name]'
+  local _k8s_namespace="${1:-}"
+  local _k8s_name="${2:-}"
+
+  local _k8s_cmd_tip=''
+  local _k8s_cmd=''
   if command -v k3s >/dev/null 2>&1; then
-    Debug "journalctl -u k3s | grep error | tail -10"
-    $(SUDO) journalctl -u k3s | grep error | tail -10
+    _k8s_cmd_tip='journalctl -u k3s'
+    _k8s_cmd="$(SUDO) journalctl -u k3s"
   fi
+
+  if [ -z "$_k8s_namespace" ] && [ -z "$_k8s_name" ]; then
+    Debug "$_k8s_cmd_tip | grep -i 'error' | tail -10"
+    $_k8s_cmd | grep -i 'error' | tail -10
+    return
+  fi
+
+  if [ -n "$_k8s_namespace" ] && [ -n "$_k8s_name" ]; then
+    Debug "$_k8s_cmd_tip | grep -i 'error' | grep '$_k8s_namespace' | grep '$$_k8s_name' | tail -10"
+    $_k8s_cmd | grep -i 'error' | grep "$_k8s_namespace" | grep "$_k8s_name"  | tail -10
+    return
+  fi
+
+  local _k8s_pattern="$_k8s_namespace"
+  if [ -z "$_k8s_pattern" ]; then
+    _k8s_pattern="$_k8s_name"
+  fi
+  Debug "$_k8s_cmd_tip | grep -i 'error' | grep '$_k8s_pattern'| tail -10"
+  $_k8s_cmd | grep -i 'error' | grep "$_k8s_pattern" | tail -10
+  return
 }
 export k8sJournalCtrlError
 readonly k8sJournalCtrlError
@@ -581,57 +607,81 @@ k8sFindCertDir(){
 export k8sFindCertDir
 readonly k8sFindCertDir
 
+k8sPodContainerLogs(){
+  Usage $# -eq 2 'k8sPodContainerLogs <namespace> <pod>'
+  local _k8s_namespace="$1"
+  local _k8s_pod="$2"
+  local _k8s_pod_id
+  local _k8s_container_id
+  local _k8s_logs
+  local _k8s_cmd_prefix
+  _k8s_cmd_prefix=$(k8sKubectlPrefix)
+  $_k8s_cmd_prefix crictl pods --name "$_k8s_pod" --namespace "$_k8s_namespace" -q | while IFS= read -r _k8s_pod_id || [[ -n "$_k8s_pod_id" ]]; do
+    $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" -q  | while IFS= read -r _k8s_container_id || [[ -n "$_k8s_container_id" ]]; do
+      Debug "crictl logs $_k8s_container_id"
+      _k8s_logs=$($_k8s_cmd_prefix crictl logs "$_k8s_container_id" 2>/dev/null)
+      if [ -n "$_k8s_logs" ]; then
+        echo "$_k8s_logs"
+      fi
+    done
+  done
+}
+export k8sPodContainerLogs
+readonly k8sPodContainerLogs
+
 k8sLogs(){
-  Usage $# 2 3 'k8sLogs <namespace> <selector> [container|pod]'
+  Usage $# 2 3 'k8sLogs <namespace> <selector> [<container_id>|pod|-j]'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
-  local _k8s_id="${3:-}"
 
   local _k8s_cmd_prefix
   _k8s_cmd_prefix=$(k8sKubectlPrefix)
 
-  if [ -z "$_k8s_id" ]; then
-    Debug "kubectl logs -n $_k8s_namespace -l $_k8s_selector -f"
-    if $_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector"; then
-      local _k8s_err
-      _k8s_err=$($_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector" 2>&1)
-      case "$_k8s_err" in
-        *"net/http: TLS handshake timeout") ;;
-        *"No resources found in $_k8s_namespace namespace."*) return 0;;
-      esac
-      k8sJournalCtrlError
-    fi
+  if [ $# -gt 2 ] && [ -n "$3" ]; then
+    case "$3" in
+      -j)
+        k8sJournalCtrlError "$_k8s_namespace"
+        ;;
+      pod)
+        Debug "kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
+        $_k8s_cmd_prefix kubectl describe pod -n "$_k8s_namespace" -l "$_k8s_selector"
+        return
+        ;;
+      *)
+        local _k8s_id="$3"
+        Debug "crictl logs $_k8s_id"  # container id
+        $_k8s_cmd_prefix crictl logs "$_k8s_id"   # 失败容器重启，名称会变
+        return
+        ;;
+    esac
+  fi
 
-    local _k8s_pod
-    _k8s_pod=$($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[0].metadata.name}')
-    if [ -z "$_k8s_pod" ]; then
-      Debug "try: kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
-      k8sJournalCtrlError
-      return 1
-    fi
+  local _k8s_err
+  _k8s_err=$($_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector" 2>&1)
+  case "$_k8s_err" in
+    *"net/http: TLS handshake timeout") ;;
+    *"No resources found in $_k8s_namespace namespace."*) return 0;;
+    *)
+       Debug "kubectl logs -n $_k8s_namespace -l $_k8s_selector"
+       $_k8s_cmd_prefix kubectl logs -n "$_k8s_namespace" -l "$_k8s_selector"
+       return 0
+      ;;
+  esac
 
-    local _k8s_pod_id
-    local _k8s_container_id
-    local _k8s_logs
-    $_k8s_cmd_prefix crictl pods --name "$_k8s_pod" --namespace "$_k8s_namespace" -q | while IFS= read -r _k8s_pod_id || [[ -n "$_k8s_pod_id" ]]; do
-      $_k8s_cmd_prefix crictl ps -a --pod "$_k8s_pod_id" -q  | while IFS= read -r _k8s_container_id || [[ -n "$_k8s_container_id" ]]; do
-        Debug "crictl logs $_k8s_container_id"
-        _k8s_logs=$($_k8s_cmd_prefix crictl logs "$_k8s_container_id" 2>/dev/null)
-        if [ -n "$_k8s_logs" ]; then
-          echo "$_k8s_logs"
-          return 0
-        fi
-      done
-    done
+  local no_pod=1
+  for _k8s_pod in $($_k8s_cmd_prefix kubectl get pods -n "$_k8s_namespace" -l "$_k8s_selector" -o jsonpath='{.items[*].metadata.name}'); do
+    [ -n "$_k8s_pod" ] || continue
+    no_pod=0
+    k8sPodContainerLogs "$_k8s_namespace" "$_k8s_pod"
 
     _k8s_error="$($_k8s_cmd_prefix kubectl describe pod "$_k8s_pod" -n "$_k8s_namespace" | grep -Ei "Error|Failed|Warning" )"
     if [ -n "$_k8s_error" ]; then Debug "kubectl describe pod $_k8s_pod -n $_k8s_namespace${LF}"; Panic "${_k8s_error}"; fi
-  elif [ "$_k8s_id" = 'pod' ]; then
-    Debug "kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
-    $_k8s_cmd_prefix kubectl describe pod -n "$_k8s_namespace" -l "$_k8s_selector"
-  else
-    Debug "crictl logs $_k8s_id"
-    $_k8s_cmd_prefix crictl logs "$_k8s_id"   # 失败容器重启，名称会变
+  done
+
+  if [ "$no_pod" -eq 0 ]; then
+    Debug "try: kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
+    k8sJournalCtrlError "$_k8s_namespace"
+    return 1
   fi
 }
 export k8sLogs

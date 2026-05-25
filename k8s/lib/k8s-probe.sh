@@ -176,7 +176,7 @@ export k8sProbeTLS
 readonly k8sProbeTLS
 
 k8sProbeLogs(){
-  Usage $# -ge 1 'k8sProbeLogs <workdir> [container|pod]'
+  Usage $# -ge 1 'k8sProbeLogs <workdir> [container|pod] [-f]'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift

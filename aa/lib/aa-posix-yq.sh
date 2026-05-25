@@ -100,7 +100,8 @@ YqGetFromFile(){
 
   PanicIfNotFiles "$_yqgetfromfile_yaml"
 
-  # Handling missing key
+  # Handling missing key.
+  # Warn: helm yaml 连接的字符串，必须要加双引号。比如 {{ .Values.xx }}-log ，如果不加双引号，这里就会读取错误
   if ! YqHas "$_yqgetfromfile_key" -f "$_yqgetfromfile_yaml"; then
     if [ -z "$_yqgetfromfile_default" ] && [ "$_yqgetfromfile_with_panic" = WITH_PANIC ]; then
       PanicD "missing key $_yqgetfromfile_key in $_yqgetfromfile_yaml" "$_yqgetfromfile_yaml 缺少键值 $_yqgetfromfile_key"
@@ -127,7 +128,7 @@ YqGetFromStr(){
     _yqgetfromstr_with_panic=WITH_PANIC
   fi
 
-  # Handling missing key
+  # Warn: helm yaml 连接的字符串，必须要加双引号。比如 {{ .Values.xx }}-log ，如果不加双引号，这里就会读取错误
   if ! YqHas "$_yqgetfromstr_key" -s "$_yqgetfromstr_str"; then
     if [ -z "$_yqgetfromstr_default" ] && [ "$_yqgetfromstr_with_panic" = WITH_PANIC ]; then
       PanicD "missing key $_yqgetfromstr_key" "缺少键值 $_yqgetfromstr_key"
