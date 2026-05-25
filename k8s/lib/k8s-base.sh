@@ -110,36 +110,28 @@ export k8sKubectlPrefix
 readonly k8sKubectlPrefix
 
 k8sJournalCtrlError(){
-  Usage $# 0 2 'k8sJournalCtrlError [namespace] [pod_name|service_name|name]'
-  local _k8s_namespace="${1:-}"
-  local _k8s_name="${2:-}"
+  Usage $# -ge 0 'k8sJournalCtrlError [pattern]...'
 
-  local _k8s_cmd_tip=''
+  local _k8s_sentence=''
   local _k8s_cmd=''
   if command -v k3s >/dev/null 2>&1; then
-    _k8s_cmd_tip='journalctl -u k3s'
-    _k8s_cmd="$(SUDO) journalctl -u k3s"
-  fi
-
-  if [ -z "$_k8s_namespace" ] && [ -z "$_k8s_name" ]; then
-    Debug "$_k8s_cmd_tip | grep -i 'error' | tail -10"
-    $_k8s_cmd | grep -i 'error' | tail -10
+    _k8s_sentence='journalctl -u k3s'
+    _k8s_jlog="$(SUDO) journalctl -u k3s"
+  else
     return
   fi
 
-  if [ -n "$_k8s_namespace" ] && [ -n "$_k8s_name" ]; then
-    Debug "$_k8s_cmd_tip | grep -i 'error' | grep '$_k8s_namespace' | grep '$$_k8s_name' | tail -10"
-    $_k8s_cmd | grep -i 'error' | grep "$_k8s_namespace" | grep "$_k8s_name"  | tail -10
-    return
-  fi
+  _k8s_sentence="$_k8s_sentence | grep -i 'error'"
+  _k8s_jlog="$(printf '%s\n' "$_k8s_jlog" | grep -i 'error')"
 
-  local _k8s_pattern="$_k8s_namespace"
-  if [ -z "$_k8s_pattern" ]; then
-    _k8s_pattern="$_k8s_name"
-  fi
-  Debug "$_k8s_cmd_tip | grep -i 'error' | grep '$_k8s_pattern'| tail -10"
-  $_k8s_cmd | grep -i 'error' | grep "$_k8s_pattern" | tail -10
-  return
+  for _k8s_pattern in "$@"; do
+    [ -n "$_k8s_pattern" ] || continue
+    _k8s_sentence="$_k8s_sentence | grep '$_k8s_pattern'"
+    _k8s_jlog="$(printf '%s\n' "$_k8s_jlog" | grep -- "$_k8s_pattern")"
+  done
+
+  Debug "$_k8s_sentence"
+  printf '%s\n' "$_k8s_jlog" | tail -10
 }
 export k8sJournalCtrlError
 readonly k8sJournalCtrlError
@@ -630,7 +622,7 @@ export k8sPodContainerLogs
 readonly k8sPodContainerLogs
 
 k8sLogs(){
-  Usage $# 2 3 'k8sLogs <namespace> <selector> [<container_id>|pod|-j]'
+  Usage $# -ge 2 'k8sLogs <namespace> <selector> [<container_id>|pod|-j] [option]...'
   local _k8s_namespace="$1"
   local _k8s_selector="$2"
 
@@ -640,7 +632,8 @@ k8sLogs(){
   if [ $# -gt 2 ] && [ -n "$3" ]; then
     case "$3" in
       -j)
-        k8sJournalCtrlError "$_k8s_namespace"
+        shift 2
+        k8sJournalCtrlError "$_k8s_namespace" "$@"
         ;;
       pod)
         Debug "kubectl describe pod -n $_k8s_namespace -l $_k8s_selector"
