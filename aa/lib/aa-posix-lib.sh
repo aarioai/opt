@@ -4269,8 +4269,7 @@ GenerateRSAKeys() {
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null' EXIT
   trap 'rm -rf "$_generatersakeys_tempdir" 2>/dev/null; exit 1' INT TERM
 
-  # shellcheck disable=SC2174
-  mkdir -m 0777 -p "$_generatersakeys_dir"
+  mkdir -p "$_generatersakeys_dir"
 
   # ()& 并行操作
   Split "$5" | while IFS= read -r _generatersakeys_size || [ -n "$_generatersakeys_size" ]; do
@@ -4352,8 +4351,7 @@ SignCertByCA(){
     return 1
   fi
 
-  # shellcheck disable=SC2174
-  mkdir -m 0777 -p "$_signcertbyca_cert_dir"
+  mkdir -p "$_signcertbyca_cert_dir"
 
   # Create server.csr
   if [ ! -f "$_signcertbyca_server_csr" ]; then
@@ -4497,8 +4495,7 @@ GenerateLeafCert(){
     _generateleafcert_subj=$(printf '%s' "$_generateleafcert_subj" | sed 's|/|//|g')
   fi
 
-  # shellcheck disable=SC2174
-  mkdir -m 0777 -p "$_generateleafcert_cert_dir"
+  mkdir -p "$_generateleafcert_cert_dir"
 
   Info "Generating leaf certificate..."
   Debug "openssl req -x509 -nodes -newkey rsa:2048 -days $_generateleafcert_expire_days -keyout $_generateleafcert_ckf -out $_generateleafcert_ck -subj $_generateleafcert_subj -addext subjectAltName=$_generateleafcert_san"
