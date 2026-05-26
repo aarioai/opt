@@ -305,7 +305,6 @@ k8sCreateHostPath(){
   _k8s_values="$(k8sProbeValues "$_k8s_workdir")"
 
   if ! YqHas '.hostPath' -s "$_k8s_values"; then
-    Notice "NO hostPAth"
     return
   fi
   yq -r '.hostPath | to_entries[] | [.key, .value] | @tsv' <<< "$_k8s_values" |
