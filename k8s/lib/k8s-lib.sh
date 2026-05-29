@@ -126,7 +126,7 @@ k8sUpTLS(){
           done < <(echo "$_k8s_tls" | yq -r '.hosts[]' 2>/dev/null)
       fi
       if [ ${#_k8s_tls_hosts[@]} -eq 0 ]; then
-          _k8s_tls_hosts=("$_k8s_tls_cn")
+          _k8s_tls_hosts=("$_k8s_tls_cn" "*.$_k8s_tls_cn")
       fi
       _k8s_tls_san=$(FormatSubjectAltName "${_k8s_tls_hosts[@]}")
     fi

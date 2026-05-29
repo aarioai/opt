@@ -1412,20 +1412,20 @@ IsDomain() {
       set -- $_isdomain
       IFS="$_isdomain_old_ifs"
 
-      for _label; do
-       case "$_label" in
+      for _isdomain_label; do
+       case "$_isdomain_label" in
          ""|*[!a-zA-Z0-9-]*) return 1 ;;
          -*|*-) return 1 ;;
-         *) [ ${#_label} -gt 63 ] && return 1 ;;
+         *) [ ${#_isdomain_label} -gt 63 ] && return 1 ;;
        esac
       done
-      _tld=""
-      for _label; do
-       _tld="$_label"
+      _isdomain_tld=""
+      for _isdomain_label; do
+       _isdomain_tld="$_isdomain_label"
       done
 
       # TLD must start and end with an alphabet
-      case "$_tld" in
+      case "$_isdomain_tld" in
        [a-zA-Z]*[a-zA-Z]|[a-zA-Z]) ;;
        *) return 1 ;;
       esac
@@ -4299,7 +4299,14 @@ FormatSubjectAltName(){
     if [ -n "$_formatsubjectaltname" ]; then
       _formatsubjectaltname="${_formatsubjectaltname},"
     fi
-    if IsDomain "$_formatsubjectaltname_host"; then
+    _formatsubjectaltname_is_domain=0
+    # allow wild sub-domains
+    case "$_formatsubjectaltname_host" in
+      \**)
+        _formatsubjectaltname_is_domain=1
+      ;;
+    esac
+    if [ "$_formatsubjectaltname_is_domain" -eq 1 ] || IsDomain "$_formatsubjectaltname_host"; then
       _formatsubjectaltname="${_formatsubjectaltname}DNS:${_formatsubjectaltname_host}"
     elif IsIP "$_formatsubjectaltname_host"; then
       _formatsubjectaltname="${_formatsubjectaltname}IP:${_formatsubjectaltname_host}"

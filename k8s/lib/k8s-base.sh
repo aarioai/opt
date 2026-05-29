@@ -706,6 +706,8 @@ k8sNsenter(){
     _k8s_args+=(-c "$_k8s_container")
   fi
 
+  Debug "kubectl exec ${_k8s_args[*]} -- "
+
   if [ "$_k8s_ns_cmd" != 'sh' ]; then
     # shellcheck disable=SC2086    # 不要加引号
     $_k8s_cmd_prefix kubectl exec "${_k8s_args[@]}" -- $_k8s_ns_cmd "${_k8s_ns_args[@]}"
