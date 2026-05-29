@@ -223,6 +223,30 @@ k8sDebugImageHere(){
 export k8sDebugImageHere
 readonly k8sDebugImageHere
 
+k8sProbeEnvYaml(){
+  Usage $# 2 3 'k8sProbeEnvYaml <workdir> <env> [WITH_PANIC]'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_env="$2"
+  local _k8s_with_panic="${3:-}"
+
+  local _k8s_env_filename="env_${_k8s_env}.yaml"
+  local _k8s_env_dir
+  local _k8s_env_yaml
+  for _k8s_env_dir in "$_k8s_workdir" "$_k8s_workdir/.." "$_k8s_workdir/../.."; do
+    _k8s_env_yaml=$(realpath "$_k8s_env_dir/$_k8s_env_filename")
+    if [ -f "$_k8s_env_yaml" ]; then
+      printf '%s' "$_k8s_env_yaml"
+      return 0
+    fi
+  done
+  if [ "$_k8s_with_panic" = WITH_PANIC ]; then
+    PanicD "missing $_k8s_env_filename" "缺少 $_k8s_env_filename"
+  fi
+}
+export k8sProbeEnvYaml
+readonly k8sProbeEnvYaml
+
 k8sRestartHere(){
   Usage $# -ge 1 'k8sRestartHere <workdir> [no_confirmation:|-y]'
   local _k8s_workdir
@@ -526,3 +550,4 @@ k8sUpgrade(){
 }
 export k8sUpgrade
 readonly k8sUpgrade
+

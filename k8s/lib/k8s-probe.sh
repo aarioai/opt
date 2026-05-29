@@ -12,8 +12,8 @@ k8s probe <CMD> [.]
   debug|dry|dry-run Dry run 'k8s up', i.e. show all rendered yaml configurations
   desc|describe     kubectl describe pods <pod> -n <namespace>
     [pod]
-  env               Get .env in $K8S_ENV_YAML
-    [-v]              Cat $K8S_ENV_YAML
+  env               Cat .env
+    [-v]              Cat env_<env>.yaml
   global            Render $K8S_GLOBAL_YAML
   images            List all images by .Values.image or .Values.images
   logs              Show logs of current service

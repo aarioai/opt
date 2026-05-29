@@ -74,7 +74,9 @@ k8sRenderTemplate(){
     done
   done <<< "$_k8s_value"
 
+  local _k8s_env
   local _k8s_chart_yaml="${_k8s_workdir}/${K8S_CHART_YAML}"
+  _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
   local _k8s_env_yaml=''
   local _k8s_values=''
 
@@ -89,9 +91,15 @@ k8sRenderTemplate(){
         _k8s_real_value=$(YqGet ".${_k8s_real_value}" -f "$_k8s_chart_yaml" WITH_PANIC)
         ;;
       ".Env."*)
-        if [ -z "$_k8s_env_yaml" ]; then _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" WITH_PANIC); fi
-        _k8s_real_value="${_k8s_var#.Env.}";
-        _k8s_real_value=$(YqGet ".${_k8s_real_value}" -f "$_k8s_env_yaml" WITH_PANIC)
+        if [ "$_k8s_var" = '.Env.env' ]; then
+          _k8s_real_value="$_k8s_env"
+        else
+          if [ -z "$_k8s_env_yaml" ]; then
+            _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" "$_k8s_env" WITH_PANIC);
+          fi
+          _k8s_real_value="${_k8s_var#.Env.}";
+          _k8s_real_value=$(YqGet ".${_k8s_real_value}" -f "$_k8s_env_yaml" WITH_PANIC)
+        fi
         ;;
       ".Values."*)
         if [ -z "$_k8s_values" ]; then _k8s_values=$(k8sProbeValues "$_k8s_workdir"); fi
@@ -224,13 +232,34 @@ k8sProbeEnv(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   local _k8s_verbose="${2:-}"
 
+  local _k8s_env="${ENV:-}"
+  local _k8s_env_from="# env=\$ENV"
+  for _k8s_env_dir in "$_k8s_workdir" "$_k8s_workdir/.." "$_k8s_workdir/../.."; do
+    _k8s_env_file=$(realpath "$_k8s_env_dir/$K8S_ENV_FILE")
+    if [ -f "$_k8s_env_file" ]; then
+      _k8s_env_from="# env=\$(cat $_k8s_env_file)"
+      _k8s_env=$(cat "$_k8s_env_file")
+      break
+    fi
+  done
+
+  if [ -z "$_k8s_env" ]; then
+    PanicD "missing .env file or \$ENV environment variable" "缺少.env文件或没有设置\$ENV环境变量"
+  fi
+
+  if [ "$_k8s_verbose" != '-v' ]; then
+    printf '%s' "$_k8s_env"
+    return 0
+  fi
+
   local _k8s_env_yaml
-  _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" WITH_PANIC)
+  _k8s_env_yaml=$(k8sProbeEnvYaml "$_k8s_workdir" "$_k8s_env" WITH_PANIC)
 
   if [ "$_k8s_verbose" != '-v' ]; then
     YqGet ".env" -f "$_k8s_env_yaml" WITH_PANIC
     return 0
   fi
+  Lowlight "$_k8s_env_from"
   Lowlight "# $_k8s_env_yaml"
   cat "$_k8s_env_yaml"
   echo ''
@@ -295,27 +324,6 @@ k8sUpNamespaceNx(){
 }
 export k8sUpNamespaceNx
 readonly k8sUpNamespaceNx
-
-k8sProbeEnvYaml(){
-  Usage $# 1 2 'k8sProbeEnvYaml <workdir> [WITH_PANIC]'
-  local _k8s_workdir
-  _k8s_workdir="$(k8sWorkDir "$1")"
-  local _k8s_with_panic="${2:-}"
-  local _k8s_env_dir
-  local _k8s_env_yaml
-  for _k8s_env_dir in "$_k8s_workdir" "$_k8s_workdir/.." "$_k8s_workdir/../.."; do
-    _k8s_env_yaml=$(realpath "$_k8s_env_dir/$K8S_ENV_YAML")
-    if [ -f "$_k8s_env_yaml" ]; then
-      printf '%s' "$_k8s_env_yaml"
-      return 0
-    fi
-  done
-  if [ "$_k8s_with_panic" = WITH_PANIC ]; then
-    PanicD "missing $K8S_ENV_YAML" "缺少 $K8S_ENV_YAML"
-  fi
-}
-export k8sProbeEnvYaml
-readonly k8sProbeEnvYaml
 
 k8sProbeValues(){
   Usage $# -eq 1 'k8sProbeValues <workdir>'

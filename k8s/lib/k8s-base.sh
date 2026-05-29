@@ -27,8 +27,8 @@ readonly K8S_CHART_YAML
 export K8S_VALUES_YAML_NAME='values'   # values.yaml / values-<env>.yaml
 readonly K8S_VALUES_YAML_NAME
 
-export K8S_ENV_YAML
-readonly K8S_ENV_YAML='._env.yaml'
+export K8S_ENV_FILE
+readonly K8S_ENV_FILE='.env'
 
 export K8S_HELPER_TPL
 readonly K8S_HELPER_TPL='templates/_helpers.tpl'
@@ -566,13 +566,13 @@ readonly k8sTlsSecrets
 
 k8sFindCertDir(){
     Usage $# 2 4 "k8sFindCertDir <workdir> <common_name> [tls_base] [cert_filename=$CERT_FILE]"
-    local _k8s_workdir
+    local _k8s_workdir=''
     _k8s_workdir="$(k8sWorkDir "$1")"
     local _k8s_tls_cn="$2"
     local _k8s_tls_base="${3:-}"
     local _k8s_tls_cert_file="${4:-"$CERT_FILE"}"
 
-    local _k8s_tls_cert_dir
+    local _k8s_tls_cert_dir=''
     # Specified tls base directory
     if [ -n "$_k8s_tls_base" ]; then
       _k8s_tls_cert_dir="${_k8s_tls_base}/${_k8s_tls_cn}"
@@ -593,7 +593,7 @@ k8sFindCertDir(){
       fi
     done
 
-    if [ -z "$_k8s_tls_cert_dir" ]; then
+    if [ -z "${_k8s_tls_cert_dir:-}" ]; then
       _k8s_tls_cert_dir="${K8S_TLS_CERT_DIR_FINAL}/${_k8s_tls_cn}"
     fi
     MkdirsOrSudo "$_k8s_tls_cert_dir" >/dev/null 2>&1 || true
