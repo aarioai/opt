@@ -90,12 +90,12 @@ k8sUpTLS(){
     _k8s_secret=$(k8sDefaultTlsSecretName "$_k8s_tls_cn")
 
     # Get cert
-    local _k8s_tls_create_nx
-    local _k8s_tls_cert_base
-    local _k8s_tls_cert_dir
-    local _k8s_tls_expire_days
-    local _k8s_tls_cert_file
-    local _k8s_tls_key_file
+    local _k8s_tls_create_nx=''
+    local _k8s_tls_cert_base=''
+    local _k8s_tls_cert_dir=''
+    local _k8s_tls_expire_days=''
+    local _k8s_tls_cert_file=''
+    local _k8s_tls_key_file=''
     if YqHas "$K8S_TLS_CERT_TAG" -s "$_k8s_tls"; then
       _k8s_tls_create_nx=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CREAT_NX_TAG}" -s "$_k8s_tls" true)
       _k8s_tls_cert_base=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_BASE_TAG}" -s "$_k8s_tls")
