@@ -100,9 +100,9 @@ k8sUpTLS(){
       _k8s_tls_create_nx=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CREAT_NX_TAG}" -s "$_k8s_tls" true)
       _k8s_tls_cert_base=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_BASE_TAG}" -s "$_k8s_tls")
       _k8s_tls_cert_dir=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_DIR_TAG}" -s "$_k8s_tls")
-      _k8s_tls_expire_days=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_EXPIRE_DAYS_TAG}" -s "$_k8s_tls" "$CERT_EXPIRE_DAYS")
-      _k8s_tls_cert_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_FILE_TAG}" -s "$_k8s_tls" "$CERT_FILE")
-      _k8s_tls_key_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_KEY_TAG}" -s "$_k8s_tls" "$CERT_KEY_FILE")
+      _k8s_tls_expire_days=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_EXPIRE_DAYS_TAG}" -s "$_k8s_tls" "$CERT_EXPIRE_DAYS" WITH_PANIC)
+      _k8s_tls_cert_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_FILE_TAG}" -s "$_k8s_tls" "$CERT_FILE" WITH_PANIC)
+      _k8s_tls_key_file=$(YqGet ".${K8S_TLS_CERT_TAG}.${K8S_TLS_CERT_KEY_TAG}" -s "$_k8s_tls" "$CERT_KEY_FILE" WITH_PANIC)
     fi
 
     if [ -z "$_k8s_tls_cert_dir" ]; then
