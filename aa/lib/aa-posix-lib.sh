@@ -1835,6 +1835,7 @@ MktempDir(){
   _mktempdir_base="${1:-"$TMPDIR"}"
 
   if [ -n "$_mktempdir_base" ]; then
+    _mktempdir_base=${_mktempdir_base%/}
     _mktempdir="${_mktempdir_base}/tmp.$(Random 10)"
     # do not use sudo
     # shellcheck disable=SC2174
