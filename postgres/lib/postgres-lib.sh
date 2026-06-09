@@ -56,12 +56,12 @@ export pgCreateExtensions
 readonly pgCreateExtensions
 
 pgDbRoleExists(){
-  Usage $# 2 3 "pgDbRoleExists <rolname> <maintainer> [database=$POSTGRES_DB]"
+  Usage $# 2 3 "pgDbRoleExists <rolname> <maintainer> [maintainer_db=$POSTGRES_DB]"
   _pg_rolname="$1"
   _pg_maintainer="$2"
-  _pg_db="${3:-"$POSTGRES_DB"}"
+  _pg_maintainer_db="${3:-"$POSTGRES_DB"}"
 
-  pgPsql "$_pg_maintainer" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" 2>/dev/null | grep -q 1
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" 2>/dev/null | grep -q 1
 }
 export pgDbRoleExists
 readonly pgDbRoleExists
@@ -78,32 +78,32 @@ export pgDbExists
 readonly pgDbExists
 
 pgDbEnsureLoginRole(){
-  Usage $# -eq 4 'pgDbEnsureLoginRole <database> <user> <password> <maintainer>'
-  _pg_db="$1"
-  _pg_user="$2"
-  _pg_password="$3"
-  _pg_maintainer="$4"
+  Usage $# 3 4 "pgDbEnsureLoginRole <rolname> <password> <maintainer> [maintainer_db=$POSTGRES_DB]"
+  _pg_rolname="$1"
+  _pg_password="$2"
+  _pg_maintainer="$3"
+  _pg_maintainer_db="${4:-"$POSTGRES_DB"}"
 
-  PanicIfEmpty "$_pg_user" 'username'
+  PanicIfEmpty "$_pg_rolname" 'username'
 
-  if pgDbRoleExists "$_pg_maintainer" "$_pg_db" "$_pg_user"; then
+  if pgDbRoleExists "$_pg_rolname" "$_pg_maintainer" "$_pg_maintainer_db"; then
     return
   fi
-  Info "create user $_pg_user"
+  Info "create user $_pg_rolname"
   PanicIfEmpty "$_pg_password" 'password'
-  pgPsql "$_pg_maintainer" "$_pg_db" -c "CREATE USER $_pg_user WITH PASSWORD '$_pg_password';" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -c "CREATE USER $_pg_rolname WITH PASSWORD '$_pg_password';" >/dev/null
 }
 export pgDbEnsureLoginRole
 readonly pgDbEnsureLoginRole
 
 pgRoleInherit(){
-  Usage $# -eq 4 'pgRoleInherit <parent_role> <child_role> <db> <maintainer>'
+  Usage $# 3 4 "pgRoleInherit <parent_role> <child_role> <maintainer> [maintainer_db=$POSTGRES_DB]"
   _pg_parent_role="$1"
   _pg_child_role="$2"
-  _pg_db="$3"
-  _pg_maintainer="$4"
+  _pg_maintainer="$3"
+  _pg_maintainer_db="${4:-"$POSTGRES_DB"}"
 
-  pgPsql "$_pg_maintainer" "$_pg_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
 }
 export pgRoleInherit
 readonly pgRoleInherit
@@ -155,7 +155,7 @@ pgGrantDbOwner(){
   _pg_maintainer_db="${5:-"$POSTGRES_DB"}"
   _pg_default_schema="${6:-"$POSTGRES_DEFAULT_SCHEMA"}"
 
-  pgDbEnsureLoginRole "$_pg_maintainer_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
   if [ -n "$_pg_default_schema" ]; then
     pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
   fi
@@ -177,7 +177,7 @@ pgCreateDbOwner(){
     return
   fi
 
-  pgDbEnsureLoginRole "$_pg_maintainer_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
   pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
   if [ -n "$_pg_default_schema" ]; then
     pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
