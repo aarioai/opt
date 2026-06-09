@@ -138,7 +138,7 @@ pgDbCreateSchemaOwner(){
 
   _pg_role_prefix="_${_pg_schema}"
 
-  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  pgDbEnsureLoginRole "$_pg_user" "$_pg_password" "$_pg_maintainer" "$_pg_db"
   Info "create schema ${_pg_db}.${_pg_schema}"
   pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
   pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
@@ -155,7 +155,7 @@ pgGrantDbOwner(){
   _pg_maintainer_db="${5:-"$POSTGRES_DB"}"
   _pg_default_schema="${6:-"$POSTGRES_DEFAULT_SCHEMA"}"
 
-  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  pgDbEnsureLoginRole "$_pg_user" "$_pg_password" "$_pg_maintainer" "$_pg_db"
   if [ -n "$_pg_default_schema" ]; then
     pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
   fi
@@ -177,7 +177,7 @@ pgCreateDbOwner(){
     return
   fi
 
-  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  pgDbEnsureLoginRole "$_pg_user" "$_pg_password" "$_pg_maintainer" "$_pg_maintainer_db"
   pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
   if [ -n "$_pg_default_schema" ]; then
     pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
