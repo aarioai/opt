@@ -156,7 +156,9 @@ pgGrantDbOwner(){
   _pg_default_schema="${6:-"$POSTGRES_DEFAULT_SCHEMA"}"
 
   pgDbEnsureLoginRole "$_pg_maintainer_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
-  pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+  if [ -n "$_pg_default_schema" ]; then
+    pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+  fi
 }
 export pgGrantDbOwner
 readonly pgGrantDbOwner
@@ -177,7 +179,9 @@ pgCreateDbOwner(){
 
   pgDbEnsureLoginRole "$_pg_maintainer_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
   pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
-  pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+  if [ -n "$_pg_default_schema" ]; then
+    pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+  fi
 }
 export pgCreateDbOwner
 readonly pgCreateDbOwner
