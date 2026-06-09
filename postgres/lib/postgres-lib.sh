@@ -61,7 +61,7 @@ pgDbRoleExists(){
   _pg_maintainer="$2"
   _pg_db="${3:-"$POSTGRES_DB"}"
 
-  pgPsql "$_pg_maintainer" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" | grep -q 1
+  pgPsql "$_pg_maintainer" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" 2>/dev/null | grep -q 1
 }
 export pgDbRoleExists
 readonly pgDbRoleExists
@@ -72,7 +72,7 @@ pgDbExists(){
   _pg_maintainer="$2"
   _pg_maintainer_db="${3:-"$POSTGRES_DB"}"
 
-  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -tAc "SELECT 1 FROM pg_database WHERE datname='$_pg_db';" | grep -q 1
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -tAc "SELECT 1 FROM pg_database WHERE datname='$_pg_db';" 2>/dev/null | grep -q 1
 }
 export pgDbExists
 readonly pgDbExists
