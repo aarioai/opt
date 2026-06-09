@@ -82,13 +82,13 @@ export pgDbEnsureLoginRole
 readonly pgDbEnsureLoginRole
 
 pgRoleInherit(){
-  Usage $# 3 4 'pgRoleInherit <parent_role> <child_role> <maintainer> [maintainer_db=postgres]'
+  Usage $# -eq 4 'pgRoleInherit <parent_role> <child_role> <db> <maintainer>'
   _pg_parent_role="$1"
   _pg_child_role="$2"
-  _pg_maintainer="$3"
-  _pg_maintainer_db="${4:-"postgres"}"
+  _pg_db="$3"
+  _pg_maintainer="$4"
 
-  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
 }
 export pgRoleInherit
 readonly pgRoleInherit
