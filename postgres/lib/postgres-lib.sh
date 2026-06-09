@@ -62,6 +62,16 @@ pgDbRoleExists(){
 export pgDbRoleExists
 readonly pgDbRoleExists
 
+pgDbExists(){
+  Usage $# -eq 3 'pgDbExists <maintainer> <maintainer_db> <database>'
+  _pg_maintainer="$1"
+  _pg_maintainer_db="$2"
+  _pg_db="$3"
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -tAc "SELECT 1 FROM pg_database WHERE datname='$_pg_db';" | grep -q 1
+}
+export pgDbExists
+readonly pgDbExists
+
 pgDbEnsureLoginRole(){
   Usage $# -eq 4 'pgDbEnsureLoginRole <database> <user> <password> <maintainer>'
   _pg_db="$1"
@@ -140,8 +150,10 @@ pgCreateDbOwner(){
   _pg_maintainer_db="${5:-"postgres"}"
   _pg_default_schema="${6:-"public"}"
 
-  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
-  pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
+  pgDbEnsureLoginRole "$_pg_maintainer_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
+  if ! pgDbExists "$_pg_maintainer" "$_pg_maintainer_db" "$_pg_db"; then
+    pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
+  fi
   pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
 }
 export pgCreateDbOwner
