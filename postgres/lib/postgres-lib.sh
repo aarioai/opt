@@ -63,11 +63,11 @@ export pgDbRoleExists
 readonly pgDbRoleExists
 
 pgDbEnsureLoginRole(){
-  Usage $# -eq 4 'pgDbEnsureLoginRole <maintainer> <database> <user> <password>'
-  _pg_maintainer="$1"
-  _pg_db="$2"
-  _pg_user="$3"
-  _pg_password="$4"
+  Usage $# -eq 4 'pgDbEnsureLoginRole <database> <user> <password> <maintainer>'
+  _pg_db="$1"
+  _pg_user="$2"
+  _pg_password="$3"
+  _pg_maintainer="$4"
 
   PanicIfEmpty "$_pg_user" 'username'
 
@@ -82,10 +82,10 @@ export pgDbEnsureLoginRole
 readonly pgDbEnsureLoginRole
 
 pgRoleInherit(){
-  Usage $# 3 4 'pgRoleInherit <maintainer> <parent_role> <child_role> [maintainer_db=postgres]'
-  _pg_maintainer="$1"
-  _pg_parent_role="$2"
-  _pg_child_role="$3"
+  Usage $# 3 4 'pgRoleInherit <parent_role> <child_role> <maintainer> [maintainer_db=postgres]'
+  _pg_parent_role="$1"
+  _pg_child_role="$2"
+  _pg_maintainer="$3"
   _pg_maintainer_db="${4:-"postgres"}"
 
   pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
@@ -114,16 +114,16 @@ export pgDbGrantAllOnSchema
 readonly pgDbGrantAllOnSchema
 
 pgDbCreateSchemaOwner(){
-  Usage $# -eq 5 'pgDbCreateSchemaOwner <maintainer> <user> <password> <database> <schema>'
-  _pg_maintainer="$1"
-  _pg_user="$2"
-  _pg_password="$3"
-  _pg_db="$4"
-  _pg_schema="$5"
+  Usage $# -eq 5 'pgDbCreateSchemaOwner <user> <password> <database> <schema> <maintainer>'
+  _pg_user="$1"
+  _pg_password="$2"
+  _pg_db="$3"
+  _pg_schema="$4"
+  _pg_maintainer="$5"
 
   _pg_role_prefix="_${_pg_schema}"
 
-  pgDbEnsureLoginRole "$_pg_maintainer" "$_pg_db" "$_pg_user" "$_pg_password"
+  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
   Info "create schema ${_pg_db}.${_pg_schema}"
   pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
   pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
@@ -140,7 +140,7 @@ pgCreateDbOwner(){
   _pg_maintainer_db="${5:-"postgres"}"
   _pg_default_schema="${6:-"public"}"
 
-  pgDbEnsureLoginRole "$_pg_maintainer" "$_pg_maintainer_db" "$_pg_user" "$_pg_password"
+  pgDbEnsureLoginRole "$_pg_db" "$_pg_user" "$_pg_password" "$_pg_maintainer"
   pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
   pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
 }
