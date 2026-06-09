@@ -2,225 +2,147 @@
 set -eu
 
 # https://github.com/aarioai/opt
-if [ -x "../../aa/lib/aa-posix-lib.sh" ]; then . ../../aa/lib/aa-posix-lib.sh; else . /opt/aa/lib/aa-posix-lib.sh; fi
+if [ -x "./postgres-sql-lib.sh" ]; then . ./postgres-sql-lib.sh; else . /opt/postgres/lib/postgres-sql-lib.sh; fi
 
-POSTGRES_USER=${POSTGRES_USER:-postgres}
+pgPsql(){
+  Usage $# -ge 2 'pgPsql <admin> <database> [psql-args]...'
+  _pg_admin="$1"
+  _pg_db="$2"
+  shift 2
+  psql -v ON_ERROR_STOP=1 --username "$_pg_admin" --dbname "$_pg_db" "$@"
+}
+export pgPsql
+readonly pgPsql
 
-# 等待 PostgreSQL ready
-pgUntilReady(){
-  Info "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
+pgWaitReady(){
+  Usage $# 2 4 'pgWaitReady <user> [database=postgres] [timeout=30] [interval=2]'
+  _pg_user="$1"
+  _pg_db="$2"
+  _pg_timeout="${3:-30}"
+  _pg_interval="${4:-2}"
 
-  _timeout="${1:-30}"
-  _interval=2
-  _count=0
-  _max_attempts=$((_timeout / _interval))
+  Info "pg_isready -U $_pg_user -d $_pg_db --> timeout: $_pg_timeout"
+  _pg_counter=0
+  _pg_max_attempts=$(((_pg_timeout + _pg_interval - 1) / _pg_interval))
 
-  until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
-    _counter=$((_counter + 1))
-    if [ $_counter -ge $_max_attempts ]; then
-      ErrorD "PostgreSQL connect timeout (${_timeout}s)" "PostgreSQL 连接超时 (${_timeout}秒)"
-      exit 1
+  until pg_isready -U "$_pg_user" -d "$_pg_db"; do
+    _pg_counter=$((_pg_counter + 1))
+    if [ "$_pg_counter" -ge "$_pg_max_attempts" ]; then
+      PanicD "PostgreSQL connect timeout (${_pg_timeout}s)" "PostgreSQL 连接超时 (${_pg_timeout}秒)"
     fi
 
     DebugD 'waiting for PostgreSQL to start...' '等待PostgreSQL启动...'
-    sleep $_interval
+    sleep "$_pg_interval"
   done
 }
-export pgUntilReady
-readonly pgUntilReady
+export pgWaitReady
+readonly pgWaitReady
 
-_pgCreateSchemaRolesSQL(){
-  Usage $# 3 4 '_pgCreateSchemaRolesSQL <database> <schema> <user> [role_prefix=<database>]'
-  _database="$1"
-  _schema="$2"
-  _user="$3"
-  _role_prefix="${4:-"$_database"}"
+pgCreateExtensions(){
+  Usage $# -ge 3 'pgCreateExtensions <admin> <database> <extension> [extension]...'
+  _pg_admin="$1"
+  _pg_db="$2"
+  shift 2
 
-  _owner="${_role_prefix}_owner"
-  _reader="${_role_prefix}_reader"
-  _writer="${_role_prefix}_writer"
-
-  cat <<-EOSQL
-    -- 需要重新连接到数据库 a_gateway
-    \c $_database;
-    CREATE SCHEMA IF NOT EXISTS $_schema;
-
-    CREATE ROLE $_owner NOLOGIN;
-    CREATE ROLE $_reader NOLOGIN;
-    CREATE ROLE $_writer NOLOGIN;
-
-    GRANT CONNECT, TEMPORARY ON DATABASE $_database TO $_owner, $_reader, $_writer;
-    GRANT ALL PRIVILEGES ON SCHEMA $_schema TO $_owner;
-
-    -- 继承角色，后面改动角色权限，user 也自动获取
-    GRANT $_owner TO $_user;
-EOSQL
+  for _pg_ext in "$@"; do
+    Info "create extension $_pg_ext in $_pg_db"
+    pgPsql "$_pg_admin" "$_pg_db" -c "CREATE EXTENSION IF NOT EXISTS \"$_pg_ext\";" >/dev/null
+  done
 }
-export _pgCreateSchemaRolesSQL
-readonly _pgCreateSchemaRolesSQL
+export pgCreateExtensions
+readonly pgCreateExtensions
 
-_pgGrantAllOnSchema(){
-  Usage $# 3 4 '_pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
-  _database="$1"
-  _schema="$2"
-  _user="$3"
-  _role_prefix="${4:-"$_database"}"
-
-  _owner="${_role_prefix}_owner"
-  _reader="${_role_prefix}_reader"
-  _writer="${_role_prefix}_writer"
-
-  cat <<-EOSQL
-    -- 需要重新连接到数据库 $_database
-    \c $_database;
-
-    -- schema 级别权限
-    GRANT USAGE ON SCHEMA $_schema TO $_owner, $_reader, $_writer;
-    GRANT CREATE ON SCHEMA $_schema TO $_owner;
-
-    -- table 级别权限
-    GRANT SELECT ON ALL TABLES IN SCHEMA $_schema TO $_reader;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA $_schema TO $_writer;
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $_schema TO $_owner;
-
-    -- 自增ID权限
-    GRANT USAGE ON ALL SEQUENCES IN SCHEMA $_schema TO $_writer, $_owner;
-    GRANT SELECT ON ALL SEQUENCES IN SCHEMA $_schema TO $_reader;
-
-    -- 存储过程、触发器等函数权限
-    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_writer, $_owner;
-    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA $_schema TO $_reader;
-
-    -- 默认权限（对未来对象生效）
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON TABLES TO $_reader;
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $_writer;
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT ALL PRIVILEGES ON TABLES TO $_owner;
-
-    -- 自增ID默认权限
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT USAGE ON SEQUENCES TO $_writer, $_owner;
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT SELECT ON SEQUENCES TO $_reader;
-
-    -- 函数的默认权限
-    ALTER DEFAULT PRIVILEGES FOR USER $_user IN SCHEMA $_schema GRANT EXECUTE ON FUNCTIONS TO $_reader, $_writer, $_owner;
-EOSQL
+pgDbRoleExists(){
+  Usage $# -eq 3 'pgDbRoleExists <admin> <database> <rolname>'
+  _pg_admin="$1"
+  _pg_db="$2"
+  _pg_rolname="$3"
+  pgPsql "$_pg_admin" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" | grep -q 1
 }
-export _pgGrantAllOnSchema
-readonly _pgGrantAllOnSchema
+export pgDbRoleExists
+readonly pgDbRoleExists
 
-pgGrantAllOnSchema(){
-  Usage $# 3 4 'pgGrantAllOnSchema <database> <schema> <user> [role_prefix=<database>]'
-  _database="$1"
-  _schema="$2"
-  _user="$3"
-  _role_prefix="${4:-"$_database"}"
+pgDbEnsureLoginRole(){
+  Usage $# -eq 4 'pgDbEnsureLoginRole <admin> <database> <user> <password>'
+  _pg_admin="$1"
+  _pg_db="$2"
+  _pg_user="$3"
+  _pg_password="$4"
 
-  _owner="${_role_prefix}_owner"
-  _reader="${_role_prefix}_reader"
-  _writer="${_role_prefix}_writer"
+  PanicIfEmpty "$_pg_user" 'username'
 
-  Info "create roles: $_owner, $_reader, $_writer"
-  _pgCreateSchemaRolesSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
-
-  Info "grant all privileges on ${_database}.${_schema} to roles: $_owner, $_reader, $_writer"
-  _pgGrantAllOnSchema "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
-}
-
-export pgGrantAllOnSchema
-readonly pgGrantAllOnSchema
-
-_pgCreateSchemaSQL(){
-  Usage $# -ge 4 '_pgCreateSchemaSQL <user> <password> <database> <schema> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema="$4"
-  shift 4
-  _options="$*"
-
-  cat <<-EOSQL
-    CREATE SCHEMA IF NOT EXISTS $_schema;
-    ALTER USER $_user SET search_path TO $_schema;
-EOSQL
-}
-export _pgCreateSchemaSQL
-readonly _pgCreateSchemaSQL
-
-_pgCreateDatabase(){
-  Usage $# -ge 3 '_pgCreateDatabase <user> <password> <database> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  shift 3
-  _options="$*"
-  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
-  cat <<-EOSQL
-    CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
-    GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
-EOSQL
-}
-readonly _pgCreateDatabase
-
-_pgCreateDatabaseToExitsUser(){
-  Usage $# -ge 3 '_pgCreateDatabaseToExitsUser <user> <password> <database> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  shift 3
-  _options="$*"
-  #  PostgreSQL 不支持 CREATE DATABASE IF NOT EXISTS，因此必须要确定创建的库不存在。
-  cat <<-EOSQL
-    CREATE DATABASE $_database OWNER $_user ENCODING 'UTF8';
-    GRANT ALL PRIVILEGES ON DATABASE $_database TO $_user;
-EOSQL
-}
-readonly _pgCreateDatabaseWithExitsUser
-
-pgCreateSchemaOwner(){
-  Usage $# -ge 4 'pgCreateSchemaOwner <user> <password> <database> <schema> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema="$4"
-
-  if psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_user';" \
-  | grep -q 1; then
-    Info "user $_user exists"
-  else
-    Info "create user $_user"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password';" >/dev/null
+  if pgDbRoleExists "$_pg_admin" "$_pg_db" "$_pg_user"; then
+    return
   fi
-
-  Info "create schema ${_database}.${_schema} and its owner $_user"
-  _pgCreateSchemaSQL "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$_database" >/dev/null
-
-  # schema 角色以下划线开头
-  _role_prefix="_${_schema}"
-  pgGrantAllOnSchema "$_database" "$_schema" "$_user" "$_role_prefix"
+  Info "create user $_pg_user"
+  PanicIfEmpty "$_pg_password" 'password'
+  pgPsql "$_pg_admin" "$_pg_db" -c "CREATE USER $_pg_user WITH PASSWORD '$_pg_password';" >/dev/null
 }
-export pgCreateSchemaOwner
-readonly pgCreateSchemaOwner
+export pgDbEnsureLoginRole
+readonly pgDbEnsureLoginRole
 
+pgRoleInherit(){
+  Usage $# 3 4 'pgRoleInherit <admin> <parent_role> <child_role> [maintainer_db=postgres]'
+  _pg_admin="$1"
+  _pg_parent_role="$2"
+  _pg_child_role="$3"
+  _pg_maintainer_db="${4:-"postgres"}"
 
-# 创建用户和 owner, reader, writer 角色
-pgCreateDatabaseOwner(){
-  Usage $# -ge 3 'pgCreateDatabaseOwner <user> <password> <database> [options]...'
-  _user="$1"
-  _password="$2"
-  _database="$3"
-  _schema='public'
-
-  if psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_user';" \
-  | grep -q 1; then
-    Info "user $_user exists"
-  else
-    Info "create user $_user"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER $_user WITH PASSWORD '$_password';" >/dev/null
-  fi
-
-  _pgCreateDatabase "$@" | psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null
-  pgGrantAllOnSchema "$_database" "$_schema" "$_user"
+  pgPsql "$_pg_admin" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
 }
-export pgCreateDatabaseOwner
-readonly pgCreateDatabaseOwner
+export pgRoleInherit
+readonly pgRoleInherit
+
+pgDbGrantAllOnSchema(){
+  Usage $# 4 5 'pgDbGrantAllOnSchema <admin> <user> <database> <schema> [role_prefix=<database>]'
+  _pg_admin="$1"
+  _pg_user="$2"
+  _pg_db="$3"
+  _pg_schema="$4"
+  _pg_role_prefix="${5:-"$_pg_db"}"
+
+  _pg_owner="${_pg_role_prefix}_owner"
+  _pg_reader="${_pg_role_prefix}_reader"
+  _pg_writer="${_pg_role_prefix}_writer"
+
+  Info "ensure roles: $_pg_owner, $_pg_reader, $_pg_writer"
+  pgDbCreateSchemaRolesSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
+  Info "grant privileges on ${_pg_db}.${_pg_schema} to roles: $_pg_owner, $_pg_reader, $_pg_writer"
+  pgDbGrantAllOnSchemaSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
+}
+export pgDbGrantAllOnSchema
+readonly pgDbGrantAllOnSchema
+
+pgDbCreateSchemaOwner(){
+  Usage $# -eq 5 'pgDbCreateSchemaOwner <admin> <user> <password> <database> <schema>'
+  _pg_admin="$1"
+  _pg_user="$2"
+  _pg_password="$3"
+  _pg_db="$4"
+  _pg_schema="$5"
+
+  _pg_role_prefix="_${_pg_schema}"
+
+  pgDbEnsureLoginRole "$_pg_admin" "$_pg_db" "$_pg_user" "$_pg_password"
+  Info "create schema ${_pg_db}.${_pg_schema}"
+  pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
+  pgDbGrantAllOnSchema "$_pg_admin" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
+}
+export pgDbCreateSchemaOwner
+readonly pgDbCreateSchemaOwner
+
+pgCreateDbOwner(){
+  Usage $# 4 6 'pgCreateDbOwner <admin> <user> <password> <database> [maintainer_db=postgres] [default_schema=public]'
+  _pg_admin="$1"
+  _pg_user="$2"
+  _pg_password="$3"
+  _pg_db="$4"
+  _pg_maintainer_db="${5:-"postgres"}"
+  _pg_default_schema="${6:-"public"}"
+
+  pgDbEnsureLoginRole "$_pg_admin" "$_pg_maintainer_db" "$_pg_user" "$_pg_password"
+  pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_admin" "$_pg_maintainer_db" >/dev/null
+  pgDbGrantAllOnSchema "$_pg_admin" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+}
+export pgCreateDbOwner
+readonly pgCreateDbOwner
