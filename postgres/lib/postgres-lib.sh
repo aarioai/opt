@@ -132,11 +132,11 @@ export pgDbCreateSchemaOwner
 readonly pgDbCreateSchemaOwner
 
 pgCreateDbOwner(){
-  Usage $# 4 6 'pgCreateDbOwner <maintainer> <user> <password> <database> [maintainer_db=postgres] [default_schema=public]'
-  _pg_maintainer="$1"
-  _pg_user="$2"
-  _pg_password="$3"
-  _pg_db="$4"
+  Usage $# 4 6 'pgCreateDbOwner <user> <password> <database> <maintainer> [maintainer_db=postgres] [default_schema=public]'
+  _pg_user="$1"
+  _pg_password="$2"
+  _pg_db="$3"
+  _pg_maintainer="$4"
   _pg_maintainer_db="${5:-"postgres"}"
   _pg_default_schema="${6:-"public"}"
 
