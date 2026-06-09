@@ -5,11 +5,11 @@ set -eu
 if [ -x "./postgres-sql-lib.sh" ]; then . ./postgres-sql-lib.sh; else . /opt/postgres/lib/postgres-sql-lib.sh; fi
 
 pgPsql(){
-  Usage $# -ge 2 'pgPsql <admin> <database> [psql-args]...'
-  _pg_admin="$1"
+  Usage $# -ge 2 'pgPsql <maintainer> <database> [psql-args]...'
+  _pg_maintainer="$1"
   _pg_db="$2"
   shift 2
-  psql -v ON_ERROR_STOP=1 --username "$_pg_admin" --dbname "$_pg_db" "$@"
+  psql -v ON_ERROR_STOP=1 --username "$_pg_maintainer" --dbname "$_pg_db" "$@"
 }
 export pgPsql
 readonly pgPsql
@@ -39,63 +39,63 @@ export pgWaitReady
 readonly pgWaitReady
 
 pgCreateExtensions(){
-  Usage $# -ge 3 'pgCreateExtensions <admin> <database> <extension> [extension]...'
-  _pg_admin="$1"
+  Usage $# -ge 3 'pgCreateExtensions <maintainer> <database> <extension> [extension]...'
+  _pg_maintainer="$1"
   _pg_db="$2"
   shift 2
 
   for _pg_ext in "$@"; do
     Info "create extension $_pg_ext in $_pg_db"
-    pgPsql "$_pg_admin" "$_pg_db" -c "CREATE EXTENSION IF NOT EXISTS \"$_pg_ext\";" >/dev/null
+    pgPsql "$_pg_maintainer" "$_pg_db" -c "CREATE EXTENSION IF NOT EXISTS \"$_pg_ext\";" >/dev/null
   done
 }
 export pgCreateExtensions
 readonly pgCreateExtensions
 
 pgDbRoleExists(){
-  Usage $# -eq 3 'pgDbRoleExists <admin> <database> <rolname>'
-  _pg_admin="$1"
+  Usage $# -eq 3 'pgDbRoleExists <maintainer> <database> <rolname>'
+  _pg_maintainer="$1"
   _pg_db="$2"
   _pg_rolname="$3"
-  pgPsql "$_pg_admin" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" | grep -q 1
+  pgPsql "$_pg_maintainer" "$_pg_db" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$_pg_rolname';" | grep -q 1
 }
 export pgDbRoleExists
 readonly pgDbRoleExists
 
 pgDbEnsureLoginRole(){
-  Usage $# -eq 4 'pgDbEnsureLoginRole <admin> <database> <user> <password>'
-  _pg_admin="$1"
+  Usage $# -eq 4 'pgDbEnsureLoginRole <maintainer> <database> <user> <password>'
+  _pg_maintainer="$1"
   _pg_db="$2"
   _pg_user="$3"
   _pg_password="$4"
 
   PanicIfEmpty "$_pg_user" 'username'
 
-  if pgDbRoleExists "$_pg_admin" "$_pg_db" "$_pg_user"; then
+  if pgDbRoleExists "$_pg_maintainer" "$_pg_db" "$_pg_user"; then
     return
   fi
   Info "create user $_pg_user"
   PanicIfEmpty "$_pg_password" 'password'
-  pgPsql "$_pg_admin" "$_pg_db" -c "CREATE USER $_pg_user WITH PASSWORD '$_pg_password';" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_db" -c "CREATE USER $_pg_user WITH PASSWORD '$_pg_password';" >/dev/null
 }
 export pgDbEnsureLoginRole
 readonly pgDbEnsureLoginRole
 
 pgRoleInherit(){
-  Usage $# 3 4 'pgRoleInherit <admin> <parent_role> <child_role> [maintainer_db=postgres]'
-  _pg_admin="$1"
+  Usage $# 3 4 'pgRoleInherit <maintainer> <parent_role> <child_role> [maintainer_db=postgres]'
+  _pg_maintainer="$1"
   _pg_parent_role="$2"
   _pg_child_role="$3"
   _pg_maintainer_db="${4:-"postgres"}"
 
-  pgPsql "$_pg_admin" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_maintainer_db" -c "GRANT $_pg_parent_role TO $_pg_child_role;" >/dev/null
 }
 export pgRoleInherit
 readonly pgRoleInherit
 
 pgDbGrantAllOnSchema(){
-  Usage $# 4 5 'pgDbGrantAllOnSchema <admin> <user> <database> <schema> [role_prefix=<database>]'
-  _pg_admin="$1"
+  Usage $# 4 5 'pgDbGrantAllOnSchema <maintainer> <user> <database> <schema> [role_prefix=<database>]'
+  _pg_maintainer="$1"
   _pg_user="$2"
   _pg_db="$3"
   _pg_schema="$4"
@@ -106,16 +106,16 @@ pgDbGrantAllOnSchema(){
   _pg_writer="${_pg_role_prefix}_writer"
 
   Info "ensure roles: $_pg_owner, $_pg_reader, $_pg_writer"
-  pgDbCreateSchemaRolesSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
+  pgDbCreateSchemaRolesSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
   Info "grant privileges on ${_pg_db}.${_pg_schema} to roles: $_pg_owner, $_pg_reader, $_pg_writer"
-  pgDbGrantAllOnSchemaSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
+  pgDbGrantAllOnSchemaSQL "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
 }
 export pgDbGrantAllOnSchema
 readonly pgDbGrantAllOnSchema
 
 pgDbCreateSchemaOwner(){
-  Usage $# -eq 5 'pgDbCreateSchemaOwner <admin> <user> <password> <database> <schema>'
-  _pg_admin="$1"
+  Usage $# -eq 5 'pgDbCreateSchemaOwner <maintainer> <user> <password> <database> <schema>'
+  _pg_maintainer="$1"
   _pg_user="$2"
   _pg_password="$3"
   _pg_db="$4"
@@ -123,26 +123,26 @@ pgDbCreateSchemaOwner(){
 
   _pg_role_prefix="_${_pg_schema}"
 
-  pgDbEnsureLoginRole "$_pg_admin" "$_pg_db" "$_pg_user" "$_pg_password"
+  pgDbEnsureLoginRole "$_pg_maintainer" "$_pg_db" "$_pg_user" "$_pg_password"
   Info "create schema ${_pg_db}.${_pg_schema}"
-  pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_admin" "$_pg_db" >/dev/null
-  pgDbGrantAllOnSchema "$_pg_admin" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
+  pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
+  pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
 }
 export pgDbCreateSchemaOwner
 readonly pgDbCreateSchemaOwner
 
 pgCreateDbOwner(){
-  Usage $# 4 6 'pgCreateDbOwner <admin> <user> <password> <database> [maintainer_db=postgres] [default_schema=public]'
-  _pg_admin="$1"
+  Usage $# 4 6 'pgCreateDbOwner <maintainer> <user> <password> <database> [maintainer_db=postgres] [default_schema=public]'
+  _pg_maintainer="$1"
   _pg_user="$2"
   _pg_password="$3"
   _pg_db="$4"
   _pg_maintainer_db="${5:-"postgres"}"
   _pg_default_schema="${6:-"public"}"
 
-  pgDbEnsureLoginRole "$_pg_admin" "$_pg_maintainer_db" "$_pg_user" "$_pg_password"
-  pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_admin" "$_pg_maintainer_db" >/dev/null
-  pgDbGrantAllOnSchema "$_pg_admin" "$_pg_user" "$_pg_db" "$_pg_default_schema"
+  pgDbEnsureLoginRole "$_pg_maintainer" "$_pg_maintainer_db" "$_pg_user" "$_pg_password"
+  pgCreateDbSQL "$_pg_db" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_maintainer_db" >/dev/null
+  pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_default_schema"
 }
 export pgCreateDbOwner
 readonly pgCreateDbOwner
