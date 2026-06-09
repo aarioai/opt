@@ -17,18 +17,6 @@ EOSQL
 export pgCreateDbSQL
 readonly pgCreateDbSQL
 
-pgDbCreateSchemaSQL(){
-  Usage $# -eq 2 'pgDbCreateSchemaSQL <schema> <user>'
-  _pg_schema="$1"
-  _pg_user="$2"
-
-  cat <<-EOSQL
-	CREATE SCHEMA IF NOT EXISTS $_pg_schema;
-	ALTER USER $_pg_user SET search_path TO $_pg_schema;
-EOSQL
-}
-export pgDbCreateSchemaSQL
-readonly pgDbCreateSchemaSQL
 
 pgDbCreateSchemaRolesSQL(){
   Usage $# 3 4 'pgDbCreateSchemaRolesSQL <user> <database> <schema> [role_prefix=<database>]'

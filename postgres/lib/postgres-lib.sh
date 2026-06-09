@@ -140,7 +140,7 @@ pgDbCreateSchemaOwner(){
 
   pgDbEnsureLoginRole "$_pg_user" "$_pg_password" "$_pg_maintainer" "$_pg_db"
   Info "create schema ${_pg_db}.${_pg_schema}"
-  pgDbCreateSchemaSQL "$_pg_schema" "$_pg_user" | pgPsql "$_pg_maintainer" "$_pg_db" >/dev/null
+  pgPsql "$_pg_maintainer" "$_pg_db" -c "CREATE SCHEMA IF NOT EXISTS $_pg_schema;" >/dev/null
   pgDbGrantAllOnSchema "$_pg_maintainer" "$_pg_user" "$_pg_db" "$_pg_schema" "$_pg_role_prefix"
 }
 export pgDbCreateSchemaOwner
