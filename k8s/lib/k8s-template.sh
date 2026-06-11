@@ -166,8 +166,8 @@ k8sRenderConfigmap(){
   local _k8s_include_tag
   local _k8s_include_path
   local _k8s_include_env_path
-    local _k8s_include_abs
-    local _k8s_include_env_abs
+  local _k8s_include_abs
+  local _k8s_include_env_abs
 
   while IFS= read -r _k8s_include_tag || [ -n "$_k8s_include_tag" ]; do
     [ -n "$_k8s_include_tag" ] || continue

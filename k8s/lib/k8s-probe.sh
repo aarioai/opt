@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # https://github.com/aarioai/opt
-if [ -x "./k8s-template.sh" ]; then . ./k8s-template.sh; else . /opt/k8s/lib/k8s-template.sh; fi
+if [ -x "./k8s-yaml.sh" ]; then . ./k8s-yaml.sh; else . /opt/k8s/lib/k8s-yaml.sh; fi
+
 readonly k8s_probe_help="
 k8s probe <CMD> [.]
   -h|-help|help     Show help
@@ -32,7 +33,6 @@ k8s probe <CMD> [.]
     json              Show in JSON format
   values            Render ${K8S_VALUES_YAML_NAME}-<env>.yaml
 "
-
 
 k8sProbeGlobalYaml(){
   Usage $# 1 2 'k8sProbeGlobalYaml <workdir> [WITH_PANIC]'
@@ -147,6 +147,7 @@ k8sProbeStatus(){
   _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
 
   k8sStatus "$_k8s_namespace" "$_k8s_selector" "${_k8s_pvcs[@]}"
+  k8sExtraCommand "$_k8s_workdir" status
 }
 export k8sProbeStatus
 readonly k8sProbeStatus

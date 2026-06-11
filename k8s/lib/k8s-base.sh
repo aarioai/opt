@@ -21,6 +21,9 @@ readonly K8S_GITIGNORE_GENERATED_FILE="**/templates/${K8S_GENERATED_PREFIX}*.yam
 export K8S_BACKUP_DIR
 readonly K8S_BACKUP_DIR='backup'
 
+export K8S_YAML
+readonly K8S_YAML='k8s.yaml'
+
 export K8S_CHART_YAML='Chart.yaml'
 readonly K8S_CHART_YAML
 

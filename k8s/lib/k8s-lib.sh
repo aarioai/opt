@@ -258,6 +258,7 @@ k8sRestartHere(){
   local _k8s_setname
   _k8s_setname=$(k8sProbeSetName "$_k8s_workdir")
 
+  k8sExtraCommand "$_k8s_workdir" restart
   k8sRestart "$_k8s_namespace" "$_k8s_setname"
 }
 export k8sRestartHere
@@ -380,6 +381,8 @@ k8sUp(){
   fi
   PanicIfNotFiles "$_k8s_helm_file"
 
+  k8sExtraCommand "$_k8s_workdir" up
+
   # .Release.Name => $_k8s_chart_name
   # .Release.Namespace => $_k8s_namespace
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
@@ -403,6 +406,7 @@ k8sUp(){
   _k8s_pvcs=$(k8sProbePVCs "$_k8s_workdir")
 
   k8sWaitReady "$_k8s_namespace" "$_k8s_selector" "$_k8s_pvc_total_bytes" "${_k8s_pvcs[@]}"
+  k8sExtraCommand "$_k8s_workdir" status
 
   k8sClearWorkDir "$_k8s_workdir"
 
@@ -462,6 +466,8 @@ k8sDown(){
     Debug "kubectl delete $_k8s_sn0 $_k8s_sn1 -n $_k8s_namespace"
     $_k8s_cmd_prefix kubectl delete "$_k8s_sn0" "$_k8s_sn1" -n "$_k8s_namespace" --ignore-not-found
   fi
+
+  k8sExtraCommand "$_k8s_workdir" down
 
   local _k8s_has_pvc=0
   if $_k8s_cmd_prefix kubectl get pvc -n "$_k8s_namespace" -l "$_k8s_selector" --no-headers 2>/dev/null | grep . >/dev/null 2>&1
@@ -550,4 +556,3 @@ k8sUpgrade(){
 }
 export k8sUpgrade
 readonly k8sUpgrade
-
