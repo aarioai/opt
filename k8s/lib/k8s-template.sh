@@ -382,9 +382,7 @@ k8sProbeValues(){
 
   local _k8s_values_yaml
   _k8s_values_yaml="$(k8sProbeValuesFile "$_k8s_workdir")"
-  local _k8s_basename
-  _k8s_basename=$(basename "$_k8s_values_yaml")
-  if [ "$_k8s_basename" = "${K8S_VALUES_YAML_NAME}.yaml" ]; then
+  if [ "$(basename "$_k8s_values_yaml")" = "${K8S_VALUES_YAML_NAME}.yaml" ]; then
     cat "$_k8s_values_yaml"
   fi
 

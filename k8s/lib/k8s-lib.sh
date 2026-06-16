@@ -356,7 +356,6 @@ k8sUp(){
     fi
   done
 
-
   k8sCreateHostPath "$_k8s_workdir"
 
   local _k8s_env
@@ -376,16 +375,19 @@ k8sUp(){
     fi
   fi
 
-  local _k8s_helm_file
-  _k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
-  PanicIfNotFiles "$_k8s_helm_file"
+  g_k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
+  PanicIfNotFiles "$g_k8s_helm_file"
+  if [ "$(basename "$g_k8s_helm_file")" = "$K8S_VALUES_GENERATED_YAML" ]; then
+    trap 'rm -f "$g_k8s_helm_file" 2>/dev/null' EXIT
+    trap 'rm -f "$g_k8s_helm_file" 2>/dev/null; return 1' INT TERM
+  fi
 
   k8sExtraCommand "$_k8s_workdir" up
 
   # .Release.Name => $_k8s_chart_name
   # .Release.Namespace => $_k8s_namespace
-  Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file $*"
-  helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" "$@"
+  Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $g_k8s_helm_file $*"
+  helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$g_k8s_helm_file" "$@"
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
 
@@ -531,9 +533,12 @@ k8sUpgrade(){
   k8sProbeConfigMap "$_k8s_workdir"
   k8sPullProbedImages "$_k8s_workdir"
 
-  local _k8s_helm_file
-  _k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
-  PanicIfNotFiles "$_k8s_helm_file"
+  g_k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
+  PanicIfNotFiles "$g_k8s_helm_file"
+  if [ "$(basename "$g_k8s_helm_file")" = "$K8S_VALUES_GENERATED_YAML" ]; then
+    trap 'rm -f "$g_k8s_helm_file" 2>/dev/null' EXIT
+    trap 'rm -f "$g_k8s_helm_file" 2>/dev/null; return 1' INT TERM
+  fi
 
   local _k8s_backup_dir="${_k8s_workdir}/${K8S_BACKUP_DIR}"
   local _k8s_backup_file
@@ -546,8 +551,8 @@ k8sUpgrade(){
   Debug "helm repo update"
   helm repo update
 
-  Debug "helm upgrade $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $_k8s_helm_file --atomic --wait $*"
-  helm upgrade "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$_k8s_helm_file" --atomic --wait "$@"
+  Debug "helm upgrade $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $g_k8s_helm_file --atomic --wait $*"
+  helm upgrade "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$g_k8s_helm_file" --atomic --wait "$@"
 
   Debug "helm status $_k8s_chart_name -n $_k8s_namespace"
   helm status "$_k8s_chart_name" -n "$_k8s_namespace"
