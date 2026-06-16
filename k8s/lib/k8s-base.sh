@@ -30,6 +30,9 @@ readonly K8S_CHART_YAML
 export K8S_VALUES_YAML_NAME='values'   # values.yaml / values-<env>.yaml
 readonly K8S_VALUES_YAML_NAME
 
+export K8S_VALUES_GENERATED_YAML='.values-generated.yaml'
+readonly K8S_VALUES_GENERATED_YAML
+
 export K8S_ENV_FILE
 readonly K8S_ENV_FILE='.env'
 

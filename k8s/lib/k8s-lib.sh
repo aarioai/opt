@@ -375,10 +375,9 @@ k8sUp(){
       PanicD "generating TLS secrets failed" "无法创建TLS secrets"
     fi
   fi
-  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_env}.yaml"
-  if [ ! -f "$_k8s_helm_file" ]; then
-    _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
-  fi
+
+  local _k8s_helm_file
+  _k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
   PanicIfNotFiles "$_k8s_helm_file"
 
   k8sExtraCommand "$_k8s_workdir" up
@@ -522,6 +521,8 @@ k8sUpgrade(){
   _k8s_workdir="$(k8sWorkDir "$1")"
   shift
 
+  local _k8s_env
+  _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
   local _k8s_chart_name
   _k8s_chart_name=$(k8sProbeName "$_k8s_workdir")
   local _k8s_namespace
@@ -530,10 +531,8 @@ k8sUpgrade(){
   k8sProbeConfigMap "$_k8s_workdir"
   k8sPullProbedImages "$_k8s_workdir"
 
-  local _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}-${_k8s_prefix}.yaml"
-  if [ ! -f "$_k8s_helm_file" ]; then
-    _k8s_helm_file="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
-  fi
+  local _k8s_helm_file
+  _k8s_helm_file="$(k8sProbeValuesFile "$_k8s_workdir")"
   PanicIfNotFiles "$_k8s_helm_file"
 
   local _k8s_backup_dir="${_k8s_workdir}/${K8S_BACKUP_DIR}"

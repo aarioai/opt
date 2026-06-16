@@ -325,19 +325,71 @@ k8sUpNamespaceNx(){
 export k8sUpNamespaceNx
 readonly k8sUpNamespaceNx
 
-k8sProbeValues(){
-  Usage $# -eq 1 'k8sProbeValues <workdir>'
+k8sConvertValuesString(){
+  Usage $# -eq 2 'k8sConvertValuesString <workdir> <values>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+  local _k8s_values="$2"
+
+  # Try append .hostname
+  local _k8s_hostname
+  if command -v hostname >/dev/null 2>&1; then
+    _k8s_hostname=$(hostname)
+  fi
+
+  _k8s_values=$(k8sRenderTemplate "$_k8s_workdir" "$_k8s_values")
+  # hostname: "$(hostname)"
+  local _k8s_hostname
+  if command -v hostname >/dev/null 2>&1; then
+    _k8s_hostname=$(hostname)
+  fi
+  if [ -n "$_k8s_hostname" ]; then
+    _k8s_values="${_k8s_values//\$(hostname)/$_k8s_hostname}"
+  fi
+  printf '%s' "$_k8s_values"
+}
+export k8sConvertValuesFile
+readonly k8sConvertValuesFile
+
+k8sProbeValuesFile(){
+  Usage $# -eq 1 'k8sProbeValuesFile <workdir>'
   local _k8s_workdir
   _k8s_workdir="$(k8sWorkDir "$1")"
 
+  # values.yaml 是不允许使用模板的
   local _k8s_values_yaml="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   local _k8s_env
   _k8s_env=$(k8sProbeEnv "$_k8s_workdir")
   local _k8s_values_override_yaml="$_k8s_workdir/${K8S_VALUES_YAML_NAME}-${_k8s_env}.yaml"
   if [ ! -f "$_k8s_values_override_yaml" ]; then
-    cat "$_k8s_values_yaml"
+    printf '%s' "$_k8s_values_yaml"
     return 0
   fi
+
+  local _k8s_generated_yaml="${_k8s_workdir}/${K8S_VALUES_GENERATED_YAML}"
+  local _k8s_values
+  _k8s_values=$(cat "$_k8s_values_override_yaml")
+  k8sConvertValuesString "$_k8s_workdir" "$_k8s_values" > "$_k8s_generated_yaml"
+  printf '%s' "$_k8s_generated_yaml"
+}
+export k8sProbeValuesFile
+readonly k8sProbeValuesFile
+
+k8sProbeValues(){
+  Usage $# -eq 1 'k8sProbeValues <workdir>'
+  local _k8s_workdir
+  _k8s_workdir="$(k8sWorkDir "$1")"
+
+  local _k8s_values_yaml
+  _k8s_values_yaml="$(k8sProbeValuesFile "$_k8s_workdir")"
+  local _k8s_basename
+  _k8s_basename=$(basename "$_k8s_values_yaml")
+  if [ "$_k8s_basename" = "${K8S_VALUES_YAML_NAME}.yaml" ]; then
+    cat "$_k8s_values_yaml"
+  fi
+
+  local _k8s_values_override_yaml="$_k8s_values_yaml"
+  _k8s_values_yaml="${_k8s_workdir}/${K8S_VALUES_YAML_NAME}.yaml"
   local _k8s_values
   _k8s_values=$(yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$_k8s_values_yaml" "$_k8s_values_override_yaml")
 
