@@ -388,6 +388,8 @@ k8sUp(){
   # .Release.Namespace => $_k8s_namespace
   Debug "helm install $_k8s_chart_name $_k8s_workdir -n $_k8s_namespace -f $g_k8s_helm_file $*"
   helm install "$_k8s_chart_name" "$_k8s_workdir" -n "$_k8s_namespace" -f "$g_k8s_helm_file" "$@"
+
+  Info "installed"
   local _k8s_selector
   _k8s_selector=$(k8sProbeSelector "$_k8s_workdir")
 

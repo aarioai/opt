@@ -26,7 +26,7 @@ k8s probe <CMD> [.]
     [name]          Show the specific PVC size
   pvc-byte|pvc-bytes) Show PVC sizes in bytes
   pvc-total         Count all pvc sizes in bytes
-  selector          Show .Values.selector or app=<.Chart.Name>
+  selector          Show kubectl selector using .Values.kubectl or fall back to app.kubernetes.io/name=<.Chart.Name>
   setname           Show deployment/statefulset/deamonset's name
   status            Show status of current pods, services, and PVCs
   tls               Show TLS secrets of current service
@@ -246,11 +246,16 @@ k8sProbeSelector(){
   local _k8s_helper_tpl="${_k8s_workdir}/${K8S_HELPER_TPL}"
 
   local _k8s_selector
-  _k8s_selector=$(sed -n '/{{-*[[:space:]]*define "helpers.selector"/,/{{-*[[:space:]]*end/{
+  _k8s_selector=$(sed -n '/{{-*[[:space:]]*define "helpers.kubectl"/,/{{-*[[:space:]]*end/{
     /{{-*[[:space:]]*define/d
     /{{-*[[:space:]]*end/d
     p
   }' "$_k8s_helper_tpl")
+
+  if [ -z "$_k8s_selector" ]; then
+    printf 'app.kubernetes.io/name=%s' "$(k8sProbeName "$_k8s_workdir")"
+    return
+  fi
 
   k8sRenderTemplate "$_k8s_workdir" "$_k8s_selector"  | yq eval 'to_entries | map(.key + "=" + (.value | tostring)) | join(",")' -
 }
