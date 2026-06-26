@@ -177,41 +177,41 @@ k8sImage(){
 }
 
 version(){
+  readonly p=12
   local prefix=''
   if command -v k3s >/dev/null 2>&1; then
-    prefix="k3s "
-    Heading "[K3S]"
-    k3s --version
+    prefix="k3s"
+    echo "$(StrFix "k3s:" $p ' ' 1) $(k3s --version | awk 'NR==1{print $3}')"
   fi
 
   if command -v containerd >/dev/null 2>&1; then
-    Heading "[CONTAINERD]"
-    containerd --version
+    echo "$(StrFix "containerd:" $p ' ' 1) $(containerd --version | awk '{print $3}')"
   fi
 
   if command -v crictl >/dev/null 2>&1; then
-    Heading "[CRICTL]"
-    $(SUDO) $prefix crictl --version
+    echo "$(StrFix "crictl:" $p ' ' 1) $($(SUDO) $prefix crictl --version | awk '{print $NF}')"
   fi
 
   if command -v runc >/dev/null 2>&1; then
-    Heading "[RUNC]"
-    runc --version
+    echo "$(StrFix "runc:" $p ' ' 1) $(runc --version | awk 'NR==1{print $3}')"
   fi
 
   if command -v kubectl >/dev/null 2>&1; then
-    Heading "[KUBECTL]"
-    $prefix kubectl version --client
+    echo "$(StrFix "kubectl:" $p ' ' 1) $($prefix kubectl version --client | awk 'NR==1{print $3}')"
   fi
 
   if command -v nerdctl >/dev/null 2>&1; then
-    Heading "[NERDCTL]"
-    $(SUDO) nerdctl version
+    local version
+    version=$($(SUDO) nerdctl version | awk '
+      /^Client:/{in_client=1}
+      /^Server:/{in_client=0}
+      in_client && /Version:/{print $2; exit}
+    ')
+    echo "$(StrFix "nerdctl:" $p ' ' 1) $version"
   fi
 
   if command -v helm >/dev/null 2>&1; then
-    Heading "[HELM]"
-    helm version --short
+    echo "$(StrFix "helm:" $p ' ' 1) $(helm version --short)"
   fi
 }
 
