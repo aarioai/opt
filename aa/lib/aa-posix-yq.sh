@@ -110,8 +110,7 @@ YqGetFromFile(){
     return
   fi
 
-  _yqgetfromfile_value=$(yq -r "$_yqgetfromfile_key" "$_yqgetfromfile_yaml")
-  printf '%s' "$_yqgetfromfile_value"
+  yq -r "$_yqgetfromfile_key" "$_yqgetfromfile_yaml"
 }
 export YqGetFromFile
 readonly YqGetFromFile
@@ -137,8 +136,7 @@ YqGetFromStr(){
     return
   fi
 
-  _yqgetfromstr_value=$(printf '%s\n' "$_yqgetfromstr_str" | yq -r "$_yqgetfromstr_key")
-  printf '%s' "$_yqgetfromstr_value"
+  printf '%s\n' "$_yqgetfromstr_str" | yq -r "$_yqgetfromstr_key"
 }
 export YqGetFromStr
 readonly YqGetFromStr

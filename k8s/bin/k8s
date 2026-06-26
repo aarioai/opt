@@ -4,6 +4,8 @@ set -euo pipefail
 # https://github.com/aarioai/opt
 . /opt/k8s/lib/k8s-lib.sh
 
+readonly VERSION_KEY_FIX=12
+
 g_workdir=$(pwd)
 readonly g_workdir
 
@@ -176,28 +178,45 @@ k8sImage(){
   echo ''
 }
 
+
+
+helmChartVersion(){
+  local file="Chart.yaml"
+  if [ ! -f "$file" ]; then
+    return
+  fi
+  local name
+  name=$(YqGetFromFile '.name' "$file" '*')
+  local version
+  version=$(YqGetFromFile '.version' "$file" '*')
+  local app_version
+  app_version=$(YqGetFromFile '.appVersion' "$file" '*')
+  echo "$(StrFix "${name}:" $VERSION_KEY_FIX ' ' 1) ${app_version} (${version})"
+}
+
 version(){
-  readonly p=12
+  helmChartVersion
+
   local prefix=''
   if command -v k3s >/dev/null 2>&1; then
     prefix="k3s"
-    echo "$(StrFix "k3s:" $p ' ' 1) $(k3s --version | awk 'NR==1{print $3}')"
+    echo "$(StrFix "k3s:" $VERSION_KEY_FIX ' ' 1) $(k3s --version | awk 'NR==1{print $3}')"
   fi
 
   if command -v containerd >/dev/null 2>&1; then
-    echo "$(StrFix "containerd:" $p ' ' 1) $(containerd --version | awk '{print $3}')"
+    echo "$(StrFix "containerd:" $VERSION_KEY_FIX ' ' 1) $(containerd --version | awk '{print $3}')"
   fi
 
   if command -v crictl >/dev/null 2>&1; then
-    echo "$(StrFix "crictl:" $p ' ' 1) $($(SUDO) $prefix crictl --version | awk '{print $NF}')"
+    echo "$(StrFix "crictl:" $VERSION_KEY_FIX ' ' 1) $($(SUDO) $prefix crictl --version | awk '{print $NF}')"
   fi
 
   if command -v runc >/dev/null 2>&1; then
-    echo "$(StrFix "runc:" $p ' ' 1) $(runc --version | awk 'NR==1{print $3}')"
+    echo "$(StrFix "runc:" $VERSION_KEY_FIX ' ' 1) $(runc --version | awk 'NR==1{print $3}')"
   fi
 
   if command -v kubectl >/dev/null 2>&1; then
-    echo "$(StrFix "kubectl:" $p ' ' 1) $($prefix kubectl version --client | awk 'NR==1{print $3}')"
+    echo "$(StrFix "kubectl:" $VERSION_KEY_FIX ' ' 1) $($prefix kubectl version --client | awk 'NR==1{print $3}')"
   fi
 
   if command -v nerdctl >/dev/null 2>&1; then
@@ -207,11 +226,11 @@ version(){
       /^Server:/{in_client=0}
       in_client && /Version:/{print $2; exit}
     ')
-    echo "$(StrFix "nerdctl:" $p ' ' 1) $version"
+    echo "$(StrFix "nerdctl:" $VERSION_KEY_FIX ' ' 1) $version"
   fi
 
   if command -v helm >/dev/null 2>&1; then
-    echo "$(StrFix "helm:" $p ' ' 1) $(helm version --short)"
+    echo "$(StrFix "helm:" $VERSION_KEY_FIX ' ' 1) $(helm version --short)"
   fi
 }
 
