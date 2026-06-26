@@ -54,6 +54,7 @@ $g_fn <CMD> [.]
     [ARGS]        Up with extra helm arguments (e.g. --set service.nodePort=8090)
   upd|update    Update current service (down + up)
   upg|upgrade   Upgrade current service
+  version       List version
 "
 
 readonly help_detail="
@@ -175,6 +176,45 @@ k8sImage(){
   echo ''
 }
 
+version(){
+  local prefix=''
+  if command -v k3s >/dev/null 2>&1; then
+    prefix="k3s "
+    Heading "[K3S]"
+    k3s --version
+  fi
+
+  if command -v containerd >/dev/null 2>&1; then
+    Heading "[CONTAINERD]"
+    containerd --version
+  fi
+
+  if command -v crictl >/dev/null 2>&1; then
+    Heading "[CRICTL]"
+    $(SUDO) $prefix crictl --version
+  fi
+
+  if command -v runc >/dev/null 2>&1; then
+    Heading "[RUNC]"
+    runc --version
+  fi
+
+  if command -v kubectl >/dev/null 2>&1; then
+    Heading "[KUBECTL]"
+    $prefix kubectl version --client
+  fi
+
+  if command -v nerdctl >/dev/null 2>&1; then
+    Heading "[NERDCTL]"
+    $(SUDO) nerdctl version
+  fi
+
+  if command -v helm >/dev/null 2>&1; then
+    Heading "[HELM]"
+    helm version --short
+  fi
+}
+
 main(){
   Usage $# -ge 1 "$help"
   local cmd="$1"
@@ -202,6 +242,7 @@ main(){
     up) k8sUp "$g_workdir" "$@" ;;
     upd|updown) k8sUpDown "$g_workdir" "$@" ;;
     upg|upgrade) k8sUpgrade "$g_workdir" "$@" ;;
+    version) version "$g_workdir" "$@" ;;
     *) $(SUDO) nerdctl "$cmd" "$@" ;;
   esac
 }
