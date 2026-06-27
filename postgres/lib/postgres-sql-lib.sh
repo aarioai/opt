@@ -94,3 +94,22 @@ EOSQL
 }
 export pgDbGrantAllOnSchemaSQL
 readonly pgDbGrantAllOnSchemaSQL
+
+# pgCreateDbOwner "$monitor_user" "$monitor_password" "$monitor_db" "$POSTGRES_USER" "$POSTGRES_DB"
+#pgCreateDbsSQL(){
+#  Usage $# -eq 1 'pgCreateDbsSQL <array>'
+#  _pg_dbs="$1"
+#  if [ -z "$_pg_dbs" ] || [ "$_pg_dbs" = '[]' ]; then
+#    return
+#  fi
+#  ParseArrays "$_pg_dbs" | while IFS= read -r _pg_db || [ -n "$_pg_db" ]; do
+#
+#  done
+#}
+#export pgCreateDbsSQL
+#readonly pgCreateDbsSQL
+
+# pgRoleInherit pg_monitor "$monitor_role" "$POSTGRES_USER" "$monitor_db"
+#  pgGrantDbOwner "$authentik_user" "$authentik_password" "$authentik_db" "$POSTGRES_USER" "$POSTGRES_DB"
+#  pgCreateExtensions "$POSTGRES_USER" "$gitlab_db" pg_trgm btree_gin
+# [user,password,db],[]
